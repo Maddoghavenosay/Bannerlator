@@ -6494,18 +6494,11 @@ internal fun ShortcutSettingsDialogScreen(
 
     // Fast OpenGL per-game override (extra "fastOpenGL"; core.FastOpenGL): "" = follow the container,
     // "1" / "0" = this game only. Locked with one reason when the effective backend is Wayland (always
-    // on there) or, on X11, when the container's layer has no EGL backend in win32u (probed off-main,
-    // cached per layer), the game's driver isn't a Turnip, or the APK has no X11 EGL.
+    // on there) or, on X11, when the game's driver isn't a Turnip or the APK has no X11 GL set. Any
+    // layer works on X11: the launch picks the EGL or GLX route.
     var fastGlOverride by remember {
         mutableStateOf(com.winlator.star.core.FastOpenGL.normalize(
             shortcut.getExtra(com.winlator.star.core.FastOpenGL.EXTRA)) ?: "")
-    }
-    var fastGlLayerEgl by remember(syncLayer) { mutableStateOf(com.winlator.star.core.FastOpenGL.peek(syncLayer)) }
-    LaunchedEffect(syncLayer) {
-        if (isLinuxEntry) return@LaunchedEffect
-        fastGlLayerEgl = withContext(Dispatchers.IO) {
-            com.winlator.star.core.FastOpenGL.layerHasEglFor(context, null, syncLayer)
-        }
     }
     val fastGlDriverVersion = GraphicsDriverConfigDialog.getVersion(graphicsDriverConfig) ?: ""
     val fastGlDriverOk = remember(fastGlDriverVersion) {
@@ -6513,7 +6506,7 @@ internal fun ShortcutSettingsDialogScreen(
     }
     val fastGlBundled = remember { com.winlator.star.core.X11Egl.isBundled(context) }
     val fastGlLocked = if (effectiveWaylandShortcut) com.winlator.star.core.FastOpenGL.WAYLAND_ALWAYS_ON
-        else com.winlator.star.core.FastOpenGL.unavailableReason(fastGlLayerEgl, fastGlDriverOk, fastGlBundled)
+        else com.winlator.star.core.FastOpenGL.unavailableReason(fastGlDriverOk, fastGlBundled)
     // Show OpenGL FPS / OpenGL vsync off per-game overrides (extras "glFpsHud" / "glVsyncOff"): same
     // "" / "1" / "0" as Fast OpenGL, on both backends, never locked.
     var glFpsHudOverride by remember {

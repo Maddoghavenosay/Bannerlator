@@ -2970,13 +2970,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
         inputControlsManager = new InputControlsManager(this);
         xServer = new XServer(new ScreenInfo(screenSize));
         xServer.setWinHandler(winHandler);
-        // Opt-in server-side GLX for a DRI-mode Mesa libGL on X11 (BANNER_X11_GLX=1 in the container's
-        // or the game's env vars). Registers GLX + Composite and reports DRI3/Present 1.2; off, the X
-        // server is exactly as before. X11 Wine sessions only: never Wayland, gamescope or Linux.
-        if (!waylandMode && !gamescopeMode && !isLinuxRuntimeSession() && isX11ServerGlxRequested()) {
-            xServer.enableServerGlx();
-            Log.i("XServerDisplayActivity", "x11 glx: server GLX + DRI3/Present 1.2 on (BANNER_X11_GLX=1)");
-        }
         advertisePanelRefreshRates();
 
         // Restore the saved Relative Mouse state for this game (issue #431). Read from the same owner
@@ -7662,14 +7655,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
         return zc != null && (zc.equals("1") || zc.equalsIgnoreCase("true"));
     }
 
-    /** BANNER_X11_GLX=1 (or true) in the container's or the shortcut's environment variables (the
-     *  shortcut wins): the X server's opt-in server-side GLX (XServer.enableServerGlx). */
-    private boolean isX11ServerGlxRequested() {
-        EnvVars env = effectiveUserEnv();
-        String v = env != null ? env.get("BANNER_X11_GLX") : null;
-        return v != null && (v.equals("1") || v.equalsIgnoreCase("true"));
-    }
-
     /** The effective env (container first, shortcut second, so the shortcut wins), or null. */
     private EnvVars effectiveUserEnv() {
         if (container == null) return null;
@@ -10390,11 +10375,13 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 }
             }
 
-            // "Fast OpenGL" on X11: Wine's EGL backend + the bundled X11-capable EGL, so Zink presents
-            // through a Vulkan swapchain instead of XMesa's finish + readback + XPutImage per frame (see
-            // core.FastOpenGL / X11Egl). After both user env merges so a value the user typed wins;
-            // never on Wayland (winewayland always uses its own EGL) or in the Linux session. The same
-            // helper writes "Show OpenGL FPS" / "OpenGL vsync off", which apply on both backends.
+            // "Fast OpenGL" on X11: the bundled Mesa through Wine's EGL backend or, for layers without
+            // it, winex11's GLX on the X server's server-side GLX, so Zink presents through a Vulkan
+            // swapchain instead of XMesa's finish + readback + XPutImage per frame (see
+            // core.FastOpenGL / X11Egl). After both user env merges so a value the user typed wins, and
+            // before the X server's socket opens below (the GLX route turns server GLX on); never on
+            // Wayland (winewayland always uses its own EGL) or in the Linux session. The same helper
+            // writes "Show OpenGL FPS" / "OpenGL vsync off", which apply on both backends.
             if (!gamescopeMode) applyFastOpenGLEnv(waylandMode);
 
             // Keep the lsfg-vk Vulkan layer INERT unless lsfg-vk is actually the engine.
@@ -13835,50 +13822,56 @@ return true;
     }
 
     /**
-     * Resolve "Fast OpenGL" for this X11 launch (core.FastOpenGL) and, when on, export X11Egl's env:
-     * BANNER_X11_EGL=0/1 in the environment wins outright (1 still needs the bundled EGL); else the
-     * shortcut's override, else the container's choice (default on), and on only when the layer's
-     * win32u knows WINE_USE_EGL, the driver is a Turnip and the APK carries the EGL. EGL vs GLX is
-     * fixed when the game process starts, so this is launch-only. On Wayland it is always on and
-     * nothing is exported. Then the two plain switches beside it (Show OpenGL FPS, OpenGL vsync off),
-     * on either backend. One log line for all three.
+     * Resolve "Fast OpenGL" for this X11 launch (core.FastOpenGL.decideX11) and, when on, export
+     * X11Egl's env for the route: BANNER_X11_EGL=0 (off), BANNER_X11_GLX=1 (GLX route) and
+     * BANNER_X11_EGL=1 (EGL route) in the environment win outright; else the shortcut's override,
+     * else the container's choice (default on), on only when the driver is a Turnip and the APK
+     * carries the GL set. The layer picks the route: EGL when its aarch64-unix win32u knows
+     * WINE_USE_EGL, else GLX, which also turns on the X server's server-side GLX + DRI3/Present 1.2
+     * for this session. Runs on the launch worker before XServerComponent opens the socket, so no
+     * client ever sees the extension list change; EGL route or off leaves the X server as it always
+     * was. On Wayland it is always on and nothing is exported. Then the two plain switches beside it
+     * (Show OpenGL FPS, OpenGL vsync off), on either backend. One log line for all three.
      */
     private void applyFastOpenGLEnv(boolean wayland) {
         if (container == null) return;
-        boolean on;
-        String why;
-        Boolean forced = wayland ? null : com.winlator.star.core.X11Egl.envOverride(envVars);
+        com.winlator.star.core.FastOpenGL.X11Decision decision;
         if (wayland) {
-            on = true;
-            why = "wayland";
-        } else if (forced != null) {
-            on = forced;
-            why = "env override";
+            decision = null;
         } else {
             String game = shortcut != null
                     ? com.winlator.star.core.FastOpenGL.normalize(shortcut.getExtra(com.winlator.star.core.FastOpenGL.EXTRA))
                     : null;
-            on = game != null ? game.equals("1") : container.isFastOpenGL();
-            why = game != null ? "game" : "container";
-            if (on) {
-                String reason = com.winlator.star.core.FastOpenGL.unavailableReason(this,
-                        wineInfo != null ? wineInfo.path : null,
-                        graphicsDriverConfig != null ? graphicsDriverConfig.get("version") : null);
-                if (reason != null) { on = false; why = "unsupported: " + reason; }
-            }
+            boolean requested = game != null ? game.equals("1") : container.isFastOpenGL();
+            String driverId = graphicsDriverConfig != null ? graphicsDriverConfig.get("version") : null;
+            decision = com.winlator.star.core.FastOpenGL.decideX11(requested, game != null ? "game" : "container",
+                    com.winlator.star.core.X11Egl.envOverride(envVars),
+                    com.winlator.star.core.X11Egl.glxForced(envVars),
+                    com.winlator.star.core.FastOpenGL.unavailableReason(this, driverId),
+                    com.winlator.star.core.FastOpenGL.layerHasEgl(wineInfo != null ? wineInfo.path : null));
         }
         String detail = null;
-        if (on && !wayland) {
-            detail = com.winlator.star.core.X11Egl.apply(this, envVars, imageFs.getRootDir().getPath() + "/usr/lib");
-            if (detail == null) { on = false; why = "unsupported: the bundled EGL could not be installed"; }
+        String glxLine = null;
+        if (decision != null && decision.getOn()) {
+            boolean egl = decision.route == com.winlator.star.core.FastOpenGL.Route.EGL;
+            detail = com.winlator.star.core.X11Egl.apply(this, envVars, imageFs.getRootDir().getPath() + "/usr/lib", egl);
+            if (detail == null) {
+                decision = new com.winlator.star.core.FastOpenGL.X11Decision(null,
+                        "unsupported: the bundled GL libraries could not be installed");
+            } else if (!egl) {
+                xServer.enableServerGlx();
+                glxLine = "x11 glx: server GLX + DRI3/Present 1.2 on (" + decision.why + ")";
+            }
         }
-        String line = "fast opengl: " + (on ? "on" : "off") + " (" + why + ")"
+        String line = (decision != null ? decision.toString() : "fast opengl: on (wayland)")
                 + " | fps hud: " + applyGlLaunchSwitch(com.winlator.star.core.FastOpenGL.FPS_HUD)
                 + " | vsync off: " + applyGlLaunchSwitch(com.winlator.star.core.FastOpenGL.VSYNC_OFF);
         Log.i("XServerDisplayActivity", line + (detail != null ? " - " + detail : ""));
+        if (glxLine != null) Log.i("XServerDisplayActivity", glxLine);
         if (wineDebugWriter != null) {
             wineDebugWriter.println(line);
             if (detail != null) wineDebugWriter.println(detail);
+            if (glxLine != null) wineDebugWriter.println(glxLine);
         }
     }
 

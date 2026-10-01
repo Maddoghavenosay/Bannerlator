@@ -520,12 +520,12 @@
     ]]></string>
     <string name="help_opengl_settings"><![CDATA[
         <b>OpenGL settings</b><br /><br />
-        <b>Fast</b> — sends an OpenGL game\'s frames straight to the screen through Vulkan (the route DXVK games take) instead of copying every frame back first. Several times faster on X11, and it also speeds up DirectDraw and older Direct3D games through WineD3D. Always on with Wayland. On X11 it needs a Turnip graphics driver and a Wine 11 layer; without them it is greyed and games use the old path. On by default; turn it off for a game that shows a black screen, crashes or draws wrongly.<br /><br />
+        <b>Fast</b> — sends an OpenGL game\'s frames straight to the screen through Vulkan (the route DXVK games take) instead of copying every frame back first. Several times faster on X11, and it also speeds up DirectDraw and older Direct3D games through WineD3D. Always on with Wayland. On X11 it works with any Wine layer: Wine 11 arm64ec layers go through EGL, everything else (older Wine, and every x86-64 layer) through GLX. It needs a Turnip graphics driver; without one it is greyed and games use the old path. On by default; turn it off for a game that shows a black screen, crashes or draws wrongly.<br /><br />
         <b>Show FPS</b> — Mesa\'s frames-per-second counter in the top-left corner of OpenGL games. DXVK games don\'t show it. Off by default.<br /><br />
         <b>Vsync off</b> — lets OpenGL games run above the screen\'s refresh rate instead of waiting for each refresh. You may see tearing. Off by default.<br /><br />
         None of these speed up game time: a very old game that ties its speed to the frame rate can run too fast — cap it with the FPS limiter.<br /><br />
         <b>Auto</b> (game settings) — follows the container\'s setting; On or Off applies to that game only. Changes take effect the next time the game starts.<br /><br />
-        <i>Sets at launch: Fast → WINE_USE_EGL=1 and the bundled X11 EGL (BANNER_X11_EGL=0/1 overrides it) · Show FPS → GALLIUM_HUD=fps · Vsync off → vblank_mode=0. A GALLIUM_HUD or vblank_mode you typed into Environment Variables is kept.</i>
+        <i>Sets at launch: Fast → the bundled X11 OpenGL libraries with Zink, plus WINE_USE_EGL=1 on the EGL route or the X server\'s GLX on the GLX route (BANNER_X11_EGL=0 turns it off, BANNER_X11_EGL=1 forces EGL, BANNER_X11_GLX=1 forces GLX) · Show FPS → GALLIUM_HUD=fps · Vsync off → vblank_mode=0. A GALLIUM_HUD or vblank_mode you typed into Environment Variables is kept.</i>
     ]]></string>
     <string name="help_graphics_driver"><![CDATA[
         <b>Graphics driver (wrapper)</b><br /><br />
@@ -1823,6 +1823,21 @@ brake on the decay behaviour.
         How long the audio path must run cleanly before the driver considers shrinking the buffer.<br /><br />
 <b>When to change:</b> raise it to make shrinking more cautious, which suits a device that has
 occasional bursts of load. Lower it to recover latency sooner after a rough patch.
+        ]]></string>
+    <string name="env_var_help__banner_x11_egl"><![CDATA[
+        Overrides the Fast OpenGL setting on X11 for this container or game.<br /><br />
+<b>0</b> : Fast OpenGL off — OpenGL games use the old copy-back path.<br />
+<b>1</b> : Fast OpenGL on, through Wine\'s EGL backend. Needs a layer whose Wine has it (Wine 11 arm64ec).<br /><br />
+<b>When to change:</b> to test a game with Fast OpenGL off, or to force the EGL route. Leave it unset
+and the OpenGL settings decide (and pick EGL or GLX by layer). No effect on Wayland.
+        ]]></string>
+    <string name="env_var_help__banner_x11_glx"><![CDATA[
+        Forces Fast OpenGL on X11 through GLX: the X server turns on its own GLX support (and DRI3/Present
+1.2) for the session, and Wine\'s GLX loads the bundled OpenGL library with Zink.<br /><br />
+<b>1</b> : GLX route on, whatever the layer.<br /><br />
+<b>When to change:</b> to try the GLX route on a Wine 11 arm64ec layer that would otherwise use EGL.
+Older Wine and x86-64 layers already take this route. BANNER_X11_EGL=0 still turns Fast OpenGL off.
+No effect on Wayland.
         ]]></string>
     <string name="env_var_help__banner_audio_direct_exclusive"><![CDATA[
         Asks Android for exclusive access to the audio device, bypassing the normal mixer.<br /><br />

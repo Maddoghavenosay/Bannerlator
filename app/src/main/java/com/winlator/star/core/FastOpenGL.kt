@@ -2,27 +2,30 @@ package com.winlator.star.core
 
 import android.content.Context
 import android.util.Log
-import com.winlator.star.contents.ContentsManager
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
 
 /**
  * The "Fast OpenGL" setting: OpenGL (and WineD3D's DirectDraw / older Direct3D, which sit on it)
- * through Wine's EGL backend and Zink, presented by a Vulkan swapchain, instead of XMesa's
+ * through the bundled Mesa and Zink, presented by a Vulkan swapchain, instead of XMesa's
  * finish + readback + XPutImage per frame. See [X11Egl] for the X11 half and the measured numbers.
  *
  *  - Wayland → always on: winewayland has no GLX path, it always takes EGL. Nothing is applied and the
  *              editors show the switch locked on.
- *  - X11     → on when asked for AND [unavailableReason] is null: the layer's unix win32u.so knows
- *              WINE_USE_EGL (every Wine 11 layer; GE-Proton 10.0-34 v9 does not), the graphics driver
- *              is an installed Turnip (not "System", not Qualcomm's blob: Zink needs Mesa's Vulkan),
- *              and the APK carries the X11 EGL.
+ *  - X11     → on when asked for AND [unavailableReason] is null: the graphics driver is an installed
+ *              Turnip (not "System", not Qualcomm's blob: Zink needs Mesa's Vulkan) and the APK carries
+ *              the X11 GL libraries. Any layer: the launch picks the [Route] ([routeFor]):
+ *      - [Route.EGL] when the layer's aarch64-unix win32u.so knows WINE_USE_EGL (arm64ec Wine 11):
+ *        Wine's EGL backend loads the bundled libEGL.
+ *      - [Route.GLX] otherwise (Wine 10 and older, every x86_64 layer, where box64 wraps the native
+ *        libGL): winex11's GLX loads the bundled libGL, and the X server turns on its server-side GLX
+ *        and DRI3/Present 1.2 for that session (XServer.enableServerGlx).
  *
  * Stored as the extra [EXTRA] on the container ("1" / "0", absent = on) and on a shortcut only as a
- * per-game override (absent or "" = follow the container). EGL vs GLX is chosen when the game process
- * starts, so there is no in-game drawer item. BANNER_X11_EGL=0/1 in the environment variables
- * overrides both ([X11Egl.ENV_OVERRIDE]).
+ * per-game override (absent or "" = follow the container). The route is chosen when the game process
+ * starts, so there is no in-game drawer item. In the environment variables BANNER_X11_EGL=0 forces it
+ * off, BANNER_X11_GLX=1 forces the GLX route and BANNER_X11_EGL=1 the EGL route ([decideX11]).
  */
 object FastOpenGL {
     private const val TAG = "FastOpenGL"
@@ -31,7 +34,6 @@ object FastOpenGL {
     const val TITLE = "Fast OpenGL"
     const val HINT = "Faster OpenGL games, and DirectDraw / older Direct3D games through WineD3D."
     const val WAYLAND_ALWAYS_ON = "Always on with Wayland"
-    const val NEEDS_LAYER = "Needs a Wine 11 layer"
     const val NEEDS_TURNIP = "Needs a Turnip driver"
     const val NOT_BUNDLED = "Not in this build"
 
@@ -64,16 +66,46 @@ object FastOpenGL {
     fun requested(containerExtra: String?, shortcutExtra: String?): Boolean =
         normalize(shortcutExtra)?.let { it == "1" } ?: containerOn(containerExtra)
 
-    /**
-     * The one reason an X11 launch can't use it, or null when it can. [layerHasEgl] null = the layer is
-     * still being probed: not held against it (the launch re-checks). First that applies wins.
-     */
+    /** The one reason an X11 launch can't use it, or null when it can. First that applies wins. */
     @JvmStatic
-    fun unavailableReason(layerHasEgl: Boolean?, driverUsable: Boolean, bundled: Boolean): String? = when {
-        layerHasEgl == false -> NEEDS_LAYER
+    fun unavailableReason(driverUsable: Boolean, bundled: Boolean): String? = when {
         !driverUsable -> NEEDS_TURNIP
         !bundled -> NOT_BUNDLED
         else -> null
+    }
+
+    /** How an X11 launch reaches the bundled Mesa. */
+    enum class Route(@JvmField val label: String) { EGL("egl"), GLX("glx") }
+
+    /** Wine's EGL backend when the layer has it (arm64ec Wine 11), else GLX on the server-side GLX. */
+    @JvmStatic
+    fun routeFor(layerHasEgl: Boolean): Route = if (layerHasEgl) Route.EGL else Route.GLX
+
+    /** One X11 launch's verdict: [route] is null when off; [why] is what the log line says. */
+    class X11Decision(@JvmField val route: Route?, @JvmField val why: String) {
+        val on: Boolean get() = route != null
+        override fun toString(): String =
+            "fast opengl: " + (if (route != null) "on ($why, ${route.label} route)" else "off ($why)")
+    }
+
+    /**
+     * Resolve an X11 launch. The environment overrides come first, in this order: BANNER_X11_EGL=0
+     * (off), BANNER_X11_GLX=1 (GLX route), BANNER_X11_EGL=1 (EGL route); they skip the support check
+     * (the bundled libraries are still needed, which the launch checks when it installs them). Else
+     * the setting ([requested], [requestedBy] = "game" / "container"), then [unavailable], then the
+     * layer picks the route.
+     */
+    @JvmStatic
+    fun decideX11(
+        requested: Boolean, requestedBy: String, eglOverride: Boolean?, glxForced: Boolean,
+        unavailable: String?, layerHasEgl: Boolean,
+    ): X11Decision = when {
+        eglOverride == false -> X11Decision(null, "env override")
+        glxForced -> X11Decision(Route.GLX, "env override")
+        eglOverride == true -> X11Decision(Route.EGL, "env override")
+        !requested -> X11Decision(null, requestedBy)
+        unavailable != null -> X11Decision(null, "unsupported: $unavailable")
+        else -> X11Decision(routeFor(layerHasEgl), requestedBy)
     }
 
     // ── Driver + APK ─────────────────────────────────────────────────────────────────────────────
@@ -88,10 +120,10 @@ object FastOpenGL {
         !driverId.isNullOrEmpty() && driverId != DefaultVersion.WRAPPER &&
             !WaylandAdapter.isProprietaryBlob(context, driverId)
 
-    /** Blocking (one byte scan per layer, then cached): the reason for an X11 launch, or null. */
+    /** The reason an X11 launch with [driverId] can't use it, or null. No layer scan. */
     @JvmStatic
-    fun unavailableReason(context: Context, layerPath: String?, driverId: String?): String? =
-        unavailableReason(layerHasEgl(layerPath), driverUsable(context, driverId), X11Egl.isBundled(context))
+    fun unavailableReason(context: Context, driverId: String?): String? =
+        unavailableReason(driverUsable(context, driverId), X11Egl.isBundled(context))
 
     // ── Layer detection ──────────────────────────────────────────────────────────────────────────
 
@@ -100,35 +132,12 @@ object FastOpenGL {
 
     private class Entry(val stamp: String, val hasEgl: Boolean)
     private val byPath = HashMap<String, Entry>()
-    private val byIdentifier = HashMap<String, Boolean>()
-
-    /** The last answer for this wine version identifier, or null if it was never probed (no I/O). */
-    @JvmStatic
-    fun peek(identifier: String?): Boolean? =
-        if (identifier.isNullOrEmpty()) null else synchronized(byIdentifier) { byIdentifier[identifier] }
 
     /**
-     * Whether the layer a wine version identifier resolves to has Wine's EGL backend (same resolution
-     * as [SyncSupport.capsFor]). Blocking file I/O: call off the main thread.
-     */
-    @JvmStatic
-    fun layerHasEglFor(context: Context, contentsManager: ContentsManager?, identifier: String?): Boolean {
-        if (identifier.isNullOrEmpty()) return false
-        val has = try {
-            val cm = contentsManager ?: ContentsManager(context).also { it.syncContents() }
-            layerHasEgl(WineInfo.fromIdentifier(context, cm, identifier).path)
-        } catch (e: Exception) {
-            Log.w(TAG, "layer $identifier: ${e.message}")
-            false
-        }
-        synchronized(byIdentifier) { byIdentifier[identifier] = has }
-        return has
-    }
-
-    /**
-     * Whether the layer installed at [layerPath] has Wine's EGL backend: its unix win32u.so contains
-     * "WINE_USE_EGL". Cached per directory and re-probed when win32u.so changes (mtime/size). An
-     * unreadable or missing win32u.so reads as false (the launch stays on GLX).
+     * Whether the layer installed at [layerPath] takes the EGL route: its aarch64-unix win32u.so
+     * contains "WINE_USE_EGL". Only that file counts: an x86_64 layer runs under box64, which wraps the
+     * native libGL, so it always takes the GLX route. Cached per directory and re-probed when
+     * win32u.so changes (mtime/size). Blocking file I/O. Unreadable or missing reads as false (GLX).
      */
     @JvmStatic
     fun layerHasEgl(layerPath: String?): Boolean {
@@ -155,12 +164,10 @@ object FastOpenGL {
     @JvmStatic
     fun invalidate() {
         synchronized(byPath) { byPath.clear() }
-        synchronized(byIdentifier) { byIdentifier.clear() }
     }
 
     private fun unixWin32u(dir: File): File? =
-        listOf("lib/wine/aarch64-unix/win32u.so", "lib/wine/x86_64-unix/win32u.so")
-            .map { File(dir, it) }.firstOrNull { it.isFile }
+        File(dir, "lib/wine/aarch64-unix/win32u.so").takeIf { it.isFile }
 }
 
 /**
