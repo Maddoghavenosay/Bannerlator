@@ -523,26 +523,20 @@ private fun generalRows(xmb: XmbScope, p: XmbPrefs, host: XmbGameHost): List<Xmb
             subtitle = com.winlator.star.core.FastOpenGL.HINT, disabledReason = glLocked) { v ->
             xmb.set(p, com.winlator.star.core.FastOpenGL.EXTRA, glValues[glLabels.indexOf(v)].ifEmpty { null })
         }
-        // The pop-up editors' "?" (help_fast_opengl), as its own column.
-        rows += XmbRow.Link("fastOpenGLHelp", "What is Fast OpenGL?", Icons.Filled.HelpOutline,
-            subtitle = "EGL instead of GLX, and when to turn it off") {
-            xmbHelpMenu(p.context, xmb.scope, com.winlator.star.core.FastOpenGL.TITLE, R.string.help_fast_opengl)
-        }
         // Show OpenGL FPS / OpenGL vsync off: the same Container default / On / Off choice, on both
         // backends, never greyed (core.FastOpenGL.FPS_HUD / VSYNC_OFF).
-        for ((sw, help) in listOf(
-            com.winlator.star.core.FastOpenGL.FPS_HUD to R.string.help_gl_fps_hud,
-            com.winlator.star.core.FastOpenGL.VSYNC_OFF to R.string.help_gl_vsync_off,
-        )) {
+        for (sw in listOf(com.winlator.star.core.FastOpenGL.FPS_HUD, com.winlator.star.core.FastOpenGL.VSYNC_OFF)) {
             val labels = listOf("Container default (" + (if (sw.containerOn(c.getExtra(sw.extra))) "On" else "Off") + ")", "On", "Off")
             val stored = com.winlator.star.core.FastOpenGL.normalize(p.ex(sw.extra, "")) ?: ""
             rows += XmbRow.Choice(sw.extra, sw.title, Icons.Filled.Speed, labels,
                 labels[glValues.indexOf(stored).coerceAtLeast(0)], subtitle = sw.hint) { v ->
                 xmb.set(p, sw.extra, glValues[labels.indexOf(v)].ifEmpty { null })
             }
-            rows += XmbRow.Link(sw.extra + "Help", "What is ${sw.title}?", Icons.Filled.HelpOutline, subtitle = sw.hint) {
-                xmbHelpMenu(p.context, xmb.scope, sw.title, help)
-            }
+        }
+        // The pop-up editors' one "?" for the OpenGL card (help_opengl_settings), as its own column.
+        rows += XmbRow.Link("openglHelp", "What are these?", Icons.Filled.HelpOutline,
+            subtitle = "Fast OpenGL, Show OpenGL FPS and OpenGL vsync off explained") {
+            xmbHelpMenu(p.context, xmb.scope, "OpenGL", R.string.help_opengl_settings)
         }
     }
     // Driver configuration is X11 tuning; on Wayland its only live field (the Turnip version) is

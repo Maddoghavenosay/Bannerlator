@@ -1171,10 +1171,11 @@ private fun TopLevelFields(
                 )
             }
         }
-        // Fast OpenGL (core.FastOpenGL): OpenGL through Wine's EGL + Zink instead of GLX's readback.
-        // Wayland always works this way, so the switch is locked on there (the stored value is kept).
-        // On X11 it greys with one reason when the layer's win32u lacks the EGL backend, the driver
-        // isn't a Turnip or the APK has no X11 EGL; the layer probe runs off-main in the view-model.
+        // OpenGL card (core.FastOpenGL): Fast / Show FPS / Vsync off as three compact switch rows under
+        // one "?". Fast is locked on with Wayland (winewayland only uses EGL; the stored value is kept)
+        // and on X11 greys with one short reason when the layer's win32u lacks the EGL backend, the
+        // driver isn't a Turnip or the APK has no X11 EGL (layer probe off-main in the view-model).
+        // Show FPS / Vsync off reach Mesa on GLX, EGL and Wayland alike, so they are never greyed.
         run {
             Spacer(Modifier.height(8.dp))
             val fastGlDriverOk = remember(compositorVersion) {
@@ -1186,40 +1187,28 @@ private fun TopLevelFields(
                 else -> com.winlator.star.core.FastOpenGL.unavailableReason(
                     viewModel.fastOpenGLLayerEgl, fastGlDriverOk, fastGlBundled)
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(
-                    enabled = fastGlReason == null,
-                    checked = if (compositorDriverOnly) true else viewModel.fastOpenGL && fastGlReason == null,
-                    onCheckedChange = { viewModel.fastOpenGL = it }
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    com.winlator.star.core.FastOpenGL.TITLE,
-                    color = if (fastGlReason == null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = { helpRes = R.string.help_fast_opengl }) {
-                    Icon(Icons.Default.Help, contentDescription = "What is Fast OpenGL?", modifier = Modifier.size(18.dp))
+            com.winlator.star.ui.components.OpenGLCard(onHelp = { helpRes = R.string.help_opengl_settings }) {
+                com.winlator.star.ui.components.OpenGLCardRow(
+                    com.winlator.star.ui.components.OPENGL_FAST_ICON, "Fast",
+                    com.winlator.star.ui.components.openGLFastNote(fastGlReason)
+                ) {
+                    Switch(
+                        enabled = fastGlReason == null,
+                        checked = if (compositorDriverOnly) true else viewModel.fastOpenGL && fastGlReason == null,
+                        onCheckedChange = { viewModel.fastOpenGL = it }
+                    )
+                }
+                com.winlator.star.ui.components.OpenGLCardRow(
+                    com.winlator.star.ui.components.OPENGL_FPS_ICON, "Show FPS", null
+                ) {
+                    Switch(checked = viewModel.glFpsHud, onCheckedChange = { viewModel.glFpsHud = it })
+                }
+                com.winlator.star.ui.components.OpenGLCardRow(
+                    com.winlator.star.ui.components.OPENGL_VSYNC_ICON, "Vsync off", null
+                ) {
+                    Switch(checked = viewModel.glVsyncOff, onCheckedChange = { viewModel.glVsyncOff = it })
                 }
             }
-            if (fastGlReason != null) {
-                Text(
-                    fastGlReason,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Text(
-                com.winlator.star.core.FastOpenGL.HINT,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            // Show OpenGL FPS / OpenGL vsync off: plain launch switches under it, independent of Fast
-            // OpenGL (they reach Mesa on GLX, EGL and Wayland alike), so never greyed.
-            GlLaunchSwitchRow(com.winlator.star.core.FastOpenGL.FPS_HUD, viewModel.glFpsHud,
-                onChange = { viewModel.glFpsHud = it }, onHelp = { helpRes = R.string.help_gl_fps_hud })
-            GlLaunchSwitchRow(com.winlator.star.core.FastOpenGL.VSYNC_OFF, viewModel.glVsyncOff,
-                onChange = { viewModel.glVsyncOff = it }, onHelp = { helpRes = R.string.help_gl_vsync_off })
         }
         // Unreal Engine HDR (both backends; under HDR output on Wayland): Off / DirectX 12 fix /
         // DirectX 11 (experimental, NVAPI). See core.UnrealHdr; the DirectX 11 mode swaps the bundled
@@ -3058,30 +3047,6 @@ internal const val WAYLAND_DRIVER_SETTINGS_HELP =
         "one for now. Off by default (Device). Warning: an NVIDIA name can make a game try NVAPI, DLSS or " +
         "Reflex, and an AMD name can send it down AMD AGS paths; go back to Device if a game misbehaves. " +
         "These are the X11 driver configuration's settings, so they follow the game across backends."
-
-/** One plain OpenGL launch switch on the GENERAL tab: switch, title, "?", hint (core.GlLaunchSwitch). */
-@Composable
-private fun GlLaunchSwitchRow(
-    sw: com.winlator.star.core.GlLaunchSwitch,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit,
-    onHelp: () -> Unit,
-) {
-    Spacer(Modifier.height(4.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Switch(checked = checked, onCheckedChange = onChange)
-        Spacer(Modifier.width(8.dp))
-        Text(sw.title, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-        IconButton(onClick = onHelp) {
-            Icon(Icons.Default.Help, contentDescription = "What is ${sw.title}?", modifier = Modifier.size(18.dp))
-        }
-    }
-    Text(
-        sw.hint,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-}
 
 /**
  * The Wayland game driver's settings (the gear next to "Wayland game driver"): the graphicsDriverConfig

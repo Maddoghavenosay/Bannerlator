@@ -518,26 +518,14 @@
         Game settings follow the container unless you pick something else for that game.<br /><br />
         <i>Sets at launch: esync → WINEESYNC=1 · ntsync → WINENTSYNC=1 + WINEESYNC=1 · wineserver → WINEESYNC=0. Any of these typed into Environment Variables is replaced by this setting.</i>
     ]]></string>
-    <string name="help_fast_opengl"><![CDATA[
-        <b>Fast OpenGL</b><br /><br />
-        Sends an OpenGL game\'s frames straight to the screen through Vulkan — the same route DXVK games take — instead of copying every finished frame back and drawing it again. On X11 that is several times faster, and it also speeds up DirectDraw and older Direct3D games that run through WineD3D.<br /><br />
-        <b>Wayland:</b> always on; Wayland only works this way.<br />
-        <b>X11:</b> needs a Turnip graphics driver and a Wine 11 compatibility layer. Without them the switch is greyed and games use the old path.<br /><br />
-        On by default. Turn it off for a game that shows a black screen, crashes or draws wrongly. Game settings follow the container unless you pick something else for that game. It takes effect the next time the game starts.<br /><br />
-        It does not speed up game time: a very old game that ties its speed to the frame rate can run too fast — cap it with the FPS limiter.
-    ]]></string>
-    <string name="help_gl_fps_hud"><![CDATA[
-        <b>Show OpenGL FPS</b><br /><br />
-        Shows Mesa\'s frames-per-second counter in the top-left corner of OpenGL games. Works on X11 and Wayland, with Fast OpenGL on or off. Direct3D games through DXVK don\'t show it; use the app\'s performance overlay for those.<br /><br />
-        Off by default. Game settings follow the container unless you pick something else for that game. It takes effect the next time the game starts.<br /><br />
-        <i>Sets GALLIUM_HUD=fps at launch. A GALLIUM_HUD you typed into Environment Variables is kept.</i>
-    ]]></string>
-    <string name="help_gl_vsync_off"><![CDATA[
-        <b>OpenGL vsync off</b><br /><br />
-        Normally an OpenGL game waits for the screen\'s next refresh before showing each frame, so it never runs faster than the refresh rate. This stops that wait, so the game can run as fast as it can. Useful for benchmarks or to cut input lag; you may see tearing.<br /><br />
-        Very old games that tie their speed to the frame rate can run far too fast with it — cap them with the FPS limiter, or leave this off.<br /><br />
-        Off by default. Works on X11 and Wayland. Game settings follow the container unless you pick something else for that game. It takes effect the next time the game starts.<br /><br />
-        <i>Sets vblank_mode=0 at launch. A vblank_mode you typed into Environment Variables is kept.</i>
+    <string name="help_opengl_settings"><![CDATA[
+        <b>OpenGL settings</b><br /><br />
+        <b>Fast</b> — sends an OpenGL game\'s frames straight to the screen through Vulkan (the route DXVK games take) instead of copying every frame back first. Several times faster on X11, and it also speeds up DirectDraw and older Direct3D games through WineD3D. Always on with Wayland. On X11 it needs a Turnip graphics driver and a Wine 11 layer; without them it is greyed and games use the old path. On by default; turn it off for a game that shows a black screen, crashes or draws wrongly.<br /><br />
+        <b>Show FPS</b> — Mesa\'s frames-per-second counter in the top-left corner of OpenGL games. DXVK games don\'t show it. Off by default.<br /><br />
+        <b>Vsync off</b> — lets OpenGL games run above the screen\'s refresh rate instead of waiting for each refresh. You may see tearing. Off by default.<br /><br />
+        None of these speed up game time: a very old game that ties its speed to the frame rate can run too fast — cap it with the FPS limiter.<br /><br />
+        <b>Auto</b> (game settings) — follows the container\'s setting; On or Off applies to that game only. Changes take effect the next time the game starts.<br /><br />
+        <i>Sets at launch: Fast → WINE_USE_EGL=1 and the bundled X11 EGL (BANNER_X11_EGL=0/1 overrides it) · Show FPS → GALLIUM_HUD=fps · Vsync off → vblank_mode=0. A GALLIUM_HUD or vblank_mode you typed into Environment Variables is kept.</i>
     ]]></string>
     <string name="help_graphics_driver"><![CDATA[
         <b>Graphics driver (wrapper)</b><br /><br />
@@ -2111,7 +2099,7 @@ D3D games use DXVK_HUD instead.
     <string name="env_var_help__vblank_mode"><![CDATA[
         Mesa\'s OpenGL vsync control.<br /><br />
 <b>0</b> : Never wait for the screen refresh (vsync off).<br /><br />
-<b>When to change:</b> use the OpenGL vsync off switch on the General tab or in the game\'s settings
+<b>When to change:</b> use Vsync off in the OpenGL card on the General tab or in the game\'s settings
 instead; it sets vblank_mode=0. A value typed here is kept and wins over the switch.
         ]]></string>
     <string name="env_var_help__ir3_shader_debug"><![CDATA[
@@ -2287,7 +2275,7 @@ write hundreds of megabytes.
         Overrides the Fast OpenGL setting on X11.<br /><br />
 <b>1</b> : On, even where the setting is off or greyed (still needs the EGL bundled with the app).<br />
 <b>0</b> : Off.<br /><br />
-<b>When to change:</b> almost never — use the Fast OpenGL switch on the General tab or in the game\'s
+<b>When to change:</b> almost never — use Fast in the OpenGL card on the General tab or in the game\'s
 settings. This is for testing a layer or driver the switch does not offer it on.
         ]]></string>
     <string name="env_var_help__winedlloverrides"><![CDATA[

@@ -7304,7 +7304,7 @@ internal fun ShortcutSettingsDialogScreen(
                 add("selectIcon")
                 // The Wine/X11 graphics stack is not registered for a Linux entry, so the D-pad
                 // cursor can never land on a row that isn't drawn (see the render conditionals).
-                if (!isLinuxEntry) { add("syncMode"); add("displayBackend"); add("fastOpenGL"); add("glFpsHud"); add("glVsyncOff") }
+                if (!isLinuxEntry) { add("syncMode"); add("displayBackend"); add("openglHelp"); add("fastOpenGL"); add("glFpsHud"); add("glVsyncOff") }
                 add("gfxDriver")   // the compositor driver: live on the gamescope path too
                 if (effectiveWaylandShortcut && !isLinuxEntry) {
                     add("waylandAdvanced"); add("waylandDriverCfg")
@@ -7797,54 +7797,70 @@ internal fun ShortcutSettingsDialogScreen(
                         }
                     }
 
-                    // Fast OpenGL (per-game): Container | On | Off, beside the backend it depends on.
-                    // D-pad: Left/Right step through the pills, A goes back to the container's. Launch-only
-                    // (EGL vs GLX is fixed when the game starts), so there is no drawer twin.
+                    // OpenGL card (per-game): Fast / Show FPS / Vsync off, each `Auto | On | Off` (Auto =
+                    // follow the container), under one "?" and a summary of what the game will get. Fast
+                    // is locked to Auto with Wayland (always on there) or with a short X11 reason.
+                    // D-pad: the "?" and each row are stops; Left/Right step the pills, A goes back to Auto.
+                    // Launch-only (EGL vs GLX is fixed when the game starts), so there is no drawer twin.
                     if (!isLinuxEntry) {
-                        val fastGlOptions = com.winlator.star.ui.components.FAST_OPENGL_OVERRIDES
-                        val pickFastGl: (String) -> Unit = { v -> if (fastGlLocked == null) fastGlOverride = v }
-                        SideEffect {
-                            dp.actions["fastOpenGL"] = ControlActions(
-                                activate = { pickFastGl("") },
-                                onLeft = { fastGlOptions.getOrNull(fastGlOptions.indexOf(fastGlOverride) - 1)?.let(pickFastGl) },
-                                onRight = { fastGlOptions.getOrNull(fastGlOptions.indexOf(fastGlOverride) + 1)?.let(pickFastGl) },
+                        val glOptions = com.winlator.star.ui.components.OPENGL_OVERRIDES
+                        val fpsSw = com.winlator.star.core.FastOpenGL.FPS_HUD
+                        val vsyncSw = com.winlator.star.core.FastOpenGL.VSYNC_OFF
+                        val pickFastGl: (String) -> Unit = { v -> if (fastGlLocked == null || v.isEmpty()) fastGlOverride = v }
+                        val pickFps: (String) -> Unit = { v -> glFpsHudOverride = v }
+                        val pickVsync: (String) -> Unit = { v -> glVsyncOffOverride = v }
+                        val stepActions = { value: String, pick: (String) -> Unit ->
+                            ControlActions(
+                                activate = { pick("") },
+                                onLeft = { glOptions.getOrNull(glOptions.indexOf(value) - 1)?.let(pick) },
+                                onRight = { glOptions.getOrNull(glOptions.indexOf(value) + 1)?.let(pick) },
                             )
                         }
-                        com.winlator.star.ui.components.FastOpenGLSelector(
-                            selected = fastGlOverride,
-                            containerOn = shortcut.container.isFastOpenGL(),
-                            lockedReason = fastGlLocked,
-                            onPick = pickFastGl,
-                            focused = dp.isFocused("fastOpenGL"),
-                            onHelp = { helpRes = R.string.help_fast_opengl },
-                            modifier = Modifier.dpadBringIntoView(dp, "fastOpenGL"),
-                        )
-                        // Show OpenGL FPS / OpenGL vsync off: the same pills, never locked.
-                        for ((sw, value, help) in listOf(
-                            Triple(com.winlator.star.core.FastOpenGL.FPS_HUD, glFpsHudOverride, R.string.help_gl_fps_hud),
-                            Triple(com.winlator.star.core.FastOpenGL.VSYNC_OFF, glVsyncOffOverride, R.string.help_gl_vsync_off),
-                        )) {
-                            val pick: (String) -> Unit = { v ->
-                                if (sw === com.winlator.star.core.FastOpenGL.FPS_HUD) glFpsHudOverride = v else glVsyncOffOverride = v
+                        SideEffect {
+                            dp.actions["openglHelp"] = ControlActions(activate = { helpRes = R.string.help_opengl_settings })
+                            dp.actions["fastOpenGL"] = stepActions(fastGlOverride, pickFastGl)
+                            dp.actions[fpsSw.extra] = stepActions(glFpsHudOverride, pickFps)
+                            dp.actions[vsyncSw.extra] = stepActions(glVsyncOffOverride, pickVsync)
+                        }
+                        val containerFast = shortcut.container.isFastOpenGL()
+                        val containerFps = fpsSw.containerOn(shortcut.container.getExtra(fpsSw.extra))
+                        val containerVsync = vsyncSw.containerOn(shortcut.container.getExtra(vsyncSw.extra))
+                        val fastEffective = effectiveWaylandShortcut || (fastGlLocked == null &&
+                            com.winlator.star.core.FastOpenGL.requested(if (containerFast) "1" else "0", fastGlOverride))
+                        com.winlator.star.ui.components.OpenGLCard(
+                            onHelp = { helpRes = R.string.help_opengl_settings },
+                            summary = com.winlator.star.ui.components.openGLSummary(
+                                fastEffective,
+                                fpsSw.requested(if (containerFps) "1" else "0", glFpsHudOverride),
+                                vsyncSw.requested(if (containerVsync) "1" else "0", glVsyncOffOverride)),
+                            helpFocused = dp.isFocused("openglHelp"),
+                            modifier = Modifier.dpadBringIntoView(dp, "openglHelp"),
+                        ) {
+                            com.winlator.star.ui.components.OpenGLCardRow(
+                                com.winlator.star.ui.components.OPENGL_FAST_ICON, "Fast",
+                                com.winlator.star.ui.components.openGLFastNote(fastGlLocked),
+                                focused = dp.isFocused("fastOpenGL"),
+                                modifier = Modifier.dpadBringIntoView(dp, "fastOpenGL"),
+                            ) {
+                                com.winlator.star.ui.components.OpenGLPills(fastGlOverride,
+                                    autoOn = containerFast || effectiveWaylandShortcut, locked = fastGlLocked != null, onPick = pickFastGl)
                             }
-                            SideEffect {
-                                dp.actions[sw.extra] = ControlActions(
-                                    activate = { pick("") },
-                                    onLeft = { fastGlOptions.getOrNull(fastGlOptions.indexOf(value) - 1)?.let(pick) },
-                                    onRight = { fastGlOptions.getOrNull(fastGlOptions.indexOf(value) + 1)?.let(pick) },
-                                )
+                            com.winlator.star.ui.components.OpenGLCardRow(
+                                com.winlator.star.ui.components.OPENGL_FPS_ICON, "Show FPS", null,
+                                focused = dp.isFocused(fpsSw.extra),
+                                modifier = Modifier.dpadBringIntoView(dp, fpsSw.extra),
+                            ) {
+                                com.winlator.star.ui.components.OpenGLPills(glFpsHudOverride,
+                                    autoOn = containerFps, locked = false, onPick = pickFps)
                             }
-                            com.winlator.star.ui.components.FastOpenGLSelector(
-                                selected = value,
-                                containerOn = sw.containerOn(shortcut.container.getExtra(sw.extra)),
-                                lockedReason = null,
-                                onPick = pick,
-                                focused = dp.isFocused(sw.extra),
-                                onHelp = { helpRes = help },
-                                modifier = Modifier.dpadBringIntoView(dp, sw.extra),
-                                title = sw.title,
-                                hint = sw.hint,
-                            )
+                            com.winlator.star.ui.components.OpenGLCardRow(
+                                com.winlator.star.ui.components.OPENGL_VSYNC_ICON, "Vsync off", null,
+                                focused = dp.isFocused(vsyncSw.extra),
+                                modifier = Modifier.dpadBringIntoView(dp, vsyncSw.extra),
+                            ) {
+                                com.winlator.star.ui.components.OpenGLPills(glVsyncOffOverride,
+                                    autoOn = containerVsync, locked = false, onPick = pickVsync)
+                            }
                         }
                     }
 
