@@ -79,7 +79,7 @@ Before any **stable release** is published, all changes are **manually debugged 
 |---|---|
 | **App label** | `Bannerlator Bionic` (standard) · `Bannerlator Bionic PuBG` (pubg) · `Bannerlator Bionic Ludashi` (ludashi) |
 | **Packages** | `com.winlator.banner` (standard) · `com.tencent.ig` (pubg) · `com.ludashi.benchmark` (ludashi) |
-| **Version** | Bannerlator **V 3.1.3** — built from Star **marcescence** (`versionName 3.1.3`, `versionCode 90`). Testers: **3.1.4 pre-release 1** (`versionCode 91`) |
+| **Version** | Bannerlator **V 3.1.3** — built from Star **marcescence** (`versionName 3.1.3`, `versionCode 90`). Testers: **3.1.4 pre-release 2** (`versionCode 92`) |
 | **Android SDK** | `compileSdk 34` · `targetSdk 28` · `minSdk 26` (Android 8.0+) |
 | **Lineage** | Winlator → cmod → Bionic Nightly → Star Bionic → **marcescence** → **Bannerlator** |
 
@@ -111,7 +111,7 @@ Every report gets its own **public discussion thread**. You can reply as the ori
 - [🤖 AI Disclaimer](#-ai-disclaimer)
 - [ℹ️ Information](#ℹ️-information)
 - [🐛 Report a Mali GPU Issue](#-report-a-mali-gpu-game-issue)
-- [🧪 3.1.4 pre-release 1 (testers): Wayland](#-314-pre-release-1-testers-wayland)
+- [🧪 3.1.4 pre-release 2 (testers): Fast OpenGL](#-314-pre-release-2-testers-fast-opengl)
 - [🐧 Linux Steam Client (3.1.3)](#-linux-steam-client-313)
 - [🆕 What's New in 3.1.2](#-whats-new-in-312)
 - [🎞️ Frame Generation & Present Modes](#-frame-generation--present-modes)
@@ -126,9 +126,9 @@ Every report gets its own **public discussion thread**. You can reply as the ori
 
 ---
 
-## 🧪 3.1.4 pre-release 1 (testers): Wayland
+## 🧪 3.1.4 pre-release 2 (testers): Fast OpenGL
 
-**[3.1.4 pre-release 1](https://github.com/The412Banner/Bannerlator/releases/tag/3.1.4-pre1) makes the Wayland display mode easier and faster.** Wayland now runs games on the same Turnip driver you pick for X11, through a built-in adapter, so there's one driver choice. Games start without tapping the screen, zero-copy no longer shows half-drawn frames, and DirectX 12 on Wayland is no longer capped by a driver wait (a small DirectX 12 test went from about 600 to over 4,000 fps). X11 is unchanged. It's a **tester pre-release**: you're only offered it in-app with **Settings → Include pre-releases** switched on. Full details are in the [release notes](docs/releases/3.1.4-pre1.md).
+**[3.1.4 pre-release 2](https://github.com/The412Banner/Bannerlator/releases/tag/3.1.4-pre2) makes OpenGL games on X11 several times faster.** A new **Fast OpenGL** setting (on by default) sends OpenGL frames straight to the screen through Vulkan instead of copying each one back first: an OpenGL test went from 222 to 1250 fps, and old DirectDraw games through WineD3D from 351 to 1086. It adds one compact **OpenGL** card (Fast, Show FPS, Vsync off), a **Sync** selector (esync, ntsync, fsync, wineserver), **Android games** in the Games tab, and Linux Steam client offline mode and a working Deck-mode overlay. It keeps everything from [pre-release 1](docs/releases/3.1.4-pre1.md) (Wayland adapter, no tap to start, DirectX 12 uncapped on Wayland). It's a **tester pre-release**: you're only offered it in-app with **Settings → Include pre-releases** switched on. Full details are in the [release notes](docs/releases/3.1.4-pre2.md).
 
 ## 🐧 Linux Steam Client (3.1.3)
 
