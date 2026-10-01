@@ -10375,6 +10375,19 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 }
             }
 
+            // OpenGL on X11 through Wine's EGL backend and the bundled X11-capable EGL (opt-in:
+            // BANNER_X11_EGL=1). Zink then presents through a Vulkan swapchain instead of XMesa's
+            // finish + readback + XPutImage per frame - see X11Egl. After both user env merges so a
+            // value the user typed wins; never on Wayland (its own EGL) or in the Linux session.
+            if (!waylandMode && !gamescopeMode) {
+                String x11Egl = com.winlator.star.core.X11Egl.apply(this, envVars,
+                        imageFs.getRootDir().getPath() + "/usr/lib");
+                if (x11Egl != null) {
+                    Log.i("XServerDisplayActivity", x11Egl);
+                    if (wineDebugWriter != null) wineDebugWriter.println(x11Egl);
+                }
+            }
+
             // Keep the lsfg-vk Vulkan layer INERT unless lsfg-vk is actually the engine.
             // Placed AFTER both user env merges (container above, shortcut just here) so
             // nothing the user carries over can re-enable it. The layer's manifest honours

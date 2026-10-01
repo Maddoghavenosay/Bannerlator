@@ -1,0 +1,4 @@
+{
+  "version": "Mesa 7cda785 EGL x11+wayland (Banners-Turnip exp/egl-x11-platform edd6f75e, run 36815196850)",
+  "files": ["libEGL.so.1", "libGLESv2.so.2", "libgallium-26.3.0-devel.so", "libwayland-client.so", "libarchive.so"]
+}
