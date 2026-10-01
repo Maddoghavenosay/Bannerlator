@@ -1184,8 +1184,7 @@ private fun TopLevelFields(
             val fastGlBundled = remember { com.winlator.star.core.X11Egl.isBundled(context) }
             val fastGlReason = when {
                 compositorDriverOnly -> com.winlator.star.core.FastOpenGL.WAYLAND_ALWAYS_ON
-                else -> com.winlator.star.core.FastOpenGL.unavailableReason(
-                    viewModel.fastOpenGLLayerEgl, fastGlDriverOk, fastGlBundled)
+                else -> com.winlator.star.core.FastOpenGL.unavailableReason(fastGlDriverOk, fastGlBundled)
             }
             com.winlator.star.ui.components.OpenGLCard(onHelp = { helpRes = R.string.help_opengl_settings }) {
                 com.winlator.star.ui.components.OpenGLCardRow(

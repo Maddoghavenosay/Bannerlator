@@ -230,28 +230,14 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // Fast OpenGL (extra "fastOpenGL": "1" / "0", absent = on; core.FastOpenGL). fastOpenGL is the
-    // stored switch; fastOpenGLLayerEgl whether the selected layer's win32u has Wine's EGL backend
-    // (null while the off-main probe runs). The driver half is judged in the screen from the picked
-    // driver; on Wayland the row is locked on and the stored value is kept as is.
+    // stored switch. Any layer can use it (the launch picks the EGL or GLX route), so availability is
+    // judged in the screen from the picked driver alone; on Wayland the row is locked on and the
+    // stored value is kept as is.
     var fastOpenGL by mutableStateOf(true)
     // Show OpenGL FPS / OpenGL vsync off (extras "glFpsHud" / "glVsyncOff", absent = off): plain
     // launch switches beside Fast OpenGL, on both backends, never greyed.
     var glFpsHud by mutableStateOf(false)
     var glVsyncOff by mutableStateOf(false)
-    var fastOpenGLLayerEgl by mutableStateOf<Boolean?>(null); private set
-    private var fastOpenGLProbeJob: Job? = null
-
-    private fun refreshFastOpenGLLayer(layer: String) {
-        fastOpenGLProbeJob?.cancel()
-        if (defaultsMode || layer.isEmpty()) { fastOpenGLLayerEgl = null; return }
-        fastOpenGLLayerEgl = com.winlator.star.core.FastOpenGL.peek(layer)
-        fastOpenGLProbeJob = viewModelScope.launch(Dispatchers.Main) {
-            val has = withContext(Dispatchers.IO) {
-                com.winlator.star.core.FastOpenGL.layerHasEglFor(context, contentsManager, layer)
-            }
-            if (selectedWineVersion == layer) fastOpenGLLayerEgl = has
-        }
-    }
 
     // Render scale (supersampling) — stored via the "renderScale" extra (no DB field). "1.0" = Off.
     var renderScale         by mutableStateOf("1.0")
@@ -813,7 +799,6 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
             envVarsStr = SyncSupport.stripSyncVars(rawEnv)
             refreshSyncCaps(selectedWineVersion)
         }
-        refreshFastOpenGLLayer(selectedWineVersion)
 
         // Drives
         drives.clear()
@@ -1074,7 +1059,6 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         if (isWaylandStored && !isWineWaylandCapable(version)) displayBackend = Container.DISPLAY_BACKEND_X11
         refreshWineDependent(version)   // updates isArm64EC + swaps the box64/wowbox64 list
         refreshSyncCaps(version)        // re-grey the Sync pills; an unavailable pick falls back
-        refreshFastOpenGLLayer(version) // re-check Fast OpenGL against the new layer's win32u
 
         // CREATE mode only: a wine change can FLIP the architecture. applyArch() swapped the box64 list
         // and reset its selection but did NOT re-seed the arch-dependent fields, so without this they'd

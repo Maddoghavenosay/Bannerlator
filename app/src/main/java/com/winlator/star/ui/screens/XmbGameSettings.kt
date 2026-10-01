@@ -161,8 +161,6 @@ private var xmbBundledDriverVersionsLoading = false
 private var xmbWaylandAutoLoading = false
 // Layers whose Sync capabilities are being probed (SyncSupport caches the answer).
 private val xmbSyncProbing = HashSet<String>()
-// Layers whose Fast OpenGL support (win32u's EGL backend) is being probed (FastOpenGL caches it).
-private val xmbFastGlProbing = HashSet<String>()
 
 private fun generalRows(xmb: XmbScope, p: XmbPrefs, host: XmbGameHost): List<XmbRow> {
     val s = p.shortcut
@@ -497,22 +495,13 @@ private fun generalRows(xmb: XmbScope, p: XmbPrefs, host: XmbGameHost): List<Xmb
     }
     // Fast OpenGL (per-game override of the container's fastOpenGL; "" = container default, "1" on,
     // "0" off) — same extra and rules as the pop-up editor (core.FastOpenGL). Locked on Wayland
-    // (always on there); on X11 greyed with one reason when the container's layer has no EGL backend
-    // (win32u probe, off-main on a first visit), the driver isn't a Turnip or the APK has no X11 EGL.
+    // (always on there); on X11 greyed with one reason when the driver isn't a Turnip or the APK has
+    // no X11 GL set. Any layer works on X11: the launch picks the EGL or GLX route.
     if (!com.winlator.star.linux.LinuxShortcuts.isLinuxEntry(s)) {
-        val glLayer = c.wineVersion ?: ""
-        val glLayerEgl = com.winlator.star.core.FastOpenGL.peek(glLayer)
-        if (glLayerEgl == null && glLayer.isNotEmpty() && xmbFastGlProbing.add(glLayer)) {
-            xmb.scope.launch {
-                withContext(Dispatchers.IO) { com.winlator.star.core.FastOpenGL.layerHasEglFor(p.context, null, glLayer) }
-                xmbFastGlProbing.remove(glLayer)
-                xmb.refresh()
-            }
-        }
         val glDriver = com.winlator.star.contentdialog.GraphicsDriverConfigDialog.getVersion(
             p.ex("graphicsDriverConfig", c.getGraphicsDriverConfig()))
         val glLocked = if (waylandGame) com.winlator.star.core.FastOpenGL.WAYLAND_ALWAYS_ON
-            else com.winlator.star.core.FastOpenGL.unavailableReason(glLayerEgl,
+            else com.winlator.star.core.FastOpenGL.unavailableReason(
                 com.winlator.star.core.FastOpenGL.driverUsable(p.context, glDriver),
                 com.winlator.star.core.X11Egl.isBundled(p.context))
         val glValues = listOf("", "1", "0")

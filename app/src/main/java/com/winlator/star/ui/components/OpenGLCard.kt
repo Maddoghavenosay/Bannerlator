@@ -58,7 +58,6 @@ val OPENGL_VSYNC_ICON: ImageVector = Icons.Filled.LockOpen
 fun openGLFastNote(reason: String?): String? = when (reason) {
     null -> null
     com.winlator.star.core.FastOpenGL.WAYLAND_ALWAYS_ON -> "always on with Wayland"
-    com.winlator.star.core.FastOpenGL.NEEDS_LAYER -> "needs Wine 11 layer"
     com.winlator.star.core.FastOpenGL.NEEDS_TURNIP -> "needs Turnip driver"
     com.winlator.star.core.FastOpenGL.NOT_BUNDLED -> "not in this build"
     else -> reason.replaceFirstChar { it.lowercase() }

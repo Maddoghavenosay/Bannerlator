@@ -139,7 +139,7 @@ internal val CONTAINER_GLOSSARY: List<GlossarySection> = listOf(
         GlossaryEntry("SurfaceFlinger (renderer)",
             "An experimental renderer that hands frames straight to Android's display system. Sometimes faster, but it can misbehave (or even reboot) some devices — Vulkan is the safe default."),
         GlossaryEntry("Fast OpenGL",
-            "Sends an OpenGL game's frames straight to the screen through Vulkan, the route DXVK games take, instead of copying every frame back first. Several times faster on X11, and it speeds up DirectDraw and older Direct3D games through WineD3D too. Always on with Wayland; on X11 it needs a Turnip driver and a Wine 11 layer. On by default — turn it off for a game that misbehaves. It doesn't change game speed: very old games tied to frame rate should use the FPS limiter."),
+            "Sends an OpenGL game's frames straight to the screen through Vulkan, the route DXVK games take, instead of copying every frame back first. Several times faster on X11, and it speeds up DirectDraw and older Direct3D games through WineD3D too. Always on with Wayland; on X11 it needs a Turnip driver and works with any Wine layer (Wine 11 arm64ec layers go through EGL, everything else, including x86-64 layers, through GLX). On by default — turn it off for a game that misbehaves. It doesn't change game speed: very old games tied to frame rate should use the FPS limiter."),
         GlossaryEntry("Show OpenGL FPS",
             "Mesa's frames-per-second counter in the top-left corner of OpenGL games (GALLIUM_HUD=fps). Works on X11 and Wayland; DXVK games don't show it. Off by default."),
         GlossaryEntry("OpenGL vsync off",
