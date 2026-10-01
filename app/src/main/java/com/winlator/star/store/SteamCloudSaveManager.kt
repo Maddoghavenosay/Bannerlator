@@ -6,7 +6,6 @@ import com.winlator.star.container.Container
 import com.winlator.star.container.ContainerManager
 import com.winlator.star.container.Shortcut
 import com.winlator.star.core.SaveLocator
-import `in`.dragonbra.javasteam.types.KeyValue
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
@@ -327,12 +326,15 @@ object SteamCloudSaveManager {
 
     /**
      * Whether [appId] actually supports Steam Cloud, read from the app's DECLARED UFS config in PICS
-     * product info (`appinfo → ufs → savefiles`) — the same source GameNative uses. A game with NO
-     * usable save-file patterns has no cloud store; uploading to it "succeeds" but persists nothing.
+     * product info (`appinfo → ufs`, see [SteamUfsConfig]). A game has a cloud store when it declares
+     * Auto-Cloud `savefiles` rules OR a `quota` / `maxnumfiles` (games that save through the Steam API —
+     * Left 4 Dead 2, Counter-Strike: Source — have a quota and NO savefiles rules), or when its cloud
+     * manifest already holds files. Only a game with none of these has no cloud store.
      *
      * Returns:
-     *  - `true`  — the app declares ≥1 usable UFS save-file pattern (e.g. Half-Life 2).
-     *  - `false` — the app's product info is populated but declares no save files (e.g. FlatOut 2).
+     *  - `true`  — rules, a quota/file limit, or files already in the cloud (Half-Life 2, Left 4 Dead 2).
+     *  - `false` — populated product info with no rules and no quota, and an empty/unknown manifest,
+     *              or a game proven not to retain uploads (FlatOut 2, see [SaveSyncStore.markNoSteamCloud]).
      *  - `null`  — couldn't determine (not signed in, PICS query failed/timed out, or metadata-only
      *              product info with no populated KeyValues). Callers should NOT treat null as "no
      *              cloud"; upload falls back to a post-upload persistence check instead.
@@ -346,34 +348,31 @@ object SteamCloudSaveManager {
 
         cloudSupportCache[appId]?.let { return it }
 
+        // Files already in this game's cloud are proof by themselves (offline-safe: last observed count).
+        if (SaveSyncStore.lastKnownCloudFileCount(appId) > 0) {
+            cloudSupportCache[appId] = true
+            return true
+        }
+
         return try {
             // Engine-agnostic single-app product-info read (JavaSteam PICS future / Rust engine PICS
-            // hop) — null when not signed in, which the caller treats as "unknown".
-            val appKeyValues: KeyValue? =
-                SteamRepository.getInstance().fetchAppKeyValues(appId, FUTURE_TIMEOUT_SEC * 1000L)
-
-            // No populated KeyValues (metadata-only / missing token) → genuinely unknown.
-            if (appKeyValues == null || appKeyValues.children.isEmpty()) {
-                null
-            } else {
-                val supported = hasUsableSaveFiles(appKeyValues)
-                cloudSupportCache[appId] = supported
-                supported
+            // hop), cached by SteamUfsConfig — null when not signed in, which the caller treats as
+            // "unknown".
+            val config = SteamUfsConfig.get(ctx, appId, allowNetwork = true, timeoutMs = FUTURE_TIMEOUT_SEC * 1000L)
+            if (config != null && config.declaresCloud) {
+                cloudSupportCache[appId] = true
+                return true
+            }
+            // PICS says no cloud (or couldn't tell): a non-empty live manifest still proves it.
+            val manifestCount = try { SteamCloudBackend.current()?.listFiles(appId)?.size } catch (e: Exception) { null }
+            when {
+                manifestCount != null && manifestCount > 0 -> { cloudSupportCache[appId] = true; true }
+                config != null -> { cloudSupportCache[appId] = false; false }   // definitive: no quota, no rules, empty cloud
+                else -> null
             }
         } catch (e: Exception) {
             Log.w(TAG, "hasCloudSupport: PICS product-info query failed for appId=$appId", e)
             null
-        }
-    }
-
-    /** True if the app's PICS KeyValues declare at least one usable UFS save-file pattern. Navigates
-     *  `ufs/savefiles` (case-insensitive; [KeyValue.get] returns the INVALID sentinel — never null —
-     *  when a key is absent, so missing sections yield an empty child list ⇒ false). A pattern counts
-     *  as usable if it carries a non-blank `root` or `pattern`. */
-    private fun hasUsableSaveFiles(appKeyValues: KeyValue): Boolean {
-        val saveFiles = appKeyValues.get("ufs").get("savefiles").children
-        return saveFiles.any { entry ->
-            !entry.get("root").value.isNullOrBlank() || !entry.get("pattern").value.isNullOrBlank()
         }
     }
 
