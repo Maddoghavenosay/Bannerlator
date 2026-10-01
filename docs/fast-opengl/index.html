@@ -310,7 +310,7 @@ details.more .inner{display:flex;flex-direction:column;gap:16px}
 <div class="tbl"><table>
   <thead><tr><th>Wine version</th><th>Faster?</th><th>Tested</th></tr></thead>
   <tbody>
-    <tr><td><b>Wine 11 / Proton 11</b> (arm64ec)<br><small>GE-Proton 11.0-7, Proton 11.0-2 and others</small></td><td class="yes">&#10003; Yes</td><td>Yes, already in 3.1.4 pre-release 2</td></tr>
+    <tr><td><b>Wine 11 / Proton 11</b> (arm64ec)<br><small>GE-Proton 11.0-7, Proton 11.0-2 and others</small></td><td class="yes">&#10003; Yes</td><td>Yes, on the phone</td></tr>
     <tr><td><b>Proton 11 x86_64</b></td><td class="yes">&#10003; Yes</td><td>Yes, on the phone</td></tr>
     <tr><td><b>Proton 10 / Wine 10</b><br><small>GE-Proton 10.0-34 and others</small></td><td class="yes">&#10003; Yes</td><td>Yes, on the phone</td></tr>
     <tr><td><b>Wine 9.5</b> x86-64</td><td class="yes">&#10003; Yes</td><td>Yes, on the phone</td></tr>
@@ -378,7 +378,7 @@ details.more .inner{display:flex;flex-direction:column;gap:16px}
     </article>
 
     <article class="road egl" aria-label="EGL road">
-      <div class="hd"><span class="tag">New &#183; EGL road</span><span class="who">X11, Wine 11 (arm64ec). Shipped in 3.1.4 pre-release 2 as "Fast OpenGL".</span></div>
+      <div class="hd"><span class="tag">New &#183; EGL road</span><span class="who">X11, Wine 11 (arm64ec). Part of "Fast OpenGL" in 3.1.4.</span></div>
       <div class="chain">
         <div class="step"><small>Game</small>Draws with OpenGL</div><span class="arrow" aria-hidden="true">&#8594;</span>
         <div class="step hot"><small>Wine 11 EGL switch</small>Wine talks EGL instead of GLX</div><span class="arrow" aria-hidden="true">&#8594;</span>
@@ -390,7 +390,7 @@ details.more .inner{display:flex;flex-direction:column;gap:16px}
     </article>
 
     <article class="road glx" aria-label="New GLX road">
-      <div class="hd"><span class="tag">New &#183; GLX road</span><span class="who">X11, Wine 9, Wine 10, x86_64 and third-party layers. Device-tested on four layers today, not released yet.</span></div>
+      <div class="hd"><span class="tag">New &#183; GLX road</span><span class="who">X11, Wine 9, Wine 10, x86_64 and third-party layers. Device-tested on four layers. Released in 3.1.4.</span></div>
       <div class="chain">
         <div class="step"><small>Game</small>Draws with OpenGL</div><span class="arrow" aria-hidden="true">&#8594;</span>
         <div class="step"><small>Wine (any version)</small>Talks GLX, like it always did</div><span class="arrow" aria-hidden="true">&#8594;</span>
@@ -442,12 +442,11 @@ details.more .inner{display:flex;flex-direction:column;gap:16px}
 
 <section class="col">
   <span class="eyebrow">Where it stands</span>
-  <h2>What's done and what's next</h2>
+  <h2>Released in Bannerlator 3.1.4</h2>
   <ul>
-    <li><span class="yes">Done:</span> the Wine 11 method, released in 3.1.4 pre-release 2.</li>
-    <li><span class="yes">Done:</span> the method for all other Wine versions, tested on the phone on Wine 9.5, GE-Proton 10 and Proton 11 x86_64. The app picks the method by itself.</li>
-    <li><b>Next:</b> testing real OpenGL games with the new method, then a pre-release.</li>
-    <li><b>Known limit:</b> 32-bit OpenGL games on older 32-bit-only Wine setups aren't covered yet.</li>
+    <li><span class="yes">In 3.1.4:</span> Fast OpenGL for every Wine version, on by default. The app picks the method by itself.</li>
+    <li><b>Please report</b> OpenGL games you play, with fps before and after (game settings &rarr; OpenGL &rarr; Fast &rarr; Off to compare).</li>
+    <li><b>Known limit:</b> 32-bit OpenGL games on older 32-bit-only Wine setups aren't covered yet. They run as before.</li>
   </ul>
 </section>
 

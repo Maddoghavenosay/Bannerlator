@@ -79,7 +79,7 @@ Before any **stable release** is published, all changes are **manually debugged 
 |---|---|
 | **App label** | `Bannerlator Bionic` (standard) · `Bannerlator Bionic PuBG` (pubg) · `Bannerlator Bionic Ludashi` (ludashi) |
 | **Packages** | `com.winlator.banner` (standard) · `com.tencent.ig` (pubg) · `com.ludashi.benchmark` (ludashi) |
-| **Version** | Bannerlator **V 3.1.3** — built from Star **marcescence** (`versionName 3.1.3`, `versionCode 90`). Testers: **3.1.4 pre-release 2** (`versionCode 92`) |
+| **Version** | Bannerlator **V 3.1.4** — built from Star **marcescence** (`versionName 3.1.4`, `versionCode 93`) |
 | **Android SDK** | `compileSdk 34` · `targetSdk 28` · `minSdk 26` (Android 8.0+) |
 | **Lineage** | Winlator → cmod → Bionic Nightly → Star Bionic → **marcescence** → **Bannerlator** |
 
@@ -111,7 +111,7 @@ Every report gets its own **public discussion thread**. You can reply as the ori
 - [🤖 AI Disclaimer](#-ai-disclaimer)
 - [ℹ️ Information](#ℹ️-information)
 - [🐛 Report a Mali GPU Issue](#-report-a-mali-gpu-game-issue)
-- [🧪 3.1.4 pre-release 2 (testers): Fast OpenGL](#-314-pre-release-2-testers-fast-opengl)
+- [⚡ Fast OpenGL (3.1.4)](#-fast-opengl-314)
 - [🐧 Linux Steam Client (3.1.3)](#-linux-steam-client-313)
 - [🆕 What's New in 3.1.2](#-whats-new-in-312)
 - [🎞️ Frame Generation & Present Modes](#-frame-generation--present-modes)
@@ -126,9 +126,11 @@ Every report gets its own **public discussion thread**. You can reply as the ori
 
 ---
 
-## 🧪 3.1.4 pre-release 2 (testers): Fast OpenGL
+## ⚡ Fast OpenGL (3.1.4)
 
-**[3.1.4 pre-release 2](https://github.com/The412Banner/Bannerlator/releases/tag/3.1.4-pre2) makes OpenGL games on X11 several times faster.** A new **Fast OpenGL** setting (on by default) sends OpenGL frames straight to the screen through Vulkan instead of copying each one back first: an OpenGL test went from 222 to 1250 fps, and old DirectDraw games through WineD3D from 351 to 1086. It adds one compact **OpenGL** card (Fast, Show FPS, Vsync off), a **Sync** selector (esync, ntsync, fsync, wineserver), **Android games** in the Games tab, and Linux Steam client offline mode and a working Deck-mode overlay. It keeps everything from [pre-release 1](docs/releases/3.1.4-pre1.md) (Wayland adapter, no tap to start, DirectX 12 uncapped on Wayland). It's a **tester pre-release**: you're only offered it in-app with **Settings → Include pre-releases** switched on. Full details are in the [release notes](docs/releases/3.1.4-pre2.md).
+**[3.1.4](https://github.com/The412Banner/Bannerlator/releases/tag/3.1.4) makes OpenGL games on X11 about 4 to 5 times faster, on every Wine version.** A new **Fast OpenGL** setting (on by default) sends OpenGL frames straight to the screen through Vulkan instead of copying each one back first. It picks the right method by itself: Wine's EGL route on Wine 11 / Proton 11 arm64ec, and a new GLX route on everything else (Proton 10, Wine 9.5, every x86_64 layer). Old DirectDraw games through WineD3D get about 2 times faster too, and no freedreno is needed, just your Turnip driver. 3.1.4 also brings one compact **OpenGL** card (Fast, Show FPS, Vsync off), a **Sync** selector, **Android games** in the Games tab, and on Wayland one driver choice through the new adapter, no tap to start and uncapped DirectX 12. Full details are in the [release notes](docs/releases/3.1.4.md).
+
+> 📘 **Plain-language explainer, with before-and-after screenshots and fps for every Wine version: [Fast OpenGL — OpenGL games now run 4 to 5 times faster](https://the412banner.github.io/Bannerlator/fast-opengl/)**
 
 ## 🐧 Linux Steam Client (3.1.3)
 
