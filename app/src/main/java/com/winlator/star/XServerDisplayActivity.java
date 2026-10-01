@@ -5422,7 +5422,10 @@ public class XServerDisplayActivity extends AppCompatActivity {
                             // stays unconditional (independent of this cloud toggle).
                             boolean cloudDisclaimerOk = getSharedPreferences("steam_prefs", MODE_PRIVATE)
                                     .getBoolean("cloud_saves_disclaimer_accepted", false);
-                            if (cloudDisclaimerOk && savePrefs.getBoolean("auto_upload_steam_on_exit", true))
+                            // A SteamLite launch's genuine client already uploaded on exit — don't race it.
+                            if (realSteamPlan != null)
+                                Log.i("BH_SAVE_SYNC", "auto-upload Steam: SteamLite launch — the Steam client syncs cloud saves itself, skip");
+                            else if (cloudDisclaimerOk && savePrefs.getBoolean("auto_upload_steam_on_exit", true))
                                 autoUploadSteamSavesBlocking();
                         } else {
                             // GOG-library games (untagged, installed under gog_games/) push their saves to
@@ -6494,10 +6497,12 @@ public class XServerDisplayActivity extends AppCompatActivity {
             if (sc == null) return;
             if (!isGenuineSteamShortcut()) return;
 
-            // The SteamLite pre-flight (SteamSessionManager, run in the launch popup BEFORE this
-            // activity opened) already did this pull — never repeat it over the game art.
-            if (getIntent().getBooleanExtra(com.winlator.star.store.SteamSessionManager.EXTRA_PREFLIGHT_DONE, false)) {
-                Log.i("BH_SAVE_SYNC", "auto-download Steam: done by the launch pre-flight — skip");
+            // SteamLite launch (genuine client in the prefix, armed by maybeStageRealSteam() earlier in
+            // setupXEnvironment): the client syncs Steam Cloud itself at launch — writing the same save
+            // files from here first only invites its cloud-conflict prompt. A SteamLite request that
+            // fell back to a normal launch (realSteamPlan == null) still gets the app's pull.
+            if (realSteamPlan != null) {
+                Log.i("BH_SAVE_SYNC", "auto-download Steam: SteamLite launch — the Steam client syncs cloud saves itself, skip");
                 return;
             }
 

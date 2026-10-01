@@ -185,6 +185,8 @@ object SteamSessionManager {
         val gameName: String,
         val pullCloudSaves: Boolean = true,
         val checkForUpdates: Boolean = true,
+        /** The launch runs the genuine Steam client (SteamLite), which syncs cloud saves itself. */
+        val clientSyncsCloud: Boolean = true,
     )
 
     /** Callbacks on the MAIN thread. */
@@ -288,7 +290,13 @@ object SteamSessionManager {
                 if (handle.isCancelled) { post { listener.onCancelled() }; return@Thread }
 
                 // 3. Cloud saves ---------------------------------------------------------------
-                if (!req.pullCloudSaves || req.appId <= 0 || req.installDir.isEmpty()) {
+                // This pre-flight only runs for SteamLite (the genuine client in the prefix), and the
+                // client syncs Steam Cloud itself at launch and exit. Pulling here as well wrote into the
+                // same save files right before the client's own sync (cloud-conflict prompts), so the
+                // app leaves cloud saves to the client.
+                if (req.clientSyncsCloud) {
+                    step(Step.CLOUD, StepState.SKIPPED, "Cloud saves: synced by the Steam client")
+                } else if (!req.pullCloudSaves || req.appId <= 0 || req.installDir.isEmpty()) {
                     step(Step.CLOUD, StepState.SKIPPED, if (req.appId <= 0) "Cloud saves: game not resolved" else "Cloud saves: off")
                 } else if (skipSession || !isLoggedOn()) {
                     step(Step.CLOUD, StepState.SKIPPED, "Cloud saves: skipped (no Steam session)")
