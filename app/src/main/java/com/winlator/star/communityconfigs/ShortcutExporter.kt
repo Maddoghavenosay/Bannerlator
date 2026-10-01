@@ -98,6 +98,11 @@ object ShortcutExporter {
             com.winlator.star.core.SyncSupport.requestedMode(
                 container?.getExtra(com.winlator.star.core.SyncMode.EXTRA), container?.getEnvVars(),
                 shortcut.getExtra(com.winlator.star.core.SyncMode.EXTRA), shortcut.getExtra("envVars")) ?: "")
+        // Fast OpenGL: effective = this game's override, else the container's switch (default on).
+        put(effective, com.winlator.star.core.FastOpenGL.EXTRA,
+            if (com.winlator.star.core.FastOpenGL.requested(
+                    container?.getExtra(com.winlator.star.core.FastOpenGL.EXTRA),
+                    shortcut.getExtra(com.winlator.star.core.FastOpenGL.EXTRA))) "1" else "0")
 
         // Community-config coverage pass (2026-07). Container-level settings resolve EFFECTIVE exactly
         // as dxwrapperConfig/screenSize above do — shortcut override via orDefault, else the container

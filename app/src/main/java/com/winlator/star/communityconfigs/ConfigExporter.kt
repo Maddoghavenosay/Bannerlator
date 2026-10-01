@@ -50,6 +50,9 @@ object ConfigExporter {
         // Sync selector (esync | ntsync | wineserver); an importing layer that can't run it falls back
         // to its own default at launch (core.SyncSupport).
         "syncMode",
+        // Fast OpenGL ("1" / "0"); an importer whose layer or driver can't do it stays on GLX at
+        // launch (core.FastOpenGL).
+        "fastOpenGL",
         // Community-config coverage pass (2026-07): per-game HUD blob + motion/refresh/frame-gen/
         // vibration/upscaler overrides that were previously dropped. Each round-trips as a scalar the
         // import write loop applies verbatim; the launch path in XServerDisplayActivity honors every one

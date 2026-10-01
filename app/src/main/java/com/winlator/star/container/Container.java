@@ -530,6 +530,18 @@ public class Container {
         putExtra("waylandGlSafeMode", enabled ? "1" : "0");
     }
 
+    // --- Fast OpenGL (per-container), stored in extraData. X11 sessions only (Wayland always uses EGL). ---
+    // OpenGL through Wine's EGL backend + Zink instead of XMesa's readback per frame (core.FastOpenGL,
+    // core.X11Egl). Default ON; the launch still checks the layer and driver can do it. A shortcut may
+    // override per game with the same-named extra.
+    public boolean isFastOpenGL() {
+        return com.winlator.star.core.FastOpenGL.containerOn(getExtra(com.winlator.star.core.FastOpenGL.EXTRA));
+    }
+
+    public void setFastOpenGL(boolean enabled) {
+        putExtra(com.winlator.star.core.FastOpenGL.EXTRA, enabled ? "1" : "0");
+    }
+
     // --- HDR output (per-container), stored in extraData. Wayland sessions only. ---
     // Games that support HDR10 get it on a screen that reports HDR10 (display.WaylandHdr, the
     // compositor's wl_color_mgmt.c). Default OFF (absent). A shortcut overrides with the same-named

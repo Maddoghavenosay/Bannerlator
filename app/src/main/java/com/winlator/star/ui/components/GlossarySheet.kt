@@ -138,6 +138,8 @@ internal val CONTAINER_GLOSSARY: List<GlossarySection> = listOf(
             "'Vsync off': frames go to the screen the instant they're ready. Lowest input lag, but you can see tearing (parts of two frames at once). Usually not worth it on a high-refresh phone screen."),
         GlossaryEntry("SurfaceFlinger (renderer)",
             "An experimental renderer that hands frames straight to Android's display system. Sometimes faster, but it can misbehave (or even reboot) some devices — Vulkan is the safe default."),
+        GlossaryEntry("Fast OpenGL",
+            "Sends an OpenGL game's frames straight to the screen through Vulkan, the route DXVK games take, instead of copying every frame back first. Several times faster on X11, and it speeds up DirectDraw and older Direct3D games through WineD3D too. Always on with Wayland; on X11 it needs a Turnip driver and a Wine 11 layer. On by default — turn it off for a game that misbehaves. It doesn't change game speed: very old games tied to frame rate should use the FPS limiter."),
         GlossaryEntry("Shader stutter & cache",
             "The first time you play, the game compiles its shaders, which can cause brief stutters. DXVK's shader (state) cache saves them so later sessions run smoothly."),
     )),

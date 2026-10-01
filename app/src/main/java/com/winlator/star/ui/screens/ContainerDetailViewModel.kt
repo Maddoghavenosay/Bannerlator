@@ -229,6 +229,26 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // Fast OpenGL (extra "fastOpenGL": "1" / "0", absent = on; core.FastOpenGL). fastOpenGL is the
+    // stored switch; fastOpenGLLayerEgl whether the selected layer's win32u has Wine's EGL backend
+    // (null while the off-main probe runs). The driver half is judged in the screen from the picked
+    // driver; on Wayland the row is locked on and the stored value is kept as is.
+    var fastOpenGL by mutableStateOf(true)
+    var fastOpenGLLayerEgl by mutableStateOf<Boolean?>(null); private set
+    private var fastOpenGLProbeJob: Job? = null
+
+    private fun refreshFastOpenGLLayer(layer: String) {
+        fastOpenGLProbeJob?.cancel()
+        if (defaultsMode || layer.isEmpty()) { fastOpenGLLayerEgl = null; return }
+        fastOpenGLLayerEgl = com.winlator.star.core.FastOpenGL.peek(layer)
+        fastOpenGLProbeJob = viewModelScope.launch(Dispatchers.Main) {
+            val has = withContext(Dispatchers.IO) {
+                com.winlator.star.core.FastOpenGL.layerHasEglFor(context, contentsManager, layer)
+            }
+            if (selectedWineVersion == layer) fastOpenGLLayerEgl = has
+        }
+    }
+
     // Render scale (supersampling) — stored via the "renderScale" extra (no DB field). "1.0" = Off.
     var renderScale         by mutableStateOf("1.0")
     var autoCloseOnExit     by mutableStateOf(true)
@@ -642,6 +662,7 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
             ?: if (isEditMode) Container.WAYLAND_GAME_DRIVER_AUTO else Container.WAYLAND_GAME_DRIVER_ADAPTER
         waylandHdr               = seed?.isWaylandHdr() ?: false
         unrealHdr                = seed?.getUnrealHdr() ?: com.winlator.star.core.UnrealHdr.OFF
+        fastOpenGL               = seed?.isFastOpenGL() ?: true
         renderScale              = seed?.getExtra("renderScale", "1.0") ?: "1.0"
         autoCloseOnExit          = (seed?.getExtra("autoCloseOnExit", "1") ?: "1") == "1"
         selectedDXWrapper        = identifierToDisplay(seed?.getDXWrapper() ?: Container.DEFAULT_DXWRAPPER, dxWrapperEntries)
@@ -786,6 +807,7 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
             envVarsStr = SyncSupport.stripSyncVars(rawEnv)
             refreshSyncCaps(selectedWineVersion)
         }
+        refreshFastOpenGLLayer(selectedWineVersion)
 
         // Drives
         drives.clear()
@@ -1046,6 +1068,7 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         if (isWaylandStored && !isWineWaylandCapable(version)) displayBackend = Container.DISPLAY_BACKEND_X11
         refreshWineDependent(version)   // updates isArm64EC + swaps the box64/wowbox64 list
         refreshSyncCaps(version)        // re-grey the Sync pills; an unavailable pick falls back
+        refreshFastOpenGLLayer(version) // re-check Fast OpenGL against the new layer's win32u
 
         // CREATE mode only: a wine change can FLIP the architecture. applyArch() swapped the box64 list
         // and reset its selection but did NOT re-seed the arch-dependent fields, so without this they'd
@@ -1347,6 +1370,7 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         c.setWaylandGameDriver(waylandGameDriver)
         c.setWaylandHdr(waylandHdr)                 // off clears the extra
         c.setUnrealHdr(unrealHdr)                   // off clears the extra
+        c.setFastOpenGL(fastOpenGL)                 // kept as chosen, also while Wayland locks it on
         c.putExtra("renderScale", if (renderScale == "1.0") null else renderScale)
         c.putExtra("autoCloseOnExit", if (autoCloseOnExit) null else "0")  // default ON
         c.setInputType(inputType)

@@ -1171,6 +1171,50 @@ private fun TopLevelFields(
                 )
             }
         }
+        // Fast OpenGL (core.FastOpenGL): OpenGL through Wine's EGL + Zink instead of GLX's readback.
+        // Wayland always works this way, so the switch is locked on there (the stored value is kept).
+        // On X11 it greys with one reason when the layer's win32u lacks the EGL backend, the driver
+        // isn't a Turnip or the APK has no X11 EGL; the layer probe runs off-main in the view-model.
+        run {
+            Spacer(Modifier.height(8.dp))
+            val fastGlDriverOk = remember(compositorVersion) {
+                com.winlator.star.core.FastOpenGL.driverUsable(context, compositorVersion)
+            }
+            val fastGlBundled = remember { com.winlator.star.core.X11Egl.isBundled(context) }
+            val fastGlReason = when {
+                compositorDriverOnly -> com.winlator.star.core.FastOpenGL.WAYLAND_ALWAYS_ON
+                else -> com.winlator.star.core.FastOpenGL.unavailableReason(
+                    viewModel.fastOpenGLLayerEgl, fastGlDriverOk, fastGlBundled)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    enabled = fastGlReason == null,
+                    checked = if (compositorDriverOnly) true else viewModel.fastOpenGL && fastGlReason == null,
+                    onCheckedChange = { viewModel.fastOpenGL = it }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    com.winlator.star.core.FastOpenGL.TITLE,
+                    color = if (fastGlReason == null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = { helpRes = R.string.help_fast_opengl }) {
+                    Icon(Icons.Default.Help, contentDescription = "What is Fast OpenGL?", modifier = Modifier.size(18.dp))
+                }
+            }
+            if (fastGlReason != null) {
+                Text(
+                    fastGlReason,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                com.winlator.star.core.FastOpenGL.HINT,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         // Unreal Engine HDR (both backends; under HDR output on Wayland): Off / DirectX 12 fix /
         // DirectX 11 (experimental, NVAPI). See core.UnrealHdr; the DirectX 11 mode swaps the bundled
         // dxvk-nvapi into the prefix at launch (core.DxvkNvapi) and Off puts the prefix's files back.

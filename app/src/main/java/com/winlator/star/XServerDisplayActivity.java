@@ -10375,18 +10375,11 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 }
             }
 
-            // OpenGL on X11 through Wine's EGL backend and the bundled X11-capable EGL (opt-in:
-            // BANNER_X11_EGL=1). Zink then presents through a Vulkan swapchain instead of XMesa's
-            // finish + readback + XPutImage per frame - see X11Egl. After both user env merges so a
-            // value the user typed wins; never on Wayland (its own EGL) or in the Linux session.
-            if (!waylandMode && !gamescopeMode) {
-                String x11Egl = com.winlator.star.core.X11Egl.apply(this, envVars,
-                        imageFs.getRootDir().getPath() + "/usr/lib");
-                if (x11Egl != null) {
-                    Log.i("XServerDisplayActivity", x11Egl);
-                    if (wineDebugWriter != null) wineDebugWriter.println(x11Egl);
-                }
-            }
+            // "Fast OpenGL" on X11: Wine's EGL backend + the bundled X11-capable EGL, so Zink presents
+            // through a Vulkan swapchain instead of XMesa's finish + readback + XPutImage per frame (see
+            // core.FastOpenGL / X11Egl). After both user env merges so a value the user typed wins;
+            // never on Wayland (winewayland always uses its own EGL) or in the Linux session.
+            if (!waylandMode && !gamescopeMode) applyFastOpenGLEnv();
 
             // Keep the lsfg-vk Vulkan layer INERT unless lsfg-vk is actually the engine.
             // Placed AFTER both user env merges (container above, shortcut just here) so
@@ -13823,6 +13816,47 @@ return true;
                 + " -> " + mode + " [layer esync=" + caps.getEsync() + " ntsync=" + caps.getNtsync() + "]"
                 + " WINEESYNC=" + envVars.get("WINEESYNC")
                 + (envVars.has("WINENTSYNC") ? " WINENTSYNC=" + envVars.get("WINENTSYNC") : ""));
+    }
+
+    /**
+     * Resolve "Fast OpenGL" for this X11 launch (core.FastOpenGL) and, when on, export X11Egl's env:
+     * BANNER_X11_EGL=0/1 in the environment wins outright (1 still needs the bundled EGL); else the
+     * shortcut's override, else the container's choice (default on), and on only when the layer's
+     * win32u knows WINE_USE_EGL, the driver is a Turnip and the APK carries the EGL. EGL vs GLX is
+     * fixed when the game process starts, so this is launch-only. One log line either way.
+     */
+    private void applyFastOpenGLEnv() {
+        if (container == null) return;
+        boolean on;
+        String why;
+        Boolean forced = com.winlator.star.core.X11Egl.envOverride(envVars);
+        if (forced != null) {
+            on = forced;
+            why = "env override";
+        } else {
+            String game = shortcut != null
+                    ? com.winlator.star.core.FastOpenGL.normalize(shortcut.getExtra(com.winlator.star.core.FastOpenGL.EXTRA))
+                    : null;
+            on = game != null ? game.equals("1") : container.isFastOpenGL();
+            why = game != null ? "game" : "container";
+            if (on) {
+                String reason = com.winlator.star.core.FastOpenGL.unavailableReason(this,
+                        wineInfo != null ? wineInfo.path : null,
+                        graphicsDriverConfig != null ? graphicsDriverConfig.get("version") : null);
+                if (reason != null) { on = false; why = "unsupported: " + reason; }
+            }
+        }
+        String detail = null;
+        if (on) {
+            detail = com.winlator.star.core.X11Egl.apply(this, envVars, imageFs.getRootDir().getPath() + "/usr/lib");
+            if (detail == null) { on = false; why = "unsupported: the bundled EGL could not be installed"; }
+        }
+        String line = "fast opengl: " + (on ? "on" : "off") + " (" + why + ")";
+        Log.i("XServerDisplayActivity", line + (detail != null ? " - " + detail : ""));
+        if (wineDebugWriter != null) {
+            wineDebugWriter.println(line);
+            if (detail != null) wineDebugWriter.println(detail);
+        }
     }
 
     private String getWineStartCommand() {

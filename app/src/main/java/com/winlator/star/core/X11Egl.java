@@ -33,8 +33,9 @@ import java.security.MessageDigest;
  * </pre>
  * so a new build lands in a new folder by itself (older folders are removed).
  *
- * <p>Opt-in for now: {@code BANNER_X11_EGL=1} in the container's or the shortcut's environment
- * variables. {@link #apply} then exports the rest; any of those variables the user set is kept.
+ * <p>Driven by the "Fast OpenGL" setting ({@link FastOpenGL}: container, per-game override, support
+ * check); the launch calls {@link #apply} once it has decided. {@value #ENV_OVERRIDE}=0/1 in the
+ * environment variables is a power-user override of that decision (1 still needs this bundled EGL).
  */
 public final class X11Egl {
     private X11Egl() {}
@@ -44,15 +45,17 @@ public final class X11Egl {
     public static final String ASSET_DIR = "x11/egl";
     public static final String ASSET_META = ASSET_DIR + "/x11egl.json";
     public static final String DIR_NAME = "x11_egl";
-    public static final String ENV_OPT_IN = "BANNER_X11_EGL";
+    public static final String ENV_OVERRIDE = "BANNER_X11_EGL";
     private static final String KEY_LIB = "libEGL.so.1";
 
     private static String cachedDir;
 
     /**
-     * On an X11 launch whose environment carries {@value #ENV_OPT_IN}=1: install the bundled EGL and
-     * point Wine's OpenGL at it. Runs after both user environment merges, so a value the user typed
-     * still wins. Returns a one-line summary for the log, or null when it did nothing.
+     * Install the bundled EGL and point Wine's OpenGL at it. The caller has already decided this X11
+     * launch uses Fast OpenGL (setting, support check or {@value #ENV_OVERRIDE}); this reads no gate.
+     * Runs after both user environment merges, so a value the user typed still wins. Returns a one-line
+     * summary for the log, or null when the APK has no X11 EGL or it could not be installed (logged;
+     * nothing is exported and the game stays on GLX).
      *
      * <ul>
      *   <li>{@code WINE_USE_EGL=1}: win32u loads libEGL and winex11 takes its EGL surfaces.</li>
@@ -69,9 +72,8 @@ public final class X11Egl {
      * </ul>
      */
     public static String apply(Context context, EnvVars envVars, String imageFsLibDir) {
-        if (!"1".equals(envVars.get(ENV_OPT_IN))) return null;
         String dir = ensureInstalled(context);
-        if (dir == null) return "X11 EGL requested but the bundled EGL could not be installed - staying on GLX";
+        if (dir == null) return null;
         StringBuilder said = new StringBuilder("X11 EGL on (" + version(context) + "):");
         putIfUnset(envVars, "WINE_USE_EGL", "1", said);
         putIfUnset(envVars, "MESA_LOADER_DRIVER_OVERRIDE", "zink", said);
@@ -88,6 +90,25 @@ public final class X11Egl {
         } else {
             envVars.put(name, value);
             said.append(' ').append(name).append('=').append(value);
+        }
+    }
+
+    /**
+     * The power-user override in the environment variables: {@code TRUE}/{@code FALSE} for
+     * {@value #ENV_OVERRIDE}=1/0, null when it is unset or anything else.
+     */
+    public static Boolean envOverride(EnvVars envVars) {
+        if (!envVars.has(ENV_OVERRIDE)) return null;
+        String v = envVars.get(ENV_OVERRIDE).trim();
+        return v.equals("1") ? Boolean.TRUE : v.equals("0") ? Boolean.FALSE : null;
+    }
+
+    /** Whether the APK carries an X11 EGL at all (cheap; no install). */
+    public static boolean isBundled(Context context) {
+        try (InputStream in = context.getAssets().open(ASSET_META)) {
+            return true;
+        } catch (IOException e) {
+            return false;
         }
     }
 

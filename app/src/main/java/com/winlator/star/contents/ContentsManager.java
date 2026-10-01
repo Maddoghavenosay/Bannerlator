@@ -274,6 +274,7 @@ public class ContentsManager {
         // A newly installed layer may be Wayland-capable (or replace one that was): drop cached verdicts.
         com.winlator.star.core.WineWaylandSupport.invalidate();
         com.winlator.star.core.SyncSupport.invalidate();
+        com.winlator.star.core.FastOpenGL.invalidate();
         callback.onSucceed(profile);
     }
 
@@ -436,6 +437,7 @@ public class ContentsManager {
         syncContents();
         com.winlator.star.core.WineWaylandSupport.invalidate();
         com.winlator.star.core.SyncSupport.invalidate();
+        com.winlator.star.core.FastOpenGL.invalidate();
     }
 
     public static String getEntryName(ContentProfile profile) {

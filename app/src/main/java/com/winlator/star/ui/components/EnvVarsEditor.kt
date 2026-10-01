@@ -164,6 +164,8 @@ internal object KnownEnvVars {
         // Wine extras
         KnownEnvVar("WINE_DISABLE_FULLSCREEN_HACK", EnvVarType.CHECKBOX, listOf("0", "1")),
         KnownEnvVar("WINE_X11FORCEGLX", EnvVarType.CHECKBOX, listOf("0", "1")),
+        // Power-user override of the "Fast OpenGL" setting on X11 (core.FastOpenGL / X11Egl).
+        KnownEnvVar("BANNER_X11_EGL", EnvVarType.CHECKBOX, listOf("0", "1")),
         KnownEnvVar("WINE_GST_NO_GL", EnvVarType.CHECKBOX, listOf("0", "1")),
         // Mali BCn decode layer (leegao / Fcharan libbcn_layer.so). On Adreno the app keeps these
         // OFF automatically (native BCn); setting them here only matters on Mali/non-Qualcomm GPUs.
