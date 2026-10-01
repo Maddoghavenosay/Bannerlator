@@ -1824,21 +1824,6 @@ brake on the decay behaviour.
 <b>When to change:</b> raise it to make shrinking more cautious, which suits a device that has
 occasional bursts of load. Lower it to recover latency sooner after a rough patch.
         ]]></string>
-    <string name="env_var_help__banner_x11_egl"><![CDATA[
-        Overrides the Fast OpenGL setting on X11 for this container or game.<br /><br />
-<b>0</b> : Fast OpenGL off — OpenGL games use the old copy-back path.<br />
-<b>1</b> : Fast OpenGL on, through Wine\'s EGL backend. Needs a layer whose Wine has it (Wine 11 arm64ec).<br /><br />
-<b>When to change:</b> to test a game with Fast OpenGL off, or to force the EGL route. Leave it unset
-and the OpenGL settings decide (and pick EGL or GLX by layer). No effect on Wayland.
-        ]]></string>
-    <string name="env_var_help__banner_x11_glx"><![CDATA[
-        Forces Fast OpenGL on X11 through GLX: the X server turns on its own GLX support (and DRI3/Present
-1.2) for the session, and Wine\'s GLX loads the bundled OpenGL library with Zink.<br /><br />
-<b>1</b> : GLX route on, whatever the layer.<br /><br />
-<b>When to change:</b> to try the GLX route on a Wine 11 arm64ec layer that would otherwise use EGL.
-Older Wine and x86-64 layers already take this route. BANNER_X11_EGL=0 still turns Fast OpenGL off.
-No effect on Wayland.
-        ]]></string>
     <string name="env_var_help__banner_audio_direct_exclusive"><![CDATA[
         Asks Android for exclusive access to the audio device, bypassing the normal mixer.<br /><br />
 <b>0</b> : Shared.<br />
@@ -2288,10 +2273,20 @@ write hundreds of megabytes.
         ]]></string>
     <string name="env_var_help__banner_x11_egl"><![CDATA[
         Overrides the Fast OpenGL setting on X11.<br /><br />
-<b>1</b> : On, even where the setting is off or greyed (still needs the EGL bundled with the app).<br />
-<b>0</b> : Off.<br /><br />
+<b>1</b> : On through Wine\'s EGL backend, even where the setting is off or greyed (still needs the
+libraries bundled with the app, and a layer whose Wine has the EGL backend: Wine 11 arm64ec).<br />
+<b>0</b> : Off, whatever the setting says (also beats BANNER_X11_GLX).<br /><br />
 <b>When to change:</b> almost never — use Fast in the OpenGL card on the General tab or in the game\'s
-settings. This is for testing a layer or driver the switch does not offer it on.
+settings, which picks EGL or GLX by layer. This is for testing a layer or driver the switch does not
+offer it on.
+        ]]></string>
+    <string name="env_var_help__banner_x11_glx"><![CDATA[
+        Forces Fast OpenGL on X11 through GLX: the X server turns on its own GLX support (and DRI3/Present
+1.2) for the session, and Wine\'s GLX loads the bundled OpenGL library with Zink.<br /><br />
+<b>1</b> : GLX route on, whatever the layer.<br /><br />
+<b>When to change:</b> to try the GLX route on a Wine 11 arm64ec layer that would otherwise use EGL.
+Older Wine and x86-64 layers already take this route. BANNER_X11_EGL=0 still turns Fast OpenGL off.
+No effect on Wayland.
         ]]></string>
     <string name="env_var_help__winedlloverrides"><![CDATA[
         Tells Wine whether to use its own version of a DLL or one shipped with the game.<br /><br />
