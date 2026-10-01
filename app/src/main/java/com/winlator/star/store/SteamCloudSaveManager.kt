@@ -86,6 +86,10 @@ object SteamCloudSaveManager {
 
                 cb.onStatus("Fetching cloud file list…")
                 val files = steamCloud.listFiles(appId)
+                // With the manifest in hand, move files the old Collect swept in (game data, logs)
+                // out of the Library so they are never applied or uploaded. Best-effort.
+                try { moveAsideNonSaves(ctx, appId, localFolder, files.map { it.remotePath }) }
+                catch (t: Throwable) { Log.w(TAG, "Library cleanup failed for $appId", t) }
                 if (files.isEmpty()) { cb.onDone("No cloud saves found for this game"); return@Thread }
 
                 if (!localFolder.exists()) localFolder.mkdirs()
@@ -163,7 +167,7 @@ object SteamCloudSaveManager {
 
                 cb.onStatus("Scanning local saves…")
                 normalizeLibrary(localFolder, appId)
-                val localFiles = enumerateLocal(localFolder)   // List<Pair<File, cloudRelPath>>
+                var localFiles = enumerateLocal(localFolder)   // List<Pair<File, cloudRelPath>>
 
                 // ── BELT-AND-SUSPENDERS GUARD (unchanged) ──────────────────────────────
                 // If there is nothing local to upload we return immediately and NEVER call
@@ -206,9 +210,12 @@ object SteamCloudSaveManager {
                 // so a changed save refreshes BOTH names — another PC that downloads either one then
                 // gets the current file. Nothing is ever deleted from the cloud.
                 val oldSpellingTwins = HashMap<String, MutableList<Pair<String, ByteArray>>>()
+                var manifestNames: List<String>? = null
                 val cloudShaByPath: Map<String, ByteArray> = try {
                     val map = HashMap<String, ByteArray>()
-                    for (f in steamCloud.listFiles(appId)) {
+                    val listing = steamCloud.listFiles(appId)
+                    manifestNames = listing.map { it.remotePath }
+                    for (f in listing) {
                         val key = sanitizeRelative(f.remotePath) ?: continue
                         if (SteamCloudSavePaths.fuseTokenSlash(key) != null) {
                             SteamCloudSavePaths.canonicalKey(key)?.let { ck ->
@@ -227,6 +234,19 @@ object SteamCloudSaveManager {
                     // Can't diff → fall back to uploading everything (today's behavior). Never a wipe.
                     Log.w(TAG, "Cloud manifest fetch failed; uploading all local files", e)
                     emptyMap()
+                }
+
+                // Never upload what isn't a save: move non-save files (game data swept in by an older
+                // Collect) out of the Library first, then re-scan. Needs the manifest; best-effort.
+                manifestNames?.let { names ->
+                    try {
+                        moveAsideNonSaves(ctx, appId, localFolder, names)
+                        localFiles = enumerateLocal(localFolder)
+                    } catch (t: Throwable) { Log.w(TAG, "Library cleanup failed for $appId", t) }
+                }
+                if (localFiles.isEmpty()) {
+                    cb.onDone("No local save files found — nothing was sent to the cloud")
+                    return@Thread
                 }
 
                 // Include a local file iff it is new, changed, or its cloud sha is unavailable.
@@ -568,6 +588,10 @@ object SteamCloudSaveManager {
                     if (ops.isNotEmpty()) Log.i(TAG, "launch intent (appId $appId): pending cloud ops $ops")
                 }
             } catch (t: Throwable) { Log.w(TAG, "launch-intent signal failed", t) }
+            // Warm the UFS-config cache (savefiles rules) so the exit-time Collect can scope itself
+            // without a network wait. Fire-and-forget.
+            Thread({ try { SteamUfsConfig.get(ctx, appId, allowNetwork = true) } catch (_: Throwable) {} },
+                "steam-ufs-prefetch-$appId").apply { isDaemon = true }.start()
             // Phase 1: Download cloud → Library. Populates the Library with the cloud copy (mtimes
             // preserved from the cloud timestamps), leaving the container untouched.
             val dl = runBlockingMove(BLOCKING_BOUND_MS) { cb -> downloadToLibrary(ctx, appId, cb) }
@@ -770,18 +794,23 @@ object SteamCloudSaveManager {
     }
 
     /**
-     * The container-side save files for this game, paired with their cloud names. Two passes,
-     * de-duped by canonical file path:
+     * The container-side save files for this game, paired with their cloud names — scoped to what
+     * Steam itself would sync, never a whole folder tree:
      *
-     *  1. **Primary** — the container directories the Library already established as this game's save
-     *     locations (each tracked Library file's container-parent), walked for their current contents.
-     *  2. **Discovery fallback** — OUR [SaveLocator.discover] heuristic name-matches candidate save
-     *     folders inside the container's Wine profile from the game's shortcut.
+     *  1. **Tracked files** — every file the Library already holds (its names are cloud names), taken
+     *     exactly (the file itself, not its folder), keeping the Library's spelling.
+     *  2. **Steam API remote store** — the game's own `…/<appId>/remote` folder for its launch mode
+     *     ([SteamCloudSavePaths.remoteStorageDir]); it belongs to this game alone, so all of it.
+     *  3. **Auto-Cloud rules** — when PICS declares `savefiles` rules ([SteamUfsConfig]), the files
+     *     under each rule's root+path that match its pattern (recursively only when the rule says so).
+     *  4. **Name-match discovery** ([SaveLocator.discover]) — only for a game with no declared cloud
+     *     (a local-only backup) or whose UFS config isn't known yet.
      *
-     * Every file is mapped through [SteamCloudSavePaths.toLibraryRel], which rejects escapes and
-     * unknown roots (null ⇒ skip).
+     * The old pass walked each tracked file's parent folder recursively, which for a cloud file at the
+     * top of the game folder (`%GameInstall%valve/config.cfg`) swallowed the whole game (Half-Life:
+     * 4,277 files). Every file is mapped through [SteamCloudSavePaths.toLibraryRel], which rejects
+     * escapes and unknown roots (null ⇒ skip). [allowNetwork] = may fetch the UFS config (bounded).
      */
-    @Suppress("UNUSED_PARAMETER")
     private fun enumerateContainerSaves(ctx: Context, target: GameTarget, allowNetwork: Boolean): List<Pair<File, String>> {
         val shortcut = target.shortcut
         val container: Container = target.container
@@ -790,45 +819,123 @@ object SteamCloudSaveManager {
         val out = ArrayList<Pair<File, String>>()
         val seen = HashSet<String>()
 
+        fun add(f: File, name: String) {
+            if (!f.isFile) return
+            val canon = try { f.canonicalPath } catch (e: Exception) { f.absolutePath }
+            if (seen.add(canon)) out.add(f to name)
+        }
         fun consider(f: File) {
             if (!f.isFile) return
-            val libraryRel = target.toLibrary(f) ?: return
-            val canon = try { f.canonicalPath } catch (e: Exception) { f.absolutePath }
-            if (seen.add(canon)) out.add(f to libraryRel)
+            val name = target.toLibrary(f) ?: return
+            add(f, name)
         }
 
-        // ── Pass 1: directories the Library already established for this game. ──
-        val scopeDirs = LinkedHashSet<File>()
+        // ── 1. Files the Library already tracks — exact files only. ──
         for ((_, rel) in enumerateLocal(library)) {
             val dest = target.toContainer(rel) ?: continue
-            val parent = dest.parentFile ?: continue
-            if (parent.isDirectory) {
-                try { scopeDirs.add(parent.canonicalFile) } catch (_: Exception) {}
-            }
-        }
-        for (dir in scopeDirs) {
-            dir.walkTopDown().filter { it.isFile }.forEach { consider(it) }
+            if (dest.isFile) add(dest, rel)
         }
 
-        // ── Pass 2: name-match discovery fallback (works with an empty Library). ──
-        try {
-            val profile = SaveLocator.profileDir(container)
-            val candidates = SaveLocator.discover(
-                container,
-                shortcut.name ?: "",
-                shortcut.path ?: "",
-                shortcut.wmClass ?: "",
-            )
-            for (c in candidates) {
-                val dir = File(profile, c.relPath)
-                if (!dir.isDirectory) continue
-                dir.walkTopDown().filter { it.isFile }.forEach { consider(it) }
+        // ── 2. The game's Steam API remote store. ──
+        SteamCloudSavePaths.remoteStorageDir(container, target.appId, target.remote)
+            ?.takeIf { it.isDirectory }
+            ?.walkTopDown()?.filter { it.isFile }?.forEach { consider(it) }
+
+        // ── 3. Auto-Cloud rules. ──
+        val config = ufsConfigBounded(ctx, target.appId, if (allowNetwork) UFS_FETCH_WAIT_MS else 0L)
+        if (config != null) for (rule in config.rules) {
+            val base = SteamCloudSavePaths.ruleBaseDir(rule, container, target.installDir, target.appId, target.remote)
+            if (base == null || !base.isDirectory) continue
+            val regex = SteamUfsConfig.patternRegex(rule.pattern)
+            val files = if (rule.recursive) base.walkTopDown().filter { it.isFile }
+                        else (base.listFiles()?.asSequence() ?: emptySequence()).filter { it.isFile }
+            files.filter { regex.matches(it.name) }.forEach { consider(it) }
+        }
+
+        // ── 4. Name-match discovery: local-only games, or cloud config not known yet. ──
+        if (config == null || !config.declaresCloud) {
+            try {
+                val profile = SaveLocator.profileDir(container)
+                val candidates = SaveLocator.discover(
+                    container,
+                    shortcut.name ?: "",
+                    shortcut.path ?: "",
+                    shortcut.wmClass ?: "",
+                )
+                for (c in candidates) {
+                    val dir = File(profile, c.relPath)
+                    if (!dir.isDirectory) continue
+                    dir.walkTopDown().filter { it.isFile }.forEach { consider(it) }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Collect discovery pass failed", e)
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Collect discovery pass failed", e)
         }
 
         return out
+    }
+
+    /** How long a Collect may wait for a not-yet-cached UFS config before going on without it. */
+    private const val UFS_FETCH_WAIT_MS = 4_000L
+
+    /**
+     * The cached UFS config, else (when [waitMs] > 0) a PICS read on a side thread awaited at most
+     * [waitMs] — so a slow network can never stretch the exit-time Collect past its bound. The read
+     * keeps going after a timeout and lands in the cache for next time.
+     */
+    private fun ufsConfigBounded(ctx: Context, appId: Int, waitMs: Long): SteamUfsConfig.Config? {
+        SteamUfsConfig.cached(ctx, appId)?.let { return it }
+        if (waitMs <= 0L) return null
+        val holder = AtomicReference<SteamUfsConfig.Config?>()
+        val latch = CountDownLatch(1)
+        Thread({
+            try { holder.set(SteamUfsConfig.get(ctx, appId, allowNetwork = true)) } catch (_: Throwable) {}
+            finally { latch.countDown() }
+        }, "steam-ufs-$appId").apply { isDaemon = true }.start()
+        try { latch.await(waitMs, TimeUnit.MILLISECONDS) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+        return holder.get()
+    }
+
+    /**
+     * Move Library files that are not saves out of the way (to [SteamCloudSavePaths.movedAsideDir],
+     * never deleted). Runs after a successful cloud listing, when we know both what the cloud holds
+     * ([manifestNames]) and what the game declares ([SteamUfsConfig]). A Library file stays if it is
+     * in the manifest (any spelling), a Steam API remote file, or covered by an Auto-Cloud rule.
+     * Otherwise it is moved aside only when that is provably safe:
+     *  - the game has Auto-Cloud rules (so the rules define what a save is), or
+     *  - it is an install-folder file and the cloud already holds files for this game
+     *    (the Half-Life case: game data swept in by the old folder walk).
+     * Games without a declared cloud are never touched — their Library is the local backup.
+     */
+    private fun moveAsideNonSaves(ctx: Context, appId: Int, library: File, manifestNames: List<String>) {
+        val config = SteamUfsConfig.get(ctx, appId, allowNetwork = true) ?: return
+        if (!config.declaresCloud) return
+        val manifestKeys = HashSet<String>()
+        for (n in manifestNames) SteamCloudSavePaths.canonicalKey(n)?.let { manifestKeys.add(it) }
+        val lock = libraryLocks.getOrPut(appId) { Any() }
+        synchronized(lock) {
+            val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
+            var moved = 0
+            for ((file, rel) in enumerateLocal(library)) {
+                if (SteamCloudSavePaths.isRemoteRel(rel)) continue
+                val key = SteamCloudSavePaths.canonicalKey(rel) ?: continue
+                if (key in manifestKeys) continue
+                if (config.rules.any { SteamCloudSavePaths.ruleCovers(it, rel) }) continue
+                val provablyNotSave = config.rules.isNotEmpty() ||
+                    (SteamCloudSavePaths.isGameInstallRel(rel) && manifestKeys.isNotEmpty())
+                if (!provablyNotSave) continue
+                try {
+                    moveFile(file, File(SteamCloudSavePaths.movedAsideDir(appId, stamp), rel)); moved++
+                } catch (e: Exception) {
+                    Log.w(TAG, "Library cleanup: could not move aside $rel", e)
+                }
+            }
+            if (moved > 0) {
+                pruneEmptyDirs(library)
+                Log.i(TAG, "Library $appId: moved $moved non-save file(s) to _moved-aside/$appId/$stamp " +
+                    "(not in the cloud manifest, not covered by the game's Steam Cloud rules)")
+            }
+        }
     }
 
     /** The game's launch shortcut (see [SteamCloudSavePaths.resolveShortcut]: drive-map + imagefs match). */
