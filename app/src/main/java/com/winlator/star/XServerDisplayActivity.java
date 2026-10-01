@@ -2970,6 +2970,13 @@ public class XServerDisplayActivity extends AppCompatActivity {
         inputControlsManager = new InputControlsManager(this);
         xServer = new XServer(new ScreenInfo(screenSize));
         xServer.setWinHandler(winHandler);
+        // Opt-in server-side GLX for a DRI-mode Mesa libGL on X11 (BANNER_X11_GLX=1 in the container's
+        // or the game's env vars). Registers GLX + Composite and reports DRI3/Present 1.2; off, the X
+        // server is exactly as before. X11 Wine sessions only: never Wayland, gamescope or Linux.
+        if (!waylandMode && !gamescopeMode && !isLinuxRuntimeSession() && isX11ServerGlxRequested()) {
+            xServer.enableServerGlx();
+            Log.i("XServerDisplayActivity", "x11 glx: server GLX + DRI3/Present 1.2 on (BANNER_X11_GLX=1)");
+        }
         advertisePanelRefreshRates();
 
         // Restore the saved Relative Mouse state for this game (issue #431). Read from the same owner
@@ -7653,6 +7660,14 @@ public class XServerDisplayActivity extends AppCompatActivity {
         }
         String zc = raw != null && !raw.isEmpty() ? new EnvVars(raw).get("BANNER_WAYLAND_ZERO_COPY") : null;
         return zc != null && (zc.equals("1") || zc.equalsIgnoreCase("true"));
+    }
+
+    /** BANNER_X11_GLX=1 (or true) in the container's or the shortcut's environment variables (the
+     *  shortcut wins): the X server's opt-in server-side GLX (XServer.enableServerGlx). */
+    private boolean isX11ServerGlxRequested() {
+        EnvVars env = effectiveUserEnv();
+        String v = env != null ? env.get("BANNER_X11_GLX") : null;
+        return v != null && (v.equals("1") || v.equalsIgnoreCase("true"));
     }
 
     /** The effective env (container first, shortcut second, so the shortcut wins), or null. */

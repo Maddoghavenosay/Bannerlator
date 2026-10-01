@@ -8,6 +8,8 @@ import com.winlator.star.winhandler.WinHandler;
 import com.winlator.star.xserver.extensions.BigReqExtension;
 import com.winlator.star.xserver.extensions.DRI3Extension;
 import com.winlator.star.xserver.extensions.Extension;
+import com.winlator.star.xserver.extensions.GLXExtension;
+import com.winlator.star.xserver.extensions.XComposite;
 import com.winlator.star.xserver.extensions.MITSHMExtension;
 import com.winlator.star.xserver.extensions.PresentExtension;
 import com.winlator.star.xserver.extensions.RandrExtension;
@@ -258,6 +260,23 @@ public class XServer {
         extensions.put(PresentExtension.MAJOR_OPCODE, new PresentExtension());
         extensions.put(SyncExtension.MAJOR_OPCODE, new SyncExtension());
         extensions.put(RandrExtension.MAJOR_OPCODE, new RandrExtension(screenInfo));
+    }
+
+    private volatile boolean serverGlx = false;
+
+    /** Opt-in server-side GLX (BANNER_X11_GLX=1): registers the GLX + Composite extensions and makes
+     *  DRI3/Present report 1.2, so a DRI-mode Mesa libGL (GLX + Zink via kopper) finds its fbconfigs.
+     *  Off by default; when never called the extension list and versions are exactly as before. Must
+     *  run before the first client connects (the extension list is read at QueryExtension time). */
+    public void enableServerGlx() {
+        if (serverGlx) return;
+        extensions.put(GLXExtension.MAJOR_OPCODE, new GLXExtension(this));
+        extensions.put(XComposite.MAJOR_OPCODE, new XComposite(this));
+        serverGlx = true;
+    }
+
+    public boolean isServerGlxEnabled() {
+        return serverGlx;
     }
 
     public <T extends Extension> T getExtension(int opcode) {
