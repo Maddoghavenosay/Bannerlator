@@ -44,7 +44,8 @@ val FAST_OPENGL_OVERRIDES: List<String> = listOf("", "1", "0")
  * pill stays live and the line says why.
  *
  * Touch only; a D-pad host drives [onPick] itself ([focused] draws its highlight). [onHelp] non-null
- * → the app's usual "?" beside the label (R.string.help_fast_opengl).
+ * → the app's usual "?" beside the label (R.string.help_fast_opengl). [title] / [hint] default to Fast
+ * OpenGL's; the plain OpenGL switches beside it (FastOpenGL.FPS_HUD / VSYNC_OFF) pass their own.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -56,6 +57,8 @@ fun FastOpenGLSelector(
     modifier: Modifier = Modifier,
     focused: Boolean = false,
     onHelp: (() -> Unit)? = null,
+    title: String = FastOpenGL.TITLE,
+    hint: String = FastOpenGL.HINT,
 ) {
     val cs = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(12.dp)
@@ -80,10 +83,10 @@ fun FastOpenGLSelector(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.align(Alignment.CenterVertically).padding(end = 10.dp),
             ) {
-                Text(FastOpenGL.TITLE, fontSize = 14.sp, color = cs.onSurfaceVariant)
+                Text(title, fontSize = 14.sp, color = cs.onSurfaceVariant)
                 if (onHelp != null) {
                     IconButton(onClick = onHelp, modifier = Modifier.size(44.dp)) {
-                        Icon(Icons.Default.Help, contentDescription = "What is Fast OpenGL?", modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Help, contentDescription = "What is $title?", modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -129,7 +132,7 @@ fun FastOpenGLSelector(
             }
         }
         Text(
-            fastOpenGLGameHelper(selected, containerOn, lockedReason),
+            fastOpenGLGameHelper(selected, containerOn, lockedReason, hint),
             fontSize = 12.sp,
             lineHeight = 16.sp,
             color = cs.onSurfaceVariant,
@@ -138,12 +141,12 @@ fun FastOpenGLSelector(
 }
 
 /** The game editor's helper line: why it's locked, else what this game runs with. */
-fun fastOpenGLGameHelper(selected: String, containerOn: Boolean, lockedReason: String?): String {
+fun fastOpenGLGameHelper(selected: String, containerOn: Boolean, lockedReason: String?, hint: String = FastOpenGL.HINT): String {
     val c = if (containerOn) "On" else "Off"
     return when {
         lockedReason != null -> "$lockedReason."
         selected == "1" || selected == "0" ->
             (if (selected == "1") "On" else "Off") + " for this game only (container: $c)."
-        else -> "Following the container: $c.  " + FastOpenGL.HINT
+        else -> "Following the container: $c.  $hint"
     }
 }

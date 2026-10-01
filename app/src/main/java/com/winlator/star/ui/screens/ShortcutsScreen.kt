@@ -6514,6 +6514,16 @@ internal fun ShortcutSettingsDialogScreen(
     val fastGlBundled = remember { com.winlator.star.core.X11Egl.isBundled(context) }
     val fastGlLocked = if (effectiveWaylandShortcut) com.winlator.star.core.FastOpenGL.WAYLAND_ALWAYS_ON
         else com.winlator.star.core.FastOpenGL.unavailableReason(fastGlLayerEgl, fastGlDriverOk, fastGlBundled)
+    // Show OpenGL FPS / OpenGL vsync off per-game overrides (extras "glFpsHud" / "glVsyncOff"): same
+    // "" / "1" / "0" as Fast OpenGL, on both backends, never locked.
+    var glFpsHudOverride by remember {
+        mutableStateOf(com.winlator.star.core.FastOpenGL.normalize(
+            shortcut.getExtra(com.winlator.star.core.FastOpenGL.FPS_HUD.extra)) ?: "")
+    }
+    var glVsyncOffOverride by remember {
+        mutableStateOf(com.winlator.star.core.FastOpenGL.normalize(
+            shortcut.getExtra(com.winlator.star.core.FastOpenGL.VSYNC_OFF.extra)) ?: "")
+    }
 
     // Wayland GAME driver override (per-game, same extra name as the container's): "" = the
     // container's choice. Only shown when the effective backend is Wayland; see core.WaylandGameDriver.
@@ -7231,6 +7241,8 @@ internal fun ShortcutSettingsDialogScreen(
                 // Fast OpenGL override: "" clears the extra (follow the container). Kept as picked while
                 // it's locked, so a later layer/driver/backend change brings the choice back.
                 putExtra(com.winlator.star.core.FastOpenGL.EXTRA, fastGlOverride.ifEmpty { null })
+                putExtra(com.winlator.star.core.FastOpenGL.FPS_HUD.extra, glFpsHudOverride.ifEmpty { null })
+                putExtra(com.winlator.star.core.FastOpenGL.VSYNC_OFF.extra, glVsyncOffOverride.ifEmpty { null })
             }
             putExtra("cpuList", cpuList)
             // Only a Linux entry draws the two pickers, so only a Linux entry writes their keys — a
@@ -7292,7 +7304,7 @@ internal fun ShortcutSettingsDialogScreen(
                 add("selectIcon")
                 // The Wine/X11 graphics stack is not registered for a Linux entry, so the D-pad
                 // cursor can never land on a row that isn't drawn (see the render conditionals).
-                if (!isLinuxEntry) { add("syncMode"); add("displayBackend"); add("fastOpenGL") }
+                if (!isLinuxEntry) { add("syncMode"); add("displayBackend"); add("fastOpenGL"); add("glFpsHud"); add("glVsyncOff") }
                 add("gfxDriver")   // the compositor driver: live on the gamescope path too
                 if (effectiveWaylandShortcut && !isLinuxEntry) {
                     add("waylandAdvanced"); add("waylandDriverCfg")
@@ -7807,6 +7819,33 @@ internal fun ShortcutSettingsDialogScreen(
                             onHelp = { helpRes = R.string.help_fast_opengl },
                             modifier = Modifier.dpadBringIntoView(dp, "fastOpenGL"),
                         )
+                        // Show OpenGL FPS / OpenGL vsync off: the same pills, never locked.
+                        for ((sw, value, help) in listOf(
+                            Triple(com.winlator.star.core.FastOpenGL.FPS_HUD, glFpsHudOverride, R.string.help_gl_fps_hud),
+                            Triple(com.winlator.star.core.FastOpenGL.VSYNC_OFF, glVsyncOffOverride, R.string.help_gl_vsync_off),
+                        )) {
+                            val pick: (String) -> Unit = { v ->
+                                if (sw === com.winlator.star.core.FastOpenGL.FPS_HUD) glFpsHudOverride = v else glVsyncOffOverride = v
+                            }
+                            SideEffect {
+                                dp.actions[sw.extra] = ControlActions(
+                                    activate = { pick("") },
+                                    onLeft = { fastGlOptions.getOrNull(fastGlOptions.indexOf(value) - 1)?.let(pick) },
+                                    onRight = { fastGlOptions.getOrNull(fastGlOptions.indexOf(value) + 1)?.let(pick) },
+                                )
+                            }
+                            com.winlator.star.ui.components.FastOpenGLSelector(
+                                selected = value,
+                                containerOn = sw.containerOn(shortcut.container.getExtra(sw.extra)),
+                                lockedReason = null,
+                                onPick = pick,
+                                focused = dp.isFocused(sw.extra),
+                                onHelp = { helpRes = help },
+                                modifier = Modifier.dpadBringIntoView(dp, sw.extra),
+                                title = sw.title,
+                                hint = sw.hint,
+                            )
+                        }
                     }
 
                     // Graphics Driver + wrapper manager (cloud). Under Wayland the wrapper flavour is

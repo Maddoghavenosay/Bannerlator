@@ -1214,6 +1214,12 @@ private fun TopLevelFields(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            // Show OpenGL FPS / OpenGL vsync off: plain launch switches under it, independent of Fast
+            // OpenGL (they reach Mesa on GLX, EGL and Wayland alike), so never greyed.
+            GlLaunchSwitchRow(com.winlator.star.core.FastOpenGL.FPS_HUD, viewModel.glFpsHud,
+                onChange = { viewModel.glFpsHud = it }, onHelp = { helpRes = R.string.help_gl_fps_hud })
+            GlLaunchSwitchRow(com.winlator.star.core.FastOpenGL.VSYNC_OFF, viewModel.glVsyncOff,
+                onChange = { viewModel.glVsyncOff = it }, onHelp = { helpRes = R.string.help_gl_vsync_off })
         }
         // Unreal Engine HDR (both backends; under HDR output on Wayland): Off / DirectX 12 fix /
         // DirectX 11 (experimental, NVAPI). See core.UnrealHdr; the DirectX 11 mode swaps the bundled
@@ -3052,6 +3058,30 @@ internal const val WAYLAND_DRIVER_SETTINGS_HELP =
         "one for now. Off by default (Device). Warning: an NVIDIA name can make a game try NVAPI, DLSS or " +
         "Reflex, and an AMD name can send it down AMD AGS paths; go back to Device if a game misbehaves. " +
         "These are the X11 driver configuration's settings, so they follow the game across backends."
+
+/** One plain OpenGL launch switch on the GENERAL tab: switch, title, "?", hint (core.GlLaunchSwitch). */
+@Composable
+private fun GlLaunchSwitchRow(
+    sw: com.winlator.star.core.GlLaunchSwitch,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    onHelp: () -> Unit,
+) {
+    Spacer(Modifier.height(4.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Switch(checked = checked, onCheckedChange = onChange)
+        Spacer(Modifier.width(8.dp))
+        Text(sw.title, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+        IconButton(onClick = onHelp) {
+            Icon(Icons.Default.Help, contentDescription = "What is ${sw.title}?", modifier = Modifier.size(18.dp))
+        }
+    }
+    Text(
+        sw.hint,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
 
 /**
  * The Wayland game driver's settings (the gear next to "Wayland game driver"): the graphicsDriverConfig

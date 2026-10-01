@@ -526,6 +526,19 @@
         On by default. Turn it off for a game that shows a black screen, crashes or draws wrongly. Game settings follow the container unless you pick something else for that game. It takes effect the next time the game starts.<br /><br />
         It does not speed up game time: a very old game that ties its speed to the frame rate can run too fast — cap it with the FPS limiter.
     ]]></string>
+    <string name="help_gl_fps_hud"><![CDATA[
+        <b>Show OpenGL FPS</b><br /><br />
+        Shows Mesa\'s frames-per-second counter in the top-left corner of OpenGL games. Works on X11 and Wayland, with Fast OpenGL on or off. Direct3D games through DXVK don\'t show it; use the app\'s performance overlay for those.<br /><br />
+        Off by default. Game settings follow the container unless you pick something else for that game. It takes effect the next time the game starts.<br /><br />
+        <i>Sets GALLIUM_HUD=fps at launch. A GALLIUM_HUD you typed into Environment Variables is kept.</i>
+    ]]></string>
+    <string name="help_gl_vsync_off"><![CDATA[
+        <b>OpenGL vsync off</b><br /><br />
+        Normally an OpenGL game waits for the screen\'s next refresh before showing each frame, so it never runs faster than the refresh rate. This stops that wait, so the game can run as fast as it can. Useful for benchmarks or to cut input lag; you may see tearing.<br /><br />
+        Very old games that tie their speed to the frame rate can run far too fast with it — cap them with the FPS limiter, or leave this off.<br /><br />
+        Off by default. Works on X11 and Wayland. Game settings follow the container unless you pick something else for that game. It takes effect the next time the game starts.<br /><br />
+        <i>Sets vblank_mode=0 at launch. A vblank_mode you typed into Environment Variables is kept.</i>
+    ]]></string>
     <string name="help_graphics_driver"><![CDATA[
         <b>Graphics driver (wrapper)</b><br /><br />
         The Vulkan driver the container uses to talk to your GPU. Different wrappers suit different GPUs — <i><b>Adreno</b></i> (Snapdragon) has the best support; <i><b>Mali</b></i> phones may need a specific wrapper to handle compressed textures. Stick with the default unless you\'re troubleshooting.
@@ -2094,6 +2107,12 @@ error.
 <b>simple</b> · <b>fps</b> · <b>frametime</b>.<br /><br />
 <b>When to change:</b> only useful for OpenGL games, since DXVK titles will not show it. For
 D3D games use DXVK_HUD instead.
+        ]]></string>
+    <string name="env_var_help__vblank_mode"><![CDATA[
+        Mesa\'s OpenGL vsync control.<br /><br />
+<b>0</b> : Never wait for the screen refresh (vsync off).<br /><br />
+<b>When to change:</b> use the OpenGL vsync off switch on the General tab or in the game\'s settings
+instead; it sets vblank_mode=0. A value typed here is kept and wins over the switch.
         ]]></string>
     <string name="env_var_help__ir3_shader_debug"><![CDATA[
         Flags for the Adreno shader compiler inside Mesa.<br /><br />

@@ -103,6 +103,11 @@ object ShortcutExporter {
             if (com.winlator.star.core.FastOpenGL.requested(
                     container?.getExtra(com.winlator.star.core.FastOpenGL.EXTRA),
                     shortcut.getExtra(com.winlator.star.core.FastOpenGL.EXTRA))) "1" else "0")
+        // Show OpenGL FPS / OpenGL vsync off: the same effective resolve (default off).
+        for (sw in listOf(com.winlator.star.core.FastOpenGL.FPS_HUD, com.winlator.star.core.FastOpenGL.VSYNC_OFF)) {
+            put(effective, sw.extra,
+                if (sw.requested(container?.getExtra(sw.extra), shortcut.getExtra(sw.extra))) "1" else "0")
+        }
 
         // Community-config coverage pass (2026-07). Container-level settings resolve EFFECTIVE exactly
         // as dxwrapperConfig/screenSize above do — shortcut override via orDefault, else the container

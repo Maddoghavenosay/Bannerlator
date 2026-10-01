@@ -35,6 +35,20 @@ object FastOpenGL {
     const val NEEDS_TURNIP = "Needs a Turnip driver"
     const val NOT_BUNDLED = "Not in this build"
 
+    // Two plain OpenGL launch switches that sit with Fast OpenGL in the editors. Independent of it:
+    // both reach Mesa on either path (GLX or EGL) and on Wayland, so they are never greyed.
+    /** "Show OpenGL FPS": GALLIUM_HUD=fps, Mesa's fps counter in the game's top-left corner. */
+    @JvmField val FPS_HUD = GlLaunchSwitch(
+        "glFpsHud", "Show OpenGL FPS", "Mesa's fps counter in the corner of OpenGL games.",
+        defaultOn = false, envName = "GALLIUM_HUD", envValue = "fps")
+
+    /** "OpenGL vsync off": vblank_mode=0, so a GL game's SwapBuffers stops waiting for the refresh. */
+    @JvmField val VSYNC_OFF = GlLaunchSwitch(
+        "glVsyncOff", "OpenGL vsync off",
+        "Lets OpenGL games run above the screen's refresh rate. Very old games that tie game speed to " +
+            "frame rate may run too fast: use the FPS limiter.",
+        defaultOn = false, envName = "vblank_mode", envValue = "0")
+
     // ── Pure mapping (unit-tested) ───────────────────────────────────────────────────────────────
 
     /** "1" / "0" for a stored or imported value we understand, else null (= no choice). */
@@ -147,4 +161,26 @@ object FastOpenGL {
     private fun unixWin32u(dir: File): File? =
         listOf("lib/wine/aarch64-unix/win32u.so", "lib/wine/x86_64-unix/win32u.so")
             .map { File(dir, it) }.firstOrNull { it.isFile }
+}
+
+/**
+ * One on/off OpenGL launch switch stored like Fast OpenGL: the container extra [extra] ("1" / "0",
+ * absent = [defaultOn]) and the same-named shortcut extra as a per-game override (absent or "" =
+ * follow the container). When on, the launch exports [envName]=[envValue] unless the environment
+ * variables already set [envName] (the user's value wins).
+ */
+class GlLaunchSwitch(
+    @JvmField val extra: String,
+    @JvmField val title: String,
+    @JvmField val hint: String,
+    @JvmField val defaultOn: Boolean,
+    @JvmField val envName: String,
+    @JvmField val envValue: String,
+) {
+    /** The container's choice: [defaultOn] unless it says "1" or "0". */
+    fun containerOn(stored: String?): Boolean = FastOpenGL.normalize(stored)?.let { it == "1" } ?: defaultOn
+
+    /** What a launch asks for: the shortcut's override, else the container's. */
+    fun requested(containerExtra: String?, shortcutExtra: String?): Boolean =
+        FastOpenGL.normalize(shortcutExtra)?.let { it == "1" } ?: containerOn(containerExtra)
 }

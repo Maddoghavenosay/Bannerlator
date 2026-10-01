@@ -10378,8 +10378,9 @@ public class XServerDisplayActivity extends AppCompatActivity {
             // "Fast OpenGL" on X11: Wine's EGL backend + the bundled X11-capable EGL, so Zink presents
             // through a Vulkan swapchain instead of XMesa's finish + readback + XPutImage per frame (see
             // core.FastOpenGL / X11Egl). After both user env merges so a value the user typed wins;
-            // never on Wayland (winewayland always uses its own EGL) or in the Linux session.
-            if (!waylandMode && !gamescopeMode) applyFastOpenGLEnv();
+            // never on Wayland (winewayland always uses its own EGL) or in the Linux session. The same
+            // helper writes "Show OpenGL FPS" / "OpenGL vsync off", which apply on both backends.
+            if (!gamescopeMode) applyFastOpenGLEnv(waylandMode);
 
             // Keep the lsfg-vk Vulkan layer INERT unless lsfg-vk is actually the engine.
             // Placed AFTER both user env merges (container above, shortcut just here) so
@@ -13823,14 +13824,19 @@ return true;
      * BANNER_X11_EGL=0/1 in the environment wins outright (1 still needs the bundled EGL); else the
      * shortcut's override, else the container's choice (default on), and on only when the layer's
      * win32u knows WINE_USE_EGL, the driver is a Turnip and the APK carries the EGL. EGL vs GLX is
-     * fixed when the game process starts, so this is launch-only. One log line either way.
+     * fixed when the game process starts, so this is launch-only. On Wayland it is always on and
+     * nothing is exported. Then the two plain switches beside it (Show OpenGL FPS, OpenGL vsync off),
+     * on either backend. One log line for all three.
      */
-    private void applyFastOpenGLEnv() {
+    private void applyFastOpenGLEnv(boolean wayland) {
         if (container == null) return;
         boolean on;
         String why;
-        Boolean forced = com.winlator.star.core.X11Egl.envOverride(envVars);
-        if (forced != null) {
+        Boolean forced = wayland ? null : com.winlator.star.core.X11Egl.envOverride(envVars);
+        if (wayland) {
+            on = true;
+            why = "wayland";
+        } else if (forced != null) {
             on = forced;
             why = "env override";
         } else {
@@ -13847,16 +13853,33 @@ return true;
             }
         }
         String detail = null;
-        if (on) {
+        if (on && !wayland) {
             detail = com.winlator.star.core.X11Egl.apply(this, envVars, imageFs.getRootDir().getPath() + "/usr/lib");
             if (detail == null) { on = false; why = "unsupported: the bundled EGL could not be installed"; }
         }
-        String line = "fast opengl: " + (on ? "on" : "off") + " (" + why + ")";
+        String line = "fast opengl: " + (on ? "on" : "off") + " (" + why + ")"
+                + " | fps hud: " + applyGlLaunchSwitch(com.winlator.star.core.FastOpenGL.FPS_HUD)
+                + " | vsync off: " + applyGlLaunchSwitch(com.winlator.star.core.FastOpenGL.VSYNC_OFF);
         Log.i("XServerDisplayActivity", line + (detail != null ? " - " + detail : ""));
         if (wineDebugWriter != null) {
             wineDebugWriter.println(line);
             if (detail != null) wineDebugWriter.println(detail);
         }
+    }
+
+    /**
+     * Resolve one plain OpenGL switch (shortcut override, else container) and export its variable when
+     * on, unless the environment variables already set it. Returns its part of the log line.
+     */
+    private String applyGlLaunchSwitch(com.winlator.star.core.GlLaunchSwitch sw) {
+        String game = shortcut != null ? com.winlator.star.core.FastOpenGL.normalize(shortcut.getExtra(sw.extra)) : null;
+        boolean on = sw.requested(container.getExtra(sw.extra), shortcut != null ? shortcut.getExtra(sw.extra) : null);
+        String why = game != null ? "game" : "container";
+        if (!on) return "off (" + why + ")";
+        if (envVars.has(sw.envName))
+            return "on (" + why + ", " + sw.envName + "=" + envVars.get(sw.envName) + " is yours, kept)";
+        envVars.put(sw.envName, sw.envValue);
+        return "on (" + why + ", " + sw.envName + "=" + sw.envValue + ")";
     }
 
     private String getWineStartCommand() {

@@ -32,3 +32,15 @@ class FastOpenGLTest {
         assertEquals(FastOpenGL.NOT_BUNDLED, FastOpenGL.unavailableReason(true, driverUsable = true, bundled = false))
     }
 }
+
+class GlLaunchSwitchTest {
+    @Test fun defaultsOffAndOverride() {
+        val sw = FastOpenGL.FPS_HUD
+        assertFalse(sw.containerOn(null))
+        assertTrue(sw.containerOn("1"))
+        assertTrue(sw.requested("0", "1"))
+        assertFalse(sw.requested("1", "0"))
+        assertTrue(sw.requested("1", ""))
+        assertFalse(FastOpenGL.VSYNC_OFF.requested(null, null))
+    }
+}

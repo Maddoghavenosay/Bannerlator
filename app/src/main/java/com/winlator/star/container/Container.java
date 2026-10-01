@@ -542,6 +542,25 @@ public class Container {
         putExtra(com.winlator.star.core.FastOpenGL.EXTRA, enabled ? "1" : "0");
     }
 
+    // --- Show OpenGL FPS / OpenGL vsync off (per-container), stored in extraData. Both backends. ---
+    // GALLIUM_HUD=fps and vblank_mode=0 at launch (core.FastOpenGL.FPS_HUD / VSYNC_OFF). Default OFF.
+    // A shortcut may override per game with the same-named extra.
+    public boolean isGlFpsHud() {
+        return com.winlator.star.core.FastOpenGL.FPS_HUD.containerOn(getExtra(com.winlator.star.core.FastOpenGL.FPS_HUD.extra));
+    }
+
+    public void setGlFpsHud(boolean enabled) {
+        putExtra(com.winlator.star.core.FastOpenGL.FPS_HUD.extra, enabled ? "1" : "0");
+    }
+
+    public boolean isGlVsyncOff() {
+        return com.winlator.star.core.FastOpenGL.VSYNC_OFF.containerOn(getExtra(com.winlator.star.core.FastOpenGL.VSYNC_OFF.extra));
+    }
+
+    public void setGlVsyncOff(boolean enabled) {
+        putExtra(com.winlator.star.core.FastOpenGL.VSYNC_OFF.extra, enabled ? "1" : "0");
+    }
+
     // --- HDR output (per-container), stored in extraData. Wayland sessions only. ---
     // Games that support HDR10 get it on a screen that reports HDR10 (display.WaylandHdr, the
     // compositor's wl_color_mgmt.c). Default OFF (absent). A shortcut overrides with the same-named

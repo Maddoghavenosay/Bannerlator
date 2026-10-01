@@ -234,6 +234,10 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
     // (null while the off-main probe runs). The driver half is judged in the screen from the picked
     // driver; on Wayland the row is locked on and the stored value is kept as is.
     var fastOpenGL by mutableStateOf(true)
+    // Show OpenGL FPS / OpenGL vsync off (extras "glFpsHud" / "glVsyncOff", absent = off): plain
+    // launch switches beside Fast OpenGL, on both backends, never greyed.
+    var glFpsHud by mutableStateOf(false)
+    var glVsyncOff by mutableStateOf(false)
     var fastOpenGLLayerEgl by mutableStateOf<Boolean?>(null); private set
     private var fastOpenGLProbeJob: Job? = null
 
@@ -663,6 +667,8 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         waylandHdr               = seed?.isWaylandHdr() ?: false
         unrealHdr                = seed?.getUnrealHdr() ?: com.winlator.star.core.UnrealHdr.OFF
         fastOpenGL               = seed?.isFastOpenGL() ?: true
+        glFpsHud                 = seed?.isGlFpsHud() ?: false
+        glVsyncOff               = seed?.isGlVsyncOff() ?: false
         renderScale              = seed?.getExtra("renderScale", "1.0") ?: "1.0"
         autoCloseOnExit          = (seed?.getExtra("autoCloseOnExit", "1") ?: "1") == "1"
         selectedDXWrapper        = identifierToDisplay(seed?.getDXWrapper() ?: Container.DEFAULT_DXWRAPPER, dxWrapperEntries)
@@ -1371,6 +1377,8 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         c.setWaylandHdr(waylandHdr)                 // off clears the extra
         c.setUnrealHdr(unrealHdr)                   // off clears the extra
         c.setFastOpenGL(fastOpenGL)                 // kept as chosen, also while Wayland locks it on
+        c.setGlFpsHud(glFpsHud)
+        c.setGlVsyncOff(glVsyncOff)
         c.putExtra("renderScale", if (renderScale == "1.0") null else renderScale)
         c.putExtra("autoCloseOnExit", if (autoCloseOnExit) null else "0")  // default ON
         c.setInputType(inputType)
