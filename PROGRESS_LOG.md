@@ -1,5 +1,14 @@
 # Star-Compose — Progress Log
 
+## 2026-10-01 — 💾 Save sync fixes from the audit (`fix/save-sync`, not merged)
+> Steam Cloud save sync, app side, both engines (cloud calls go through the same `SteamCloudBackend` seam; Rust engine is the default). Not device-tested yet.
+> - **Cloud detection:** a game has Steam Cloud if PICS `ufs` has savefiles rules OR a quota OR a file limit, or its manifest holds files. Steam API games (L4D2 550, CS:S 240: quota, no savefiles) were cached `cloud_support_<id>=false` and never uploaded. Migration `cloud_rule_version=2` clears the old `false` verdicts. `SteamUfsConfig` caches quota/limit/Windows rules per app (`ufs_config_v1_<id>`).
+> - **API saves target:** untokened cloud names → the launch mode's remote store (Goldberg `AppData/Roaming/GSE Saves/<id>/remote`, SteamLite `Steam/userdata/<accountId>/<id>/remote`), was the install folder.
+> - **One spelling:** Collect writes Steam's fused `%Token%rest`; `normalizeLibrary` folds old `%Token%/rest` copies (newer mtime wins, loser to `SteamCloudSaves/_moved-aside/<id>/<stamp>/`); Apply picks the newest per destination; upload refreshes old-spelling twins still in the cloud.
+> - **Collect scope:** tracked files exactly + remote store + Auto-Cloud rules; name-match discovery only for no-cloud / unknown-config games. After a cloud listing, non-save Library files (not in manifest, not a rule match; install-folder files when the cloud has files) move to `_moved-aside` (Half-Life 70's 4,277-file Library).
+> - **Also:** `ensureLoggedIn(8 s)` before "Not signed in"; Save Manager Sync/Sync Now ask the same third-party consent as the detail page; SteamLite launches skip the app's pre-pull/exit-upload (client syncs itself). Guide §6 rewritten.
+> - To test: L4D2 exit upload, Hades both ways, Sims 4 duplicate merge, Half-Life cleanup, Monster Train 2 once installed.
+
 ## 2026-10-01 — 🔍 Overnight graphics hunt: AIO embed caveat, honest per-API numbers, X11 OpenGL ×5.7 via EGL (`feat/x11-egl-opengl`, opt-in, not merged)
 > Pocket FIT, container 3, layer `11.0-2-arm64ec-9`, Turnip `v26.3.0-20260930-r7`. The GPU was thermally capped at 310 MHz all night (charging, Thermal Status 3, `thermal_pwrlevel=12`), so every A/B was run back-to-back at the same cap; absolute numbers are low.
 > - **AIO sweep caveat:** in the ImGui shell (and `--sweep`) every non-D3D11 row (Vulkan, OpenGL, D3D12, D3D10, D3D9, D3D8, DirectDraw) is an *embed* backend: offscreen render → GPU→CPU readback → D3D11 upload (`src/cube_embed.h`). The "~2× refresh" plateau on those rows is the test's readback, not the API. Honest numbers come from the standalone runner `--cube <api> --bench N --autoclose 2` (own window, real present). AIO gained `--sweep N --apis=gl,vk,…` (branch `feat/sweep-apis` `aad3cd2`) for quick per-API runs.
