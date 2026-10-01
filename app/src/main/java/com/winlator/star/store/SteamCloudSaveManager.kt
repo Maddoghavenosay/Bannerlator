@@ -1040,8 +1040,24 @@ object SteamCloudSaveManager {
 
     // ── Private helpers ─────────────────────────────────────────────────────────
 
-    /** The live session's cloud backend (JavaSteam handler or Rust engine), or null when signed out. */
-    private fun requireCloud(): SteamCloudBackend? = SteamCloudBackend.current()
+    /** How long a cloud op waits for a reconnecting session to log back on before giving up. */
+    private const val LOGON_WAIT_MS = 8_000L
+
+    /**
+     * The live session's cloud backend (JavaSteam handler or Rust engine). If the session is mid-
+     * reconnect (connected but not logged on — the same race that broke depot downloads), re-logon
+     * from the saved token and wait up to [LOGON_WAIT_MS] before reporting "Not signed in". Null when
+     * signed out (no saved token) or the app's session is lent to a SteamLite game. Worker threads only.
+     */
+    private fun requireCloud(): SteamCloudBackend? {
+        SteamCloudBackend.current()?.let { return it }
+        val back = try { SteamRepository.getInstance().ensureLoggedIn(LOGON_WAIT_MS) } catch (t: Throwable) { false }
+        if (!back) {
+            Log.w(TAG, "cloud op: Steam session not logged on (waited ${LOGON_WAIT_MS / 1000}s)")
+            return null
+        }
+        return SteamCloudBackend.current()
+    }
 
     /** Convert a Steam cloud path into a SAFE relative filesystem path under the local folder.
      *  Normalizes '\' -> '/', strips leading slashes, and REJECTS any '..' traversal (returns null).
