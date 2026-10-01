@@ -16,6 +16,7 @@ import com.winlator.star.box64.Box64Preset
 import com.winlator.star.box64.Box64PresetManager
 import com.winlator.star.container.Container
 import com.winlator.star.container.ContainerManager
+import com.winlator.star.contentdialog.DXVKConfigDialog
 import com.winlator.star.contents.ContentProfile
 import com.winlator.star.contents.ContentsManager
 import com.winlator.star.contents.WrapperManager
@@ -27,6 +28,7 @@ import com.winlator.star.core.NewContainerDefaults
 import com.winlator.star.core.PreloaderState
 import com.winlator.star.core.StorageRoots
 import com.winlator.star.core.StringUtils
+import com.winlator.star.ui.screens.contents.SetAsDefault
 import com.winlator.star.core.SyncCaps
 import com.winlator.star.core.SyncMode
 import com.winlator.star.core.SyncSupport
@@ -578,10 +580,13 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         // ARCH-MATCHED profile (box64/wowbox64/emulator/FEXCore are arch-coupled). Defaults mode uses
         // the explicit selector; a real new container derives it from its default wine version (the
         // same isArm64EC refreshWineDependent would compute below); edit mode's template is unused.
+        // A layer set as the default (Contents › Installed › Set as default…) opens the create form.
+        val preferredWine = if (c == null && !defaultsMode)
+            NewContainerDefaults.preferredLayer(context, wineVersionEntries) else null
         val seedArch: String = when {
             defaultsMode -> defaultsArch
             c == null -> if (WineInfo.fromIdentifier(
-                    context, contentsManager, wineVersionEntries.firstOrNull() ?: ""
+                    context, contentsManager, preferredWine ?: wineVersionEntries.firstOrNull() ?: ""
                 ).isArm64EC()) NewContainerDefaults.ARCH_ARM64EC else NewContainerDefaults.ARCH_X86_64
             else -> NewContainerDefaults.ARCH_X86_64
         }
@@ -607,9 +612,10 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         // Wine version — NEVER templated (profiles omit it): a new container always picks its wine
-        // fresh from the REAL container / first entry, so a saved profile can't force one. In defaults
+        // fresh from the REAL container / the default layer set from Contents / first entry, so a
+        // saved profile can't force one. In defaults
         // mode the arch comes from the explicit selector (applyArch), not from any wine version.
-        selectedWineVersion = c?.wineVersion ?: wineVersionEntries.firstOrNull() ?: ""
+        selectedWineVersion = c?.wineVersion ?: preferredWine ?: wineVersionEntries.firstOrNull() ?: ""
         if (defaultsMode) applyArch(defaultsArch == NewContainerDefaults.ARCH_ARM64EC)
         else refreshWineDependent(selectedWineVersion)
 
@@ -640,6 +646,8 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         autoCloseOnExit          = (seed?.getExtra("autoCloseOnExit", "1") ?: "1") == "1"
         selectedDXWrapper        = identifierToDisplay(seed?.getDXWrapper() ?: Container.DEFAULT_DXWRAPPER, dxWrapperEntries)
         dxWrapperConfig          = seed?.getDXWrapperConfig() ?: Container.DEFAULT_DXWRAPPERCONFIG
+        // No profile for this arch: lay its "Set as default" picks over the built-in defaults.
+        if (seed == null) applyDefaultPicks(seedArch, archDependent = false)
 
         // Audio driver (load as display name). Emulator is arch-dependent → seedArchDependentDefaults.
         selectedAudioDriver = identifierToDisplay(seed?.audioDriver ?: Container.DEFAULT_AUDIO_DRIVER, audioDriverEntries)
@@ -848,7 +856,9 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
             isArm64EC -> NewContainerDefaults.ARCH_ARM64EC
             else -> NewContainerDefaults.ARCH_X86_64
         }
-        val json = NewContainerDefaults.load(context, arch) ?: return null
+        val json = NewContainerDefaults.load(context, arch)
+            ?: return NewContainerDefaults.loadPicks(context, arch)?.optString(SetAsDefault.Kind.DRIVER.name)
+                ?.takeIf { it.isNotEmpty() && it != "System" }
         val v = runCatching {
             GraphicsDriverConfigDialog.getVersion(JSONObject(json).optString("graphicsDriverConfig", ""))
         }.getOrNull() ?: return null
@@ -930,6 +940,34 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         // FEXCore preset.
         val fexPreset = archSeed?.getFEXCorePreset() ?: prefs.getString("fexcore_preset", FEXCorePreset.INTERMEDIATE) ?: FEXCorePreset.INTERMEDIATE
         selectedFEXCorePresetIndex = fexCorePresetIds.indexOf(fexPreset).takeIf { it >= 0 } ?: 0
+
+        if (archSeed == null) applyDefaultPicks(arch, archDependent = true)
+    }
+
+    /**
+     * The sparse "Set as default" picks for [arch] (NewContainerDefaults.loadPicks), written onto the
+     * form through the same writers the Contents hub uses for containers. Only used when [arch] has
+     * no full profile (a profile carries the values itself). [archDependent] = the Box64/WOWBox64 and
+     * FEXCore versions (seedArchDependentDefaults); otherwise the graphics driver and DX wrapper.
+     * A value no longer in its list (component removed since) is ignored.
+     */
+    private fun applyDefaultPicks(arch: String, archDependent: Boolean) {
+        val picks = NewContainerDefaults.loadPicks(context, arch) ?: return
+        fun pick(kind: SetAsDefault.Kind) = picks.optString(kind.name).ifEmpty { null }
+        if (archDependent) {
+            val b64Kind = if (arch == NewContainerDefaults.ARCH_ARM64EC) SetAsDefault.Kind.WOWBOX64 else SetAsDefault.Kind.BOX64
+            pick(b64Kind)?.takeIf { it in box64VersionEntries }?.let { selectedBox64Version = it }
+            pick(SetAsDefault.Kind.FEXCORE)?.takeIf { it in fexCoreVersionEntries }?.let { selectedFEXCoreVersion = it }
+            return
+        }
+        pick(SetAsDefault.Kind.DRIVER)?.let { graphicsDriverConfig = withGraphicsDriverVersion(graphicsDriverConfig, it) }
+        val dxvk = { DXVKConfigDialog.loadDxvkVersionList(context, contentsManager, arch == NewContainerDefaults.ARCH_ARM64EC) }
+        for (kind in listOf(SetAsDefault.Kind.DXVK, SetAsDefault.Kind.VEGAS, SetAsDefault.Kind.VKD3D)) {
+            val v = pick(kind) ?: continue
+            val (w, cfg) = SetAsDefault.withDx(kind, v, StringUtils.parseIdentifier(selectedDXWrapper), dxWrapperConfig, dxvk)
+            selectedDXWrapper = identifierToDisplay(w, dxWrapperEntries)
+            dxWrapperConfig = cfg
+        }
     }
 
     // The arch-dependent slice of the form: emulator gate + the box64/wowbox64 version list & its
@@ -1377,6 +1415,8 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
             profile.remove("drives")
             profile.remove("wineVersion")
             NewContainerDefaults.save(context, defaultsArch, profile.toString())
+            // The form showed the arch's "Set as default" picks; they're in the profile now.
+            NewContainerDefaults.clearPicks(context, defaultsArch)
             AppUtils.showToast(context, R.string.new_container_defaults_saved)
         } catch (e: Exception) {
             AppUtils.showToast(context, R.string.new_container_defaults_save_failed)
@@ -1387,6 +1427,9 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
     /** Reset mode ✓: forget the CURRENT arch's profile and reload the form to its built-in defaults. */
     fun resetDefaults() {
         NewContainerDefaults.clear(context, defaultsArch)
+        // App defaults means app defaults: the arch's "Set as default" picks and layer go too.
+        NewContainerDefaults.clearPicks(context, defaultsArch)
+        NewContainerDefaults.clearLayer(context, defaultsArch)
         loadContainerData()   // template is now null → every field falls back to Container.DEFAULT_*
         AppUtils.showToast(context, R.string.reset_to_app_defaults)
     }
