@@ -184,14 +184,27 @@ public class XServer {
         inputSink = sink;
     }
 
+    /** Any backend: called after the app injects pointer motion or a button (touch, mouse, an
+     *  on-screen or physical stick bound to the mouse) - never for a client's WarpPointer. Drives
+     *  the X11 pointer's idle / controller auto-hide. */
+    private volatile Runnable pointerActivityListener;
+
+    public void setPointerActivityListener(Runnable listener) {
+        pointerActivityListener = listener;
+    }
+
     private void sinkPointerMove() {
         InputSink sink = inputSink;
         if (sink != null) sink.onPointerMove(pointer.getX(), pointer.getY());
+        Runnable activity = pointerActivityListener;
+        if (activity != null) activity.run();
     }
 
     private void sinkPointerButton(Pointer.Button button, boolean pressed) {
         InputSink sink = inputSink;
         if (sink != null) sink.onPointerButton(button, pressed);
+        Runnable activity = pointerActivityListener;
+        if (activity != null) activity.run();
     }
 
     private void sinkKey(XKeycode xKeycode, boolean pressed) {
