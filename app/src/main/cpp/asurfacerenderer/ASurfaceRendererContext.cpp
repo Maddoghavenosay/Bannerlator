@@ -231,7 +231,7 @@ void ASurfaceRendererContext::scanoutSetCursorImage(void* pixels, short w, short
     if (stride <= 0)
         stride = w;
 
-    uint32_t srcStride = (uint32_t)w;
+    uint32_t srcStride = (uint32_t)stride;
     if (scanoutCursorBuf && (scanoutCursorBufW != w || scanoutCursorBufH != h)) {
         if (scanoutCursorFence >= 0) { close(scanoutCursorFence); scanoutCursorFence = -1; }
         AHardwareBuffer_release(scanoutCursorBuf);
