@@ -1660,9 +1660,13 @@ public class XServerDisplayActivity extends AppCompatActivity {
     // just sitting there or while a controller was driving. The renderer's setCursorVisible is the
     // launch gate (hidden until the first game frame); these rules sit on top of it, so the effective
     // state is wanted && !autoHidden. BANNER_CURSOR_AUTOHIDE=0 keeps the pointer up as before.
+    // A held stick marks controller input every tick of the virtual-mouse loop, so a short window
+    // still keeps the pointer hidden while it moves; 1.2 s (the Wayland value) made a touch right
+    // after using the pad wait about a second for the pointer to come back.
+    private static final long X11_CURSOR_PAD_MS = 250L;
     private volatile boolean x11CursorWanted = false;   // launch gate
     private boolean x11CursorAutoHidden = false;         // main thread only
-    private boolean x11CursorAutoHide = true;
+    private volatile boolean x11CursorAutoHide = true;
     private final java.util.concurrent.atomic.AtomicBoolean x11CursorPokePending =
             new java.util.concurrent.atomic.AtomicBoolean();
     private final Runnable x11CursorHideRunnable = () -> setX11CursorAutoHidden(true);
@@ -1686,7 +1690,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
         if (waylandMode || !x11CursorAutoHide) return;
         waylandCursorIdle.removeCallbacks(x11CursorHideRunnable);
         boolean padDriving =
-                android.os.SystemClock.uptimeMillis() - waylandLastPadInputMs < WAYLAND_CURSOR_PAD_MS;
+                android.os.SystemClock.uptimeMillis() - waylandLastPadInputMs < X11_CURSOR_PAD_MS;
         if (padDriving) {
             setX11CursorAutoHidden(true);
             return;
@@ -10446,6 +10450,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
             // (after the user env merges, before the socket opens); Wine on X11 only, since the
             // prefix step above keeps winex11's GDI off RENDER. BANNER_X11_RENDER=0 turns it off.
             if (!gamescopeMode && !waylandMode) applyColorCursors();
+            if (!gamescopeMode && !waylandMode) applyX11CursorAutoHide();
 
             // Keep the lsfg-vk Vulkan layer INERT unless lsfg-vk is actually the engine.
             // Placed AFTER both user env merges (container above, shortcut just here) so
@@ -10800,20 +10805,17 @@ public class XServerDisplayActivity extends AppCompatActivity {
         renderer.setCursorVisible(false);
         x11CursorWanted = false;
         if (!waylandMode) {
-            String autoHide = envVars.has("BANNER_CURSOR_AUTOHIDE") ? envVars.get("BANNER_CURSOR_AUTOHIDE").trim() : "";
-            x11CursorAutoHide = !(autoHide.equals("0") || autoHide.equalsIgnoreCase("false"));
-            Log.i("XServerDisplayActivity", "x11 cursor auto-hide: " + (x11CursorAutoHide ? "on" : "off (BANNER_CURSOR_AUTOHIDE=" + autoHide + ")"));
-            if (x11CursorAutoHide) {
-                // Called on whichever thread injected the input; coalesce to one UI-thread poke.
-                xServer.setPointerActivityListener(() -> {
-                    if (x11CursorPokePending.compareAndSet(false, true)) {
-                        runOnUiThread(() -> {
-                            x11CursorPokePending.set(false);
-                            x11CursorPoke();
-                        });
-                    }
-                });
-            }
+            // On/off is decided later, once the user's env vars are merged (applyX11CursorAutoHide);
+            // x11CursorPoke checks it on every call.
+            // Called on whichever thread injected the input; coalesce to one UI-thread poke.
+            xServer.setPointerActivityListener(() -> {
+                if (x11CursorPokePending.compareAndSet(false, true)) {
+                    runOnUiThread(() -> {
+                        x11CursorPokePending.set(false);
+                        x11CursorPoke();
+                    });
+                }
+            });
         }
 
         // Power-user perf (non-root): arm the thermal watchdog for this session, and if the priority
@@ -15223,6 +15225,20 @@ return true;
         }
         catch (Exception e) {
             Log.w("XServerDisplayActivity", "colour cursors: could not write ClientSideWithRender", e);
+        }
+    }
+
+    // After both user env merges (container + shortcut), unlike the renderer setup, which runs first.
+    private void applyX11CursorAutoHide() {
+        String v = envVars.has("BANNER_CURSOR_AUTOHIDE") ? envVars.get("BANNER_CURSOR_AUTOHIDE").trim() : "";
+        boolean on = !(v.equals("0") || v.equalsIgnoreCase("false"));
+        x11CursorAutoHide = on;
+        Log.i("XServerDisplayActivity", "x11 cursor auto-hide: " + (on ? "on" : "off (BANNER_CURSOR_AUTOHIDE=" + v + ")"));
+        if (!on) {
+            runOnUiThread(() -> {
+                waylandCursorIdle.removeCallbacks(x11CursorHideRunnable);
+                setX11CursorAutoHidden(false);
+            });
         }
     }
 
