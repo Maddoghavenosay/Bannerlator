@@ -3126,6 +3126,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
                         extractGraphicsDriverFiles();
                         changeWineAudioDriver();
                         applyGameRefreshRateUnlock();
+                        applyColorCursorRegistry();
                         provisionEpicOverlay();
                     } else {
                         preloaderDialog.step(2, "Preparing the Linux runtime…");
@@ -10389,6 +10390,12 @@ public class XServerDisplayActivity extends AppCompatActivity {
             // writes "Show OpenGL FPS" / "OpenGL vsync off", which apply on both backends.
             if (!gamescopeMode) applyFastOpenGLEnv(waylandMode);
 
+            // Full-colour game cursors on X11: register the cursor subset of RENDER so libXcursor
+            // stops falling back to two-colour core cursors. Same placement rule as Fast OpenGL
+            // (after the user env merges, before the socket opens); Wine on X11 only, since the
+            // prefix step above keeps winex11's GDI off RENDER. BANNER_X11_RENDER=0 turns it off.
+            if (!gamescopeMode && !waylandMode) applyColorCursors();
+
             // Keep the lsfg-vk Vulkan layer INERT unless lsfg-vk is actually the engine.
             // Placed AFTER both user env merges (container above, shortcut just here) so
             // nothing the user carries over can re-enable it. The layer's manifest honours
@@ -15130,6 +15137,33 @@ return true;
         if (unlock && !capable && explicit) {
             runOnUiThread(() -> showToast(this, R.string.refresh_unlock_needs_compatible_layer));
         }
+    }
+
+    // Keep winex11's GDI drawing off the X RENDER extension. Our server only implements RENDER's
+    // cursor requests (RenderExtension), so without this winex11 would try to draw text and blits
+    // through RENDER the moment it sees the extension. "ClientSideWithRender"="N" makes
+    // X11DRV_XRender_Init return before it even queries RENDER (winex11 xrender.c), while the
+    // Xcursor path in mouse.c still uses it for colour cursors. Harmless when RENDER is off: winex11
+    // then finds no extension and takes the same non-RENDER path. Written on every launch so it
+    // survives a prefix regen and retrofits existing containers.
+    private void applyColorCursorRegistry() {
+        File userRegFile = new File(imageFs.getRootDir(), ImageFs.WINEPREFIX + "/user.reg");
+        try (WineRegistryEditor registryEditor = new WineRegistryEditor(userRegFile)) {
+            registryEditor.setStringValue("Software\\Wine\\X11 Driver", "ClientSideWithRender", "N");
+        }
+        catch (Exception e) {
+            Log.w("XServerDisplayActivity", "colour cursors: could not write ClientSideWithRender", e);
+        }
+    }
+
+    private void applyColorCursors() {
+        String v = envVars.has("BANNER_X11_RENDER") ? envVars.get("BANNER_X11_RENDER").trim() : "";
+        if (v.equals("0") || v.equalsIgnoreCase("false")) {
+            Log.i("XServerDisplayActivity", "colour cursors: off (BANNER_X11_RENDER=" + v + ")");
+            return;
+        }
+        xServer.enableRenderCursors();
+        Log.i("XServerDisplayActivity", "colour cursors: on (X RENDER cursor subset)");
     }
 
     // Whether the guest-side refresh setting was explicitly chosen by the user (extra present) vs. left

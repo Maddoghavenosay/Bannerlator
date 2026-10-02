@@ -13,6 +13,7 @@ import com.winlator.star.xserver.extensions.XComposite;
 import com.winlator.star.xserver.extensions.MITSHMExtension;
 import com.winlator.star.xserver.extensions.PresentExtension;
 import com.winlator.star.xserver.extensions.RandrExtension;
+import com.winlator.star.xserver.extensions.RenderExtension;
 import com.winlator.star.xserver.extensions.SyncExtension;
 
 import java.nio.charset.Charset;
@@ -273,6 +274,22 @@ public class XServer {
         extensions.put(GLXExtension.MAJOR_OPCODE, new GLXExtension(this));
         extensions.put(XComposite.MAJOR_OPCODE, new XComposite(this));
         serverGlx = true;
+    }
+
+    private volatile boolean renderCursors = false;
+
+    /** Full-colour cursors: registers the cursor subset of RENDER (extensions.RenderExtension) so
+     *  libXcursor hands over ARGB cursors instead of two-colour core ones. Wine sessions only, and
+     *  only once the prefix has "ClientSideWithRender"="N" so winex11 keeps its GDI off RENDER.
+     *  Must run before the first client connects, like enableServerGlx(). */
+    public void enableRenderCursors() {
+        if (renderCursors) return;
+        extensions.put(RenderExtension.MAJOR_OPCODE, new RenderExtension(this));
+        renderCursors = true;
+    }
+
+    public boolean isRenderCursorsEnabled() {
+        return renderCursors;
     }
 
     public boolean isServerGlxEnabled() {
