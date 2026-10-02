@@ -10466,6 +10466,8 @@ public class XServerDisplayActivity extends AppCompatActivity {
             // (after the user env merges, before the socket opens); Wine on X11 only, since the
             // prefix step above keeps winex11's GDI off RENDER. BANNER_X11_RENDER=0 turns it off.
             if (!gamescopeMode && !waylandMode) applyColorCursors();
+            // Raw mouse on X11 (XInput 2), same placement rule. BANNER_X11_XINPUT2=0 turns it off.
+            if (!gamescopeMode && !waylandMode) applyXInput2();
             if (!gamescopeMode && !waylandMode) applyX11CursorAutoHide();
 
             // Keep the lsfg-vk Vulkan layer INERT unless lsfg-vk is actually the engine.
@@ -15257,6 +15259,32 @@ return true;
                 setX11CursorAutoHidden(false);
             });
         }
+    }
+
+    // Raw mouse for Wine on X11: games that read the mouse through raw input (usually mouse-look)
+    // got nothing, every log saying "XInput 2.0 not available". BANNER_X11_XINPUT2=0 turns it off;
+    // BANNER_X11_XGE=1 also advertises the Generic Event extension (A/B: GameNative ships it as an
+    // option); BANNER_X11_XI2_TOUCH=0 keeps touchscreen-mode drags out of raw motion.
+    private void applyXInput2() {
+        if (envFlagOff("BANNER_X11_XINPUT2")) {
+            Log.i("XServerDisplayActivity", "raw mouse (XInput 2): off (BANNER_X11_XINPUT2=0)");
+            return;
+        }
+        boolean xge = envFlagOn("BANNER_X11_XGE");
+        boolean touch = !envFlagOff("BANNER_X11_XI2_TOUCH");
+        xServer.enableXInput2(xge, touch);
+        Log.i("XServerDisplayActivity", "raw mouse (XInput 2): on | XGE " + (xge ? "on" : "off")
+                + " | touchscreen drags " + (touch ? "on" : "off"));
+    }
+
+    private boolean envFlagOff(String name) {
+        String v = envVars.has(name) ? envVars.get(name).trim() : "";
+        return v.equals("0") || v.equalsIgnoreCase("false");
+    }
+
+    private boolean envFlagOn(String name) {
+        String v = envVars.has(name) ? envVars.get(name).trim() : "";
+        return v.equals("1") || v.equalsIgnoreCase("true");
     }
 
     private void applyColorCursors() {

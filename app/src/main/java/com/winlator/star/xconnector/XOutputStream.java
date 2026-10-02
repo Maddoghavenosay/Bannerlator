@@ -104,6 +104,13 @@ public class XOutputStream {
         buffer.putLong(value);
     }
 
+    /** X FP3232 (XInput 2): int32 integral part, then uint32 fraction. */
+    public void writeFP3232(double value) {
+        long fixed = Math.round(value * 4294967296.0);
+        writeInt((int)(fixed >> 32));
+        writeInt((int)fixed);
+    }
+
     public void writeString8(String str) {
         byte[] bytes = str.getBytes(XServer.LATIN1_CHARSET);
         int length = -str.length() & 3;

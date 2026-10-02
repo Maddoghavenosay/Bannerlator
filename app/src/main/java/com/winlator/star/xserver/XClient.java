@@ -74,6 +74,8 @@ public class XClient implements XResourceManager.OnResourceLifecycleListener {
     }
 
     public void freeResources() {
+        com.winlator.star.xserver.extensions.XInput2Extension xi = xServer.getXInput2();
+        if (xi != null) xi.onClientDisconnected(this);
         try (XLock lock = xServer.lockAll()) {
             while (!resources.isEmpty()) {
                 XResource resource = resources.remove(resources.size()-1);

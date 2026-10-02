@@ -273,11 +273,18 @@ public class TouchpadView extends View {
         // If mouse is disabled, ignore all input
         if (!mouseEnabled) return true;
 
+        int wakeAction = event.getActionMasked();
+        // A finger landing, or the tracked finger changing, moves the pointer by a jump; raw mouse
+        // (XInput 2) must not report that as motion.
+        if (wakeAction == MotionEvent.ACTION_DOWN || wakeAction == MotionEvent.ACTION_POINTER_DOWN
+                || wakeAction == MotionEvent.ACTION_POINTER_UP) {
+            xServer.markPointerJump();
+        }
+
         // A finger that lands while the pointer is auto-hidden only brings it back: the gesture moves
         // the pointer but clicks nothing. Decided once per gesture and held until the next first
         // finger, or a short while after the lift - long enough to drop the delayed click a tap posts
         // after lifting, short enough that an on-screen mouse button pressed next still clicks.
-        int wakeAction = event.getActionMasked();
         if (wakeAction == MotionEvent.ACTION_DOWN) {
             removeCallbacks(endWakeGesture);
             boolean wake = event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER
