@@ -10,6 +10,7 @@
 > - **Test tool:** `CursorTest.exe` (AIO-Graphics-Test `feat/cursor-test` `7bf71d1`, `tools/cursor-test/`, workflow `build-cursor-test.yml`): colour quadrants, soft alpha shadow, 64×64, animated, standard arrow, hidden, plus a GDI strip for 2D regressions. Staged in `Download/Bannerlator-colour-cursor-test/`.
 > - **Build:** `2da9fba1`, CI 36997483871 green (all flavours). Installed pubg sha256 `3e22e41b…f925` (manual download; gh/curl kept dropping on the 544 MB artifact).
 > - **✅ Device-proven 07:51 (CursorTest, X11):** every tile correct (red top-left → R/B fix works, smooth alpha, 64×64, standard arrow, hidden), GDI strip intact. Animated cursors show their first frame only (by design for now).
+> - **✅ Real game 08:07:** Gothic 1 Remake (UE5, D3D12, X11) shows its full-colour cursor (blue crystal shard), main menu ~145 fps. Gothic needed `VKD3D_SHADER_MODEL=6_6` (vkd3d did not enable SM 6.6 on its own although Turnip A750 has every SM 6.6 feature; cause open). One run hit an Android ANR: main thread blocked writing X events to a game that stopped reading (pre-existing; fix proposed, not built).
 > - **Next:** Gothic 1 Remake (installed) + Kingdom Come, a launcher-heavy game, A/B with `BANNER_X11_RENDER=0`; credit the reporter in the next release notes.
 
 ## 2026-10-01 — 💾 Save sync fixes from the audit (`fix/save-sync`, not merged)
