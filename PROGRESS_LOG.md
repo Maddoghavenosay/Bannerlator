@@ -7,6 +7,7 @@
 > - **X11 only:** queued MotionNotify events collapse to the newest (`XClient` opts in); clicks, keys, replies and the other protocols on this stream class (ALSA, SysV shm, VirGL) keep every message.
 > - **Disconnect:** `killConnection` stops a stream's output before closing its fd, so no late write lands on a closed/reused fd.
 > - **Build:** `d495c99b`, CI 37005819053 (running). **Test:** delete Gothic's `vkd3d-proton.cache`, launch, tap/move during the compile → no ANR, input catches up; normal play + audio unchanged.
+> - **CI green** (37005819053, headSha `d495c99b`). Installed 08:55 (manual download), sha256 `ad809dcf…`; dex has `XOutputDrain` + `writeNonBlocking`, libwinlator.so has `ClientSocket_writeNonBlocking`. Gothic's vkd3d cache renamed to `.bak` (`G1R/Binaries/Win64/`) to force the first-launch compile again; Turnip's shader cache left alone.
 > - Same day: colour cursors merged to main (`77a3e484`, CI 37005371448).
 
 ## 2026-10-02 — 🖱️🎨 X11 full-colour game cursors via the RENDER cursor subset (`feat/xrender-argb-cursor`, not merged)
