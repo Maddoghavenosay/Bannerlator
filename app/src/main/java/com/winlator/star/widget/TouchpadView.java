@@ -251,7 +251,7 @@ public class TouchpadView extends View {
 
     private java.util.function.BooleanSupplier wakeGate;
     private static final long WAKE_GESTURE_TAIL_MS = 250L;
-    private final Runnable endWakeGesture = () -> xServer.setSuppressPointerButtons(false);
+    private final Runnable endWakeGesture = () -> this.xServer.setSuppressPointerButtons(false);
 
     /** True when a new touch should only reveal the hidden pointer, not click. */
     public void setWakeGate(java.util.function.BooleanSupplier wakeGate) {
