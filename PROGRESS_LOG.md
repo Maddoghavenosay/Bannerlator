@@ -1,5 +1,12 @@
 # Star-Compose — Progress Log
 
+## 2026-10-02 — 👆 X11 auto-hide: the touch that wakes a hidden pointer doesn't click (`feat/x11-cursor-autohide`, not merged)
+> Gothic 1 Remake sometimes kept the plain white arrow on its menu instead of its own blue crystal cursor. `WINEDEBUG=+cursor,+rawinput` over five launches: the game builds the crystal (`CreateIconIndirect` 32x32, 32 bpp) and switches to it once its menu settles (right after it registers and drops raw mouse input), unless a click reaches it first. A tap is a left click, so a tap to bring the hidden pointer back clicked the game, which went to SetCursor(NULL) and then the standard arrow for the session. Movement alone never broke it; raw input isn't the cause.
+> - **`XServer.setSuppressPointerButtons`:** while set, presses and pulses are dropped (still counted as pointer activity, so the pointer wakes) and releases only pass for a button that is down.
+> - **`TouchpadView.setWakeGate`:** checked once per gesture at the first finger (fingers only, not mouse or stylus); the gate lifts 250 ms after the lift so a tap's delayed click is dropped but on-screen mouse buttons pressed next still work.
+> - **`XServerDisplayActivity.x11TouchOnlyWakesCursor`:** X11 with auto-hide on, past the launch gate, pointer auto-hidden, and the game's own cursor not hidden (when the game hides it, a touch is a real click). Not covered: the relative-mouse path (`WinHandler.mouseEvent`).
+> - **Build:** `785ecf71`, CI 37027865639. **Test:** Gothic menu, let the pointer hide, tap → pointer shows, nothing clicked, crystal stays; next tap clicks.
+
 ## 2026-10-02 — 🧵 X output never blocks the UI thread (`fix/x-event-nonblocking`, not merged)
 > Gothic 1 Remake's first launch (UE5 precompiling ~1,000 PSOs) brought up Android "not responding". ANR trace: the main thread sat in `sock_alloc_send_pskb`, "Waited 5003ms for MotionEvent" — touch input is turned into X events on the UI thread, and `XOutputStream.flush()` did a blocking `write()` into a socket the busy game had stopped reading. Relaunching was fine (shaders cached). Pre-existing Winlator design.
 > - **`ClientSocket.writeNonBlocking`** (native `send(MSG_DONTWAIT | MSG_NOSIGNAL)`, `xconnector_epoll.c`).
