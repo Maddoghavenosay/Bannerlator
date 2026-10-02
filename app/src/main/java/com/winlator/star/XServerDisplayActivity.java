@@ -1699,6 +1699,22 @@ public class XServerDisplayActivity extends AppCompatActivity {
         waylandCursorIdle.postDelayed(x11CursorHideRunnable, WAYLAND_CURSOR_IDLE_MS);
     }
 
+    /**
+     * X11: a finger landing now should only bring the auto-hidden pointer back, not click. A tap is a
+     * left click, and Gothic 1 Remake shows its own cursor only if no click reaches it before its
+     * menu settles - waking the pointer with a tap left it on the plain arrow for the session. Not
+     * when the game hid the cursor itself (its hide wins, so the touch has nothing to reveal and is a
+     * real click). Main thread only.
+     */
+    private boolean x11TouchOnlyWakesCursor() {
+        if (waylandMode || gamescopeMode || !x11CursorAutoHide || !x11CursorWanted || !x11CursorAutoHidden) {
+            return false;
+        }
+        Window pw = xServer != null ? xServer.inputDeviceManager.getPointWindow() : null;
+        com.winlator.star.xserver.Cursor cursor = pw != null ? pw.attributes.getCursor() : null;
+        return cursor == null || cursor.isVisible();
+    }
+
     /** X11: a physical pad produced input - hide the pointer now rather than at the idle timeout. */
     private void x11CursorPadInput() {
         if (waylandMode || !x11CursorAutoHide || x11CursorAutoHidden) return;
@@ -11244,6 +11260,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
         // surface, which hands them to gamescope as real touches (Big Picture scrolls under one).
         // Read at every touch, so the drawer's Touch choice applies at once.
         touchpadView.setPassThrough(() -> gamescopeMode && waylandTouchscreenMode(), () -> waylandSurfaceView);
+        touchpadView.setWakeGate(this::x11TouchOnlyWakesCursor);
         rootView.addView(touchpadView);
 
         inputControlsView = new InputControlsView(this, timeoutHandler, hideControlsRunnable);

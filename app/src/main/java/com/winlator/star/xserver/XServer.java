@@ -193,6 +193,20 @@ public class XServer {
         pointerActivityListener = listener;
     }
 
+    /** While set, injected button presses are dropped (a touch that only wakes a hidden pointer must
+     *  not click). Releases still go through for a button that is down, so nothing is left stuck. */
+    private volatile boolean suppressPointerButtons;
+
+    public void setSuppressPointerButtons(boolean suppress) {
+        suppressPointerButtons = suppress;
+    }
+
+    /** A dropped press still counts as the player touching the pointer (it wakes it). */
+    private void notifyPointerActivity() {
+        Runnable activity = pointerActivityListener;
+        if (activity != null) activity.run();
+    }
+
     private void sinkPointerMove() {
         InputSink sink = inputSink;
         if (sink != null) sink.onPointerMove(pointer.getX(), pointer.getY());
@@ -227,6 +241,7 @@ public class XServer {
     }
 
     public void injectPointerButtonPress(Pointer.Button buttonCode) {
+        if (suppressPointerButtons) { notifyPointerActivity(); return; }
         try (XLock lock = lock(Lockable.WINDOW_MANAGER, Lockable.INPUT_DEVICE)) {
             pointer.setButton(buttonCode, true);
         }
@@ -234,6 +249,7 @@ public class XServer {
     }
 
     public void injectPointerButtonRelease(Pointer.Button buttonCode) {
+        if (suppressPointerButtons && !pointer.isButtonPressed(buttonCode)) return;
         try (XLock lock = lock(Lockable.WINDOW_MANAGER, Lockable.INPUT_DEVICE)) {
             pointer.setButton(buttonCode, false);
         }
@@ -241,6 +257,7 @@ public class XServer {
     }
 
     public void injectPointerButtonPulse(Pointer.Button buttonCode) {
+        if (suppressPointerButtons) { notifyPointerActivity(); return; }
         try (XLock lock = lock(Lockable.WINDOW_MANAGER, Lockable.INPUT_DEVICE)) {
             pointer.setButton(buttonCode, true);
             pointer.setButton(buttonCode, false);
