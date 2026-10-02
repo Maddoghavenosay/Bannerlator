@@ -1,5 +1,13 @@
 # Star-Compose — Progress Log
 
+## 2026-10-02 — 🖱️ X11 raw mouse through XInput 2 (`feat/x11-xinput2`, not merged)
+> Every Wine log on X11 says `x11drv_xinput2_init XInput 2.0 not available`: the Java X server had no XInputExtension, so games reading the mouse through raw input (WM_INPUT, usually mouse-look) got no movement. Wayland already sends relative motion for every pointer move. GameNative (PR #1084, #1354) and WinNative (a decompiled copy of an older GameNative) both have it; ported from GameNative (GPL-3.0).
+> - **`XInput2Extension`** (XI 2.2, opcode -109, events from 80, errors from MIN+40): GetExtensionVersion, XIGetClientPointer, XISelectEvents, XIQueryVersion, XIQueryDevice; BadImplementation for anything else. One master pointer, 7 buttons, two relative axes.
+> - **`XIRawEvent`:** RawMotion (FP3232 deltas) and RawButtonPress/Release as GenericEvents, fed from the app's pointer injection.
+> - **Beyond GameNative:** absolute moves (touchscreen mode, hovering mouse/stylus) also become raw motion, measured from the last position we injected; a finger landing only re-anchors (`markPointerJump` from TouchpadView).
+> - **Switches:** Wine on X11 only; `BANNER_X11_XINPUT2=0` off, `BANNER_X11_XI2_TOUCH=0` no touchscreen drags, `BANNER_X11_XGE=1` also advertises the Generic Event extension (A/B).
+> - **Build:** `f377dbda`, CI 37035855224. **Test:** Gothic log loses the XInput warning; a mouse-look game turns with a drag and a real mouse; an RTS/desktop app still clicks where you tap.
+
 ## 2026-10-02 — 👆 X11 auto-hide: the touch that wakes a hidden pointer doesn't click (`feat/x11-cursor-autohide`, not merged)
 > Gothic 1 Remake sometimes kept the plain white arrow on its menu instead of its own blue crystal cursor. `WINEDEBUG=+cursor,+rawinput` over five launches: the game builds the crystal (`CreateIconIndirect` 32x32, 32 bpp) and switches to it once its menu settles (right after it registers and drops raw mouse input), unless a click reaches it first. A tap is a left click, so a tap to bring the hidden pointer back clicked the game, which went to SetCursor(NULL) and then the standard arrow for the session. Movement alone never broke it; raw input isn't the cause.
 > - **`XServer.setSuppressPointerButtons`:** while set, presses and pulses are dropped (still counted as pointer activity, so the pointer wakes) and releases only pass for a button that is down.
