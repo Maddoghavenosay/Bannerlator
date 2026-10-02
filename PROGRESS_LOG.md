@@ -1,5 +1,17 @@
 # Star-Compose — Progress Log
 
+## 2026-10-02 — 🖱️🎨 X11 full-colour game cursors via the RENDER cursor subset (`feat/xrender-argb-cursor`, not merged)
+> Discord #bugs report: in Kingdom Come 1 & 2 and the Gothic Remake the in-game cursor is black and white on X11, in every Winlator fork (glibc too), fine in GameHub/BannerHub.
+> - **Cause:** the Java X server never offered RENDER. Wine's winex11 dlopens libXcursor + libXrender (both in imagefs), and libXcursor only builds ARGB cursors on RENDER >= 0.5, so every cursor fell back to a two-colour core cursor (`CursorRequests.createCursor` → `recolorCursor`). App-only fix, no layer rebuild.
+> - **`xserver/extensions/RenderExtension.java`** (opcode -108): QueryVersion 0.11, QueryPictFormats (A1 / RGB24 / ARGB32; root visual is depth 32 → ARGB32), Create/FreePicture, CreateCursor, CreateAnimCursor (first frame, static). Pictures snapshot their pixels because libXcursor frees the pixmap before `XRenderCreateCursor`.
+> - **Fail-safe:** cursor requests always leave a valid cursor (`CursorManager.createFallbackArrowCursor` on failure); other RENDER requests get BadImplementation with their bytes skipped; exceptions never drop the client; after 8 failures the session uses the plain arrow.
+> - **On automatically** for Wine on X11 (not gamescope/Linux runtime, not Wayland); `BANNER_X11_RENDER=0` turns it off. Each launch writes HKCU `Software\Wine\X11 Driver` `ClientSideWithRender=N`, so winex11's GDI never touches our partial RENDER (`X11DRV_XRender_Init` returns early, xrender.c:325); the Xcursor path in mouse.c is separate.
+> - **Also fixed:** both scanout cursor uploads (ASR `ASurfaceRendererContext.cpp`, DirectScanout `ScanoutContext.cpp`) memcpy'd X BGRA words into an R8G8B8A8 buffer, swapping red and blue; hidden until now by black/white cursors.
+> - **Test tool:** `CursorTest.exe` (AIO-Graphics-Test `feat/cursor-test` `7bf71d1`, `tools/cursor-test/`, workflow `build-cursor-test.yml`): colour quadrants, soft alpha shadow, 64×64, animated, standard arrow, hidden, plus a GDI strip for 2D regressions. Staged in `Download/Bannerlator-colour-cursor-test/`.
+> - **Build:** `2da9fba1`, CI 36997483871 green (all flavours). Installed pubg sha256 `3e22e41b…f925` (manual download; gh/curl kept dropping on the 544 MB artifact).
+> - **✅ Device-proven 07:51 (CursorTest, X11):** every tile correct (red top-left → R/B fix works, smooth alpha, 64×64, standard arrow, hidden), GDI strip intact. Animated cursors show their first frame only (by design for now).
+> - **Next:** Gothic 1 Remake (installed) + Kingdom Come, a launcher-heavy game, A/B with `BANNER_X11_RENDER=0`; credit the reporter in the next release notes.
+
 ## 2026-10-01 — 💾 Save sync fixes from the audit (`fix/save-sync`, not merged)
 > Steam Cloud save sync, app side, both engines (cloud calls go through the same `SteamCloudBackend` seam; Rust engine is the default). Not device-tested yet.
 > - **Cloud detection:** a game has Steam Cloud if PICS `ufs` has savefiles rules OR a quota OR a file limit, or its manifest holds files. Steam API games (L4D2 550, CS:S 240: quota, no savefiles) were cached `cloud_support_<id>=false` and never uploaded. Migration `cloud_rule_version=2` clears the old `false` verdicts. `SteamUfsConfig` caches quota/limit/Windows rules per app (`ufs_config_v1_<id>`).
