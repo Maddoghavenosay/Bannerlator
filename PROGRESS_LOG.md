@@ -1,5 +1,14 @@
 # Star-Compose — Progress Log
 
+## 2026-10-02 — 🧵 X output never blocks the UI thread (`fix/x-event-nonblocking`, not merged)
+> Gothic 1 Remake's first launch (UE5 precompiling ~1,000 PSOs) brought up Android "not responding". ANR trace: the main thread sat in `sock_alloc_send_pskb`, "Waited 5003ms for MotionEvent" — touch input is turned into X events on the UI thread, and `XOutputStream.flush()` did a blocking `write()` into a socket the busy game had stopped reading. Relaunching was fine (shaders cached). Pre-existing Winlator design.
+> - **`ClientSocket.writeNonBlocking`** (native `send(MSG_DONTWAIT | MSG_NOSIGNAL)`, `xconnector_epoll.c`).
+> - **`XOutputStream`:** flush never blocks; what doesn't fit goes to an ordered per-client backlog (fd-passing messages queue too) that a background task drains once the client reads again; later output queues behind it.
+> - **X11 only:** queued MotionNotify events collapse to the newest (`XClient` opts in); clicks, keys, replies and the other protocols on this stream class (ALSA, SysV shm, VirGL) keep every message.
+> - **Disconnect:** `killConnection` stops a stream's output before closing its fd, so no late write lands on a closed/reused fd.
+> - **Build:** `d495c99b`, CI 37005819053 (running). **Test:** delete Gothic's `vkd3d-proton.cache`, launch, tap/move during the compile → no ANR, input catches up; normal play + audio unchanged.
+> - Same day: colour cursors merged to main (`77a3e484`, CI 37005371448).
+
 ## 2026-10-02 — 🖱️🎨 X11 full-colour game cursors via the RENDER cursor subset (`feat/xrender-argb-cursor`, not merged)
 > Discord #bugs report: in Kingdom Come 1 & 2 and the Gothic Remake the in-game cursor is black and white on X11, in every Winlator fork (glibc too), fine in GameHub/BannerHub.
 > - **Cause:** the Java X server never offered RENDER. Wine's winex11 dlopens libXcursor + libXrender (both in imagefs), and libXcursor only builds ARGB cursors on RENDER >= 0.5, so every cursor fell back to a two-colour core cursor (`CursorRequests.createCursor` → `recolorCursor`). App-only fix, no layer rebuild.
