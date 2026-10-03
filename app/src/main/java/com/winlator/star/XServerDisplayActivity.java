@@ -15184,7 +15184,7 @@ return true;
     // Codecs rows of the Win Components tab (per-game override → container). Written on every
     // launch (idempotent, survives a prefix regen) into the ACTIVE prefix's user.reg: a DWORD 0
     // under HKCU\Software\Wine\MediaFoundation routes Wine's MF byte-stream handlers to
-    // winegstreamer; with the value absent they use winedmo (FFmpeg). See MediaDecoder.
+    // winegstreamer, a DWORD 1 to winedmo (FFmpeg). See MediaDecoder.
     // The env side (WINE_USE_DMO / WINE_DO_NOT_CREATE_DXGI_DEVICE_MANAGER) is added where the
     // launch env is assembled, after the override merge.
     private void applyMediaDecoderSettings() {
@@ -15197,7 +15197,7 @@ return true;
                 registryEditor.setDwordValue(MediaDecoder.REG_KEY, MediaDecoder.REG_VALUE, 0);
             }
             else {
-                registryEditor.removeValue(MediaDecoder.REG_KEY, MediaDecoder.REG_VALUE);
+                registryEditor.setDwordValue(MediaDecoder.REG_KEY, MediaDecoder.REG_VALUE, 1);
             }
         }
         Log.d("XServerDisplayActivity", "Media decoder backend: " + (gstreamer ? "GStreamer" : "FFmpeg (winedmo)")

@@ -9,12 +9,14 @@ package com.winlator.star.core;
  * loop and applies them here instead.
  *
  * Builtin decoder — Wine's mfsrcsnk/mfasfsrcsnk/mfmp4srcsnk byte-stream handlers (every layer we
- * ship, Wine-10 base) pick winedmo (FFmpeg) unless HKCU\Software\Wine\MediaFoundation
- * "DisableGstByteStreamHandler" is a DWORD 0, which routes them to winegstreamer's handler
- * instead (dlls/mfsrcsnk/media_source.c use_gst_byte_stream_handler). So:
- *   GStreamer → write the DWORD 0 (today's proven path: MF → winegstreamer → GStreamer).
- *   FFmpeg    → remove the value, and also export WINE_USE_DMO=1 for layers built from Pipetto's
- *               Proton-9 tree, which gates the same choice on that variable.
+ * ship, Wine-10 base) read HKCU\Software\Wine\MediaFoundation "DisableGstByteStreamHandler":
+ * DWORD 0 = winegstreamer's handler, 1 = winedmo (dlls/mfsrcsnk/media_source.c
+ * use_gst_byte_stream_handler). Our layers default to winegstreamer when the value is absent
+ * (upstream Wine defaults to winedmo) and also honour WINE_USE_DMO=1, like Pipetto's Proton-9
+ * tree. Both are written, so the choice holds on any layer:
+ *   GStreamer → DWORD 0 (today's proven path: MF → winegstreamer → GStreamer).
+ *   FFmpeg    → DWORD 1 + WINE_USE_DMO=1. Needs a layer whose winedmo was built with FFmpeg
+ *               (Proton 11.0-2 vc12+); older ones fail winedmo's probe and stay on GStreamer.
  * DirectShow (quartz) always goes through winegstreamer; this only moves Media Foundation.
  *
  * Software decoding — WINE_DO_NOT_CREATE_DXGI_DEVICE_MANAGER=1 makes MFCreateDXGIDeviceManager
