@@ -310,7 +310,7 @@ jobs:
         # Without that file nothing is fetched, the apk carries no gamescope, and sessions keep the runtime's own.
         if [ -f tools/gamescope/release.env ]; then
           . tools/gamescope/release.env
-          curl -fsSL -o gamescope.tzst "${GAMESCOPE_URL}"
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o gamescope.tzst "${GAMESCOPE_URL}"
           echo "${GAMESCOPE_SHA256}  gamescope.tzst" | sha256sum -c -
           tar --use-compress-program=unzstd -xf gamescope.tzst -C "$D"
           test -f "$D/usr/local/bin/gamescope"
@@ -355,7 +355,7 @@ jobs:
       if: steps.pa-src.outputs.cache-hit != 'true'
       run: |
         set -euo pipefail
-        curl -fsSL -o pa.tar.gz https://github.com/pulseaudio/pulseaudio/archive/refs/tags/v13.0.tar.gz
+        curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o pa.tar.gz https://github.com/pulseaudio/pulseaudio/archive/refs/tags/v13.0.tar.gz
         mkdir -p pa13 && tar -xzf pa.tar.gz -C pa13 --strip-components=1 && rm pa.tar.gz
 
     - name: Build the DirectAudio sink into the audio bundle
