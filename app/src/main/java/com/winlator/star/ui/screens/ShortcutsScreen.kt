@@ -242,6 +242,7 @@ import com.winlator.star.ui.screens.adrenodownload.RemoteDriverEntry
 import com.winlator.star.ui.screens.adrenodownload.RemoteDriverRepository
 import com.winlator.star.core.CopyGameToDriveC
 import com.winlator.star.core.DefaultVersion
+import com.winlator.star.core.MediaDecoder
 import com.winlator.star.core.FileUtils
 import com.winlator.star.core.GameFolderScanner
 import com.winlator.star.core.CustomSaveVault
@@ -9669,7 +9670,9 @@ private fun TvNote(text: String) {
 @Composable
 private fun ScWinComponentsTab(components: androidx.compose.runtime.snapshots.SnapshotStateList<WinComponentEntry>) {
     val directx = components.filter { it.key.startsWith("direct") }
-    val general = components.filterNot { it.key.startsWith("direct") }
+    val general = components.filterNot { it.key.startsWith("direct") || MediaDecoder.isCodecKey(it.key) }
+    // Media backend rows: not DLL overrides, their own option labels (see MediaDecoder).
+    val codecs = components.filter { MediaDecoder.isCodecKey(it.key) }
     val options = listOf("Builtin (Wine)", "Native (Windows)")
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -9700,6 +9703,30 @@ private fun ScWinComponentsTab(components: androidx.compose.runtime.snapshots.Sn
                         onSelect = { opt ->
                             val i = components.indexOfFirst { it.key == comp.key }
                             if (i >= 0) components[i] = components[i].copy(selectedIndex = options.indexOf(opt).coerceAtLeast(0))
+                        }
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        if (codecs.isNotEmpty()) {
+            SectionBox(title = "Codecs") {
+                Text(
+                    "Builtin decoder: which backend Wine's Media Foundation plays cutscenes with — GStreamer (default) or FFmpeg (winedmo). Software decoding keeps video frames off the GPU; try it for black video with sound.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                codecs.forEach { comp ->
+                    val codecOptions = MediaDecoder.optionsFor(comp.key).toList()
+                    LabeledDropdown(
+                        label = comp.label,
+                        options = codecOptions,
+                        selectedOption = codecOptions.getOrElse(comp.selectedIndex) { codecOptions[0] },
+                        onSelect = { opt ->
+                            val i = components.indexOfFirst { it.key == comp.key }
+                            if (i >= 0) components[i] = components[i].copy(selectedIndex = codecOptions.indexOf(opt).coerceAtLeast(0))
                         }
                     )
                     Spacer(Modifier.height(4.dp))

@@ -229,6 +229,8 @@
     <string name="directx">DirectX</string>
     <string name="xaudio">XAudio</string>
     <string name="vcrun2010">Visual C++ 2010</string>
+    <string name="builtinDecoder">Builtin decoder</string>
+    <string name="softwareDecoding">Software decoding</string>
     <string name="opengl">OpenGL</string>
     <string name="renderer">Renderer</string>
     <string name="settings">Settings</string>

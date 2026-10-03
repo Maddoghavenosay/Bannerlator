@@ -69,6 +69,7 @@ import com.winlator.star.contents.WrapperManager
 import com.winlator.star.contents.WrapperSettingsDictionary
 import com.winlator.star.core.AppUtils
 import com.winlator.star.core.DefaultVersion
+import com.winlator.star.core.MediaDecoder
 import com.winlator.star.core.FileUtils
 import com.winlator.star.core.GPUInformation
 import com.winlator.star.core.ImageUtils
@@ -2145,7 +2146,11 @@ private fun WinComponentsTab(viewModel: ContainerDetailViewModel) {
         derivedStateOf { viewModel.winComponents.filter { it.key.startsWith("direct") } }
     }
     val generalItems by remember {
-        derivedStateOf { viewModel.winComponents.filterNot { it.key.startsWith("direct") } }
+        derivedStateOf { viewModel.winComponents.filterNot { it.key.startsWith("direct") || MediaDecoder.isCodecKey(it.key) } }
+    }
+    // Media backend rows: not DLL overrides, their own option labels (see MediaDecoder).
+    val codecItems by remember {
+        derivedStateOf { viewModel.winComponents.filter { MediaDecoder.isCodecKey(it.key) } }
     }
     var showComponentsSheet by remember { mutableStateOf(false) }
 
@@ -2186,6 +2191,22 @@ private fun WinComponentsTab(viewModel: ContainerDetailViewModel) {
                 }
             }
         }
+        if (codecItems.isNotEmpty()) {
+            SectionBox(title = "Codecs") {
+                Text(
+                    "Builtin decoder: which backend Wine's Media Foundation plays cutscenes with — GStreamer (default) or FFmpeg (winedmo). Software decoding keeps video frames off the GPU; try it for black video with sound.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                codecItems.forEach { comp ->
+                    WinComponentRow(comp, MediaDecoder.optionsFor(comp.key).toList()) { idx ->
+                        val i = viewModel.winComponents.indexOfFirst { it.key == comp.key }
+                        if (i >= 0) viewModel.winComponents[i] = viewModel.winComponents[i].copy(selectedIndex = idx)
+                    }
+                }
+            }
+        }
     }
 
     if (showComponentsSheet) {
@@ -2196,8 +2217,11 @@ private fun WinComponentsTab(viewModel: ContainerDetailViewModel) {
 }
 
 @Composable
-private fun WinComponentRow(comp: WinComponentEntry, onSelect: (Int) -> Unit) {
-    val options = listOf("Builtin (Wine)", "Native (Windows)")
+private fun WinComponentRow(
+    comp: WinComponentEntry,
+    options: List<String> = listOf("Builtin (Wine)", "Native (Windows)"),
+    onSelect: (Int) -> Unit,
+) {
     LabeledDropdown(
         label = comp.label,
         options = options,

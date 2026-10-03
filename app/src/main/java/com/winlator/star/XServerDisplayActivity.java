@@ -98,6 +98,7 @@ import com.winlator.star.core.TarCompressorUtils;
 import com.winlator.star.core.DirectAudioSupport;
 import com.winlator.star.core.WineInfo;
 import com.winlator.star.core.WineRegistryEditor;
+import com.winlator.star.core.MediaDecoder;
 import com.winlator.star.core.WineRequestHandler;
 import com.winlator.star.core.WineStartMenuCreator;
 import com.winlator.star.core.Callback;
@@ -3196,6 +3197,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
                         runSteamInstallScriptPreLaunch();
                         extractGraphicsDriverFiles();
                         changeWineAudioDriver();
+                        applyMediaDecoderSettings();
                         applyGameRefreshRateUnlock();
                         applyColorCursorRegistry();
                         provisionEpicOverlay();
@@ -10577,6 +10579,18 @@ public class XServerDisplayActivity extends AppCompatActivity {
             overrideEnvVars.clear(); // Clear overrideEnvVars as per smali logic
         }
 
+        // Codecs rows (Win Components tab): the registry half is applyMediaDecoderSettings(); these
+        // two env vars are the rest. Only ever ADDED, so a user's own value in the env string stays.
+        {
+            String codecComponents = shortcut != null ? shortcut.getExtra("wincomponents", container.getWinComponents()) : container.getWinComponents();
+            if (MediaDecoder.backend(codecComponents) == MediaDecoder.BACKEND_FFMPEG && !envVars.has("WINE_USE_DMO")) {
+                envVars.put("WINE_USE_DMO", "1");
+            }
+            if (MediaDecoder.softwareDecoding(codecComponents) && !envVars.has("WINE_DO_NOT_CREATE_DXGI_DEVICE_MANAGER")) {
+                envVars.put("WINE_DO_NOT_CREATE_DXGI_DEVICE_MANAGER", "1");
+            }
+        }
+
         // Sync selector: the ONE writer of WINEESYNC / WINENTSYNC (and the remover of WINEFSYNC). After
         // every env merge so a stale value in the container/shortcut env string can't fight it.
         applySyncModeEnv();
@@ -13853,6 +13867,10 @@ return true;
             Iterator<String[]> oldWinComponentsIter = new KeyValueSet(container.getExtra("wincomponents", Container.FALLBACK_WINCOMPONENTS)).iterator();
 
             for (String[] wincomponent : new KeyValueSet(wincomponents)) {
+                // Codecs rows are not DLL overrides (no tzst, no registry override): applied by
+                // applyMediaDecoderSettings() instead. Skipped BEFORE the lockstep next() so an
+                // older saved string without them still pairs up entry for entry.
+                if (MediaDecoder.isCodecKey(wincomponent[0])) continue;
                 if (wincomponent[1].equals(oldWinComponentsIter.next()[1]) && !firstTimeBoot) continue;
                 String identifier = wincomponent[0];
                 boolean useNative = wincomponent[1].equals("1");
@@ -15161,6 +15179,29 @@ return true;
             overrideEnvVars = new EnvVars();
         }
         return overrideEnvVars;
+    }
+
+    // Codecs rows of the Win Components tab (per-game override → container). Written on every
+    // launch (idempotent, survives a prefix regen) into the ACTIVE prefix's user.reg: a DWORD 0
+    // under HKCU\Software\Wine\MediaFoundation routes Wine's MF byte-stream handlers to
+    // winegstreamer; with the value absent they use winedmo (FFmpeg). See MediaDecoder.
+    // The env side (WINE_USE_DMO / WINE_DO_NOT_CREATE_DXGI_DEVICE_MANAGER) is added where the
+    // launch env is assembled, after the override merge.
+    private void applyMediaDecoderSettings() {
+        String wincomponents = shortcut != null ? shortcut.getExtra("wincomponents", container.getWinComponents()) : container.getWinComponents();
+        boolean gstreamer = MediaDecoder.backend(wincomponents) == MediaDecoder.BACKEND_GSTREAMER;
+        File rootDir = imageFs.getRootDir();
+        File userRegFile = new File(rootDir, ImageFs.WINEPREFIX+"/user.reg");
+        try (WineRegistryEditor registryEditor = new WineRegistryEditor(userRegFile)) {
+            if (gstreamer) {
+                registryEditor.setDwordValue(MediaDecoder.REG_KEY, MediaDecoder.REG_VALUE, 0);
+            }
+            else {
+                registryEditor.removeValue(MediaDecoder.REG_KEY, MediaDecoder.REG_VALUE);
+            }
+        }
+        Log.d("XServerDisplayActivity", "Media decoder backend: " + (gstreamer ? "GStreamer" : "FFmpeg (winedmo)")
+                + ", software decoding " + MediaDecoder.softwareDecoding(wincomponents));
     }
 
     private void changeWineAudioDriver() {
