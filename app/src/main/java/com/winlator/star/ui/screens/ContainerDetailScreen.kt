@@ -2194,7 +2194,7 @@ private fun WinComponentsTab(viewModel: ContainerDetailViewModel) {
         if (codecItems.isNotEmpty()) {
             SectionBox(title = "Codecs") {
                 Text(
-                    "Builtin decoder: which backend Wine's Media Foundation plays cutscenes with — GStreamer (default) or FFmpeg (winedmo). Software decoding keeps video frames off the GPU; try it for black video with sound.",
+                    "Builtin decoder: which backend Wine's Media Foundation plays cutscenes with — GStreamer (default) or FFmpeg (winedmo; arm64ec layers only — on x86_64 it falls back to GStreamer). Software decoding keeps video frames off the GPU; try it for black video with sound.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
