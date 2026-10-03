@@ -177,8 +177,9 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
      *
      * The {@code .so} source is the SAME per-version staging the DLLs come from: a component's
      * install dir ({@link ContentsManager#getInstallDir}) retains every profile file, including the
-     * unixlib {@code .so} (profile target {@code ${libdir}/wine/aarch64-unix/...}). The bundled asset
-     * FEX has no profile and is DLL-only, so the slot is simply left cleared for a clean DLL run.
+     * unixlib {@code .so} (profile target {@code ${libdir}/wine/aarch64-unix/...}). A bundled FEX
+     * ships its unixlib pair as {@code fexcore/fexcore-<version>-unixlib.tzst} (the default
+     * 2609-unix does); a bundled FEX without that asset is DLL-only and the slot is left cleared.
      *
      * NOTE: one game runs at a time (Bannerlator), so a single shared slot is safe. Concurrent
      * multi-instance with different FEX versions would need per-container .so isolation (future work).
@@ -213,6 +214,17 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
                         }
                     }
                 }
+            }
+
+            // 3) A bundled FEX keeps its unixlib pair in a sibling asset (no profile to retain it).
+            if (!copied && profile == null
+                    && TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, context,
+                            "fexcore/fexcore-" + fexcoreVersion + "-unixlib.tzst", soDir)) {
+                for (String name : FEX_UNIXLIB_SO_NAMES) {
+                    File so = new File(soDir, name);
+                    if (so.exists()) FileUtils.chmod(so, 0755);
+                }
+                copied = true;
             }
 
             Log.d("GuestProgramLauncherComponent", "FEX unixlib reconcile: " + fexcoreVersion
