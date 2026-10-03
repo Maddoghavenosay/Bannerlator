@@ -743,8 +743,9 @@ public class XServerDisplayActivity extends AppCompatActivity {
      * on the HOST side of winewayland.drv (wine's unix libEGL -> Zink -> Turnip), and — device-measured
      * on this layer — it is mapped into a process only when that process really takes the GL path:
      * <ul>
-     *   <li><b>OpenGL</b>: the layer's own {@code lib/libEGL.so.1} / {@code libgallium-*.so} /
-     *       {@code libwayland-egl.so} appear in the game's maps. Measured against the counter-example:
+     *   <li><b>OpenGL</b>: the layer's own {@code lib/libEGL.so.1} / {@code libgallium-*.so} appear in
+     *       the game's maps ({@code libwayland-egl.so} does not count: winewayland links it into every
+     *       process). Measured against the counter-example:
      *       a D3D11-on-DXVK title (Titanfall 2, live Wayland session) maps NONE of them.</li>
      *   <li><b>Vulkan</b> (native, or DXVK/VKD3D on top): {@code winevulkan.so}, the unix half of
      *       winevulkan.dll, which only loads when the guest itself uses Vulkan.</li>
@@ -784,8 +785,10 @@ public class XServerDisplayActivity extends AppCompatActivity {
                     // environment while rendering D3D11 through DXVK. Treat it the way the X11
                     // resolver already treats opengl32: resident, and proof of nothing. Zink runs GL
                     // on Vulkan here anyway, so the neutral "Vulkan" stays underlying-accurate.
-                    if (!gamescopeMode && (line.indexOf("libegl.so.1") >= 0 || line.indexOf("libgallium") >= 0
-                            || line.indexOf("libwayland-egl.so") >= 0)) { gl = true; break; }
+                    // libwayland-egl.so is NOT evidence either: winewayland links it for its own window
+                    // surfaces, so every Wayland Wine process maps it - a Vulkan game (DOOM 2016's
+                    // DOOMx64vk.exe: only libvulkan_wrapper/libvulkan_freedreno mapped) read "OpenGL".
+                    if (!gamescopeMode && (line.indexOf("libegl.so.1") >= 0 || line.indexOf("libgallium") >= 0)) { gl = true; break; }
                     if (line.indexOf("winevulkan.so") >= 0 || line.indexOf("winevulkan.dll") >= 0
                             || line.indexOf("vulkan-1.dll") >= 0) vulkan = true;
                 }
