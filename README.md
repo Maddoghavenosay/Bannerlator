@@ -79,7 +79,7 @@ Before any **stable release** is published, all changes are **manually debugged 
 |---|---|
 | **App label** | `Bannerlator Bionic` (standard) · `Bannerlator Bionic PuBG` (pubg) · `Bannerlator Bionic Ludashi` (ludashi) |
 | **Packages** | `com.winlator.banner` (standard) · `com.tencent.ig` (pubg) · `com.ludashi.benchmark` (ludashi) |
-| **Version** | Bannerlator **V 3.1.4** — built from Star **marcescence** (`versionName 3.1.4`, `versionCode 93`) |
+| **Version** | Bannerlator **V 3.1.5** — built from Star **marcescence** (`versionName 3.1.5`, `versionCode 94`) |
 | **Android SDK** | `compileSdk 34` · `targetSdk 28` · `minSdk 26` (Android 8.0+) |
 | **Lineage** | Winlator → cmod → Bionic Nightly → Star Bionic → **marcescence** → **Bannerlator** |
 
@@ -111,6 +111,7 @@ Every report gets its own **public discussion thread**. You can reply as the ori
 - [🤖 AI Disclaimer](#-ai-disclaimer)
 - [ℹ️ Information](#ℹ️-information)
 - [🐛 Report a Mali GPU Issue](#-report-a-mali-gpu-game-issue)
+- [🎬 Cutscenes & Codecs (3.1.5)](#-cutscenes--codecs-315)
 - [⚡ Fast OpenGL (3.1.4)](#-fast-opengl-314)
 - [🐧 Linux Steam Client (3.1.3)](#-linux-steam-client-313)
 - [🆕 What's New in 3.1.2](#-whats-new-in-312)
@@ -125,6 +126,10 @@ Every report gets its own **public discussion thread**. You can reply as the ori
 - [📄 License](#-license)
 
 ---
+
+## 🎬 Cutscenes & Codecs (3.1.5)
+
+**[3.1.5](https://github.com/The412Banner/Bannerlator/releases/tag/3.1.5) makes in-game cutscenes play on every DXVK version, and on x86_64 layers for the first time.** The fixes ship in the **v12 Proton layers** (the catalog default; take the in-place update) plus two app pieces: a **Codecs** block in Win Components — builtin decoder **GStreamer** (default) or **FFmpeg** (winedmo, arm64ec only) and **software decoding** — and new defaults for new containers: **Box64 0.4.5-gst** (box64 with the GStreamer-wrapper fix, so x86_64 containers can decode video; upstream [ptitSeb/box64#4528](https://github.com/ptitSeb/box64/pull/4528)) and **FEXCore 2609-unix**. Existing x86_64 containers: pick Box64 0.4.5-gst once in Advanced. 3.1.5 also brings X11 raw mouse (XInput 2), full-colour game cursors, pointer auto-hide and a non-blocking X server, and Steam Cloud save-sync fixes — details in the release notes.
 
 ## ⚡ Fast OpenGL (3.1.4)
 
