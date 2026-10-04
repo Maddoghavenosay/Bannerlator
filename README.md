@@ -79,7 +79,7 @@ Before any **stable release** is published, all changes are **manually debugged 
 |---|---|
 | **App label** | `Bannerlator Bionic` (standard) · `Bannerlator Bionic PuBG` (pubg) · `Bannerlator Bionic Ludashi` (ludashi) |
 | **Packages** | `com.winlator.banner` (standard) · `com.tencent.ig` (pubg) · `com.ludashi.benchmark` (ludashi) |
-| **Version** | Bannerlator **V 3.1.5** — built from Star **marcescence** (`versionName 3.1.5`, `versionCode 94`) |
+| **Version** | Bannerlator **V 3.1.6-pre1** — built from Star **marcescence** (`versionName 3.1.6-pre1`, `versionCode 95`) |
 | **Android SDK** | `compileSdk 34` · `targetSdk 28` · `minSdk 26` (Android 8.0+) |
 | **Lineage** | Winlator → cmod → Bionic Nightly → Star Bionic → **marcescence** → **Bannerlator** |
 
@@ -111,6 +111,7 @@ Every report gets its own **public discussion thread**. You can reply as the ori
 - [🤖 AI Disclaimer](#-ai-disclaimer)
 - [ℹ️ Information](#ℹ️-information)
 - [🐛 Report a Mali GPU Issue](#-report-a-mali-gpu-game-issue)
+- [🎮 Headless Steam & Server Browser (3.1.6)](#-headless-steam--server-browser-316)
 - [🎬 Cutscenes & Codecs (3.1.5)](#-cutscenes--codecs-315)
 - [⚡ Fast OpenGL (3.1.4)](#-fast-opengl-314)
 - [🐧 Linux Steam Client (3.1.3)](#-linux-steam-client-313)
@@ -126,6 +127,16 @@ Every report gets its own **public discussion thread**. You can reply as the ori
 - [📄 License](#-license)
 
 ---
+
+## 🎮 Headless Steam & Server Browser (3.1.6)
+
+**Since [3.1.6-pre1](https://github.com/The412Banner/Bannerlator/releases/tag/3.1.6-pre1), Steam games have a second online launch option next to SteamLite.** **Headless Steam** runs a game on the app's own signed-in Steam session: a small native host (Valve's Android Steam library, driven by the app) signs in on your account in about a second and the game talks to it through the Steam bridge in the Proton 11 layers — no Steam client window, nothing installed in the prefix, every Steam call native. Cloud saves, stats, achievements and multiplayer work; Counter-Strike: Source was the proving case, including a live community match.
+
+- **How to use it:** sign in to Steam in the app, then pick **Headless Steam** in a Steam shortcut's launch popup (Headless Steam / SteamLite / Goldberg / Raw). Needs the **v13** Proton 11 layers from the catalog.
+- **Find Servers works.** Valve's Android library has no working server browser, so the v13 layers carry their own: the app fetches the master list through Steam's Web API, the layer pings every server and feeds the game, and a small x86-64 front keeps the game's sort lookups inside the emulator — the list refreshes at 316 to 376 fps.
+- **VAC:** Headless Steam is **not** VAC-protected — Valve's Android library has no VAC scanner (only the Windows and x86 Linux clients do). Secure servers may admit you, but for a VAC session use **SteamLite**.
+- **Log Manager:** a Headless Steam toggle writes a per-game `headless_steam.txt` with a PASS/FAIL checklist of the session and the server browser.
+- **Box64EC (experimental, unofficial):** arm64ec containers also gain an **Emulator (64-bit)** picker (FEXCore, the supported default, or Box64EC). Box64EC components are built by The412Banner from the [box64](https://github.com/ptitSeb/box64) project's work-in-progress ARM64EC target and [airidosas252's PR #4480](https://github.com/ptitSeb/box64/pull/4480); they are not releases of the box64 project and the picker only appears once a Box64EC component is installed from the catalog.
 
 ## 🎬 Cutscenes & Codecs (3.1.5)
 
