@@ -118,7 +118,7 @@ private const val HELP_CLIENT =
         "relies on (live launch status, in-game friends). Update downloads ~18 MB and re-stages it " +
         "into your container."
 private const val HELP_CLIENT_APPSTEAM =
-    "Valve's own Steam client library set, downloaded from Valve for App Steam launches. The app runs " +
+    "Valve's own Steam client library set, downloaded from Valve for Headless Steam launches. The app runs " +
         "it as a separate process on your own Steam session; only builds this app has been verified " +
         "with are used."
 private const val HELP_CLIENT_OFFER =

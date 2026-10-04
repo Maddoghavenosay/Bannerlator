@@ -508,7 +508,7 @@ fun ShortcutsScreen(vm: ShortcutsViewModel = viewModel()) {
     fun launchWithAppSteam(s: Shortcut) {
         if (!SteamHostComponent.isInstalled(context)) {
             componentDownloadFor = s
-            componentDownloadLabel = "App Steam (Valve Steam client)"
+            componentDownloadLabel = "Headless Steam (Valve Steam client)"
             componentDownloadProgress = 0f
             SteamHostComponent.downloadAsync(
                 context,

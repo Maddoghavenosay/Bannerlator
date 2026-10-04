@@ -171,7 +171,7 @@ object SteamHostComponent {
             // install something the host would then refuse to drive (private vtable slots drift).
             Log.w(TAG, "Valve manifest build ${manifest.version} is not in the verified set $VERIFIED_BUILDS")
             return false to "Valve published Steam client build ${manifest.version}, which this version of the app " +
-                "hasn't been verified with yet. An app update is needed before App Steam can use it."
+                "hasn't been verified with yet. An app update is needed before Headless Steam can use it."
         }
         val cacheDir = File(context.cacheDir, "steamhost_dl").apply { mkdirs() }
         val zip = File(cacheDir, "bins_androidarm64.zip")

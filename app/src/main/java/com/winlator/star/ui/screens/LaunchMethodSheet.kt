@@ -147,7 +147,7 @@ private fun classifySource(shortcut: Shortcut): GameSource = when {
 
 // Plain-terms help copy for the "?" bubbles (kept short: what it is + when to use it).
 private const val HELP_LAUNCH_WITH =
-    "How the game talks to Steam. SteamLite = real Steam (online, VAC, real achievements). App Steam = " +
+    "How the game talks to Steam. SteamLite = real Steam (online, VAC, real achievements). Headless Steam = " +
         "the app's own Steam session (friends & chat stay online; experimental). Goldberg = fake offline " +
         "Steam for single-player. Raw = just run the .exe."
 private const val HELP_APPSTEAM =
@@ -633,12 +633,12 @@ private fun ChipsRow(
     onMethod: (LaunchMethod) -> Unit,
     toggleHelp: (String) -> Unit,
 ) {
-    // Four chips share the row: the label steps down to labelSmall so "App Steam" fits without ellipsis.
+    // Four chips share the row: the label steps down to labelSmall so "Headless Steam" fits without ellipsis.
     val dense = compact || enabledMethods.size >= 4
     Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 5.dp)) {
         SegChip("🌐", "SteamLite", method == LaunchMethod.STEAMLITE, LaunchMethod.STEAMLITE in enabledMethods,
             accent, dense, { onMethod(LaunchMethod.STEAMLITE) }, { toggleHelp(HELP_STEAMLITE) })
-        SegChip("🔗", "App Steam", method == LaunchMethod.APPSTEAM, LaunchMethod.APPSTEAM in enabledMethods,
+        SegChip("🔗", "Headless Steam", method == LaunchMethod.APPSTEAM, LaunchMethod.APPSTEAM in enabledMethods,
             accent, dense, { onMethod(LaunchMethod.APPSTEAM) }, { toggleHelp(HELP_APPSTEAM) })
         SegChip("🛡️", "Goldberg", method == LaunchMethod.GOLDBERG, LaunchMethod.GOLDBERG in enabledMethods,
             accent, dense, { onMethod(LaunchMethod.GOLDBERG) }, { toggleHelp(HELP_GOLDBERG) })

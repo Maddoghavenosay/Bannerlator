@@ -208,7 +208,7 @@ public final class SteamLiteLogCollector {
 
             StringBuilder out = new StringBuilder(8 * 1024);
             appendSummary(out, context, gameName, appId, info, steamLiteVersion, dxText);
-            if (appSteam) out.append("Launch mode: App Steam — the game ran on the app's own Steam session "
+            if (appSteam) out.append("Launch mode: Headless Steam — the game ran on the app's own Steam session "
                     + "(bl-steam-host + Valve androidarm64 libsteamclient.so; no in-container Steam client)\n");
             if (!engineLines.isEmpty()) out.append("Steam engine: Rust (libblsteam.so) — app-side session log included\n");
             // The genuine Steam client logs accumulate across every launch — anchor to THIS run so the
@@ -675,7 +675,7 @@ public final class SteamLiteLogCollector {
 
     /** Raw section: the App Steam session host's own log (bl-steam-host stdout), redacted line by line. */
     private static void appendAppSteamSection(StringBuilder out, File hostLog) {
-        out.append("\n===== App Steam — session host log (bl-steam-host) =====\n");
+        out.append("\n===== Headless Steam — session host log (bl-steam-host) =====\n");
         String text = hostLog != null ? readTail(hostLog, LAUNCHER_LOG_TAIL_BYTES) : null;
         if (text == null || text.trim().isEmpty()) {
             out.append("(no host log — the host never started, or its log was not written)\n");
