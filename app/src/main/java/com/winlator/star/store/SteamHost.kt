@@ -157,24 +157,52 @@ object SteamHost {
         Log.i(TAG, "host stopped (exit ${runCatching { p.exitValue() }.getOrDefault(-1)})")
     }
 
-    /** Kill a host left behind by a crashed app process (its pid is remembered in prefs). */
+    /**
+     * Kill any host left behind by an earlier app process: the pid remembered in prefs, plus ANY
+     * live process of ours running the host binary (a force-stop can leave the pref cleared while
+     * the host lingers for a few seconds holding :57343 — the new host then exits "port_busy" and
+     * the game launches without a Steam session). Then wait, bounded, for the port to free.
+     */
     private fun reapStale(app: Context) {
         val prefs = app.getSharedPreferences(PID_PREFS, Context.MODE_PRIVATE)
-        val stale = prefs.getInt("pid", 0)
-        if (stale <= 0) return
+        val pids = LinkedHashSet<Int>()
+        prefs.getInt("pid", 0).takeIf { it > 0 }?.let { pids.add(it) }
         prefs.edit().remove("pid").apply()
         try {
-            val cmdline = File("/proc/$stale/cmdline").takeIf { it.exists() }?.readText().orEmpty()
-            if (cmdline.contains(BINARY)) {
+            val me = android.os.Process.myPid()
+            File("/proc").listFiles { f -> f.isDirectory && f.name.all(Char::isDigit) }?.forEach { d ->
+                val pid = d.name.toInt()
+                if (pid == me) return@forEach
+                val cmdline = runCatching { File(d, "cmdline").readText() }.getOrDefault("")
+                if (cmdline.contains(BINARY)) pids.add(pid)
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "stale-host scan failed", t)
+        }
+        for (stale in pids) {
+            try {
+                val cmdline = File("/proc/$stale/cmdline").takeIf { it.exists() }?.readText().orEmpty()
+                if (!cmdline.contains(BINARY)) continue
                 Log.w(TAG, "reaping stale host pid $stale")
                 runCatching { Os.kill(stale, OsConstants.SIGTERM) }
                 Thread.sleep(300)
                 if (File("/proc/$stale").exists()) runCatching { Os.kill(stale, OsConstants.SIGKILL) }
+            } catch (t: Throwable) {
+                Log.w(TAG, "stale-host check failed", t)
             }
-        } catch (t: Throwable) {
-            Log.w(TAG, "stale-host check failed", t)
         }
+        // The kernel may keep the listener a moment after the owner dies; the host refuses to start
+        // while it is held, so wait (bounded) for Steam3Master to be bindable again.
+        val deadline = System.currentTimeMillis() + 3_000L
+        while (System.currentTimeMillis() < deadline) {
+            if (portFree(57343)) return
+            try { Thread.sleep(100) } catch (_: InterruptedException) { return }
+        }
+        Log.w(TAG, "Steam3Master port still busy after the stale-host reap")
     }
+
+    private fun portFree(port: Int): Boolean =
+        runCatching { java.net.ServerSocket().use { it.reuseAddress = true; it.bind(java.net.InetSocketAddress("127.0.0.1", port)); true } }.getOrDefault(false)
 
     private fun rememberPid(app: Context, id: Int) {
         runCatching { app.getSharedPreferences(PID_PREFS, Context.MODE_PRIVATE).edit().putInt("pid", id).apply() }
