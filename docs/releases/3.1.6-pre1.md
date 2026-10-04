@@ -51,7 +51,7 @@ Valve's Android Steam library has no working in-game server browser: the moment 
 
 ## 📦 New compatibility layers — versionCode 13
 
-All eight **Proton 11** layers (Proton 11.0-2, 11.0-1, GE-Proton 11.0-3 / 5 / 6 / 7 / 7.1, Proton-CachyOS) are rebuilt at **versionCode 13** with the server browser and its x86-64 front; the x86_64 flavours are rebuilt for version parity only (they carry no Steam bridge). The two Proton 10 layers stay at v12 — they have no Steam bridge, so Headless Steam does not apply to them. They install into a new coexisting `-13` slot; a container on an older build of the same layer is offered **Update layer → v13** with a revert snapshot. Release notes: [bionic layers v13](https://github.com/The412Banner/proton-wine/releases/tag/build-bionic-layers-20261004-v13).
+All eight **Proton 11** layers (Proton 11.0-2, 11.0-1, GE-Proton 11.0-3 / 5 / 6 / 7 / 7.1, Proton-CachyOS) are rebuilt at **versionCode 13** with the server browser and its x86-64 front; the four x86_64 flavours are in the same release so the set stays together, but **they have no Steam bridge** (Headless Steam and the server browser do not apply to them) **and are unchanged** apart from the version number. The two Proton 10 layers stay at v12 — no Steam bridge there either. They install into a new coexisting `-13` slot; a container on an older build of the same layer is offered **Update layer → v13** with a revert snapshot. Release notes: [bionic layers v13](https://github.com/The412Banner/proton-wine/releases/tag/build-bionic-layers-20261004-v13).
 
 ## 🧬 Box64EC — an experimental second x86-64 translator (unofficial)
 
