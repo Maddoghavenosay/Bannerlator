@@ -139,9 +139,19 @@ public class ContainerManager {
                 for (File file : files) {
                     if (file.isDirectory()) {
                         if (file.getName().startsWith(ImageFs.USER + "-")) {
-                            Container container = new Container(
-                                    Integer.parseInt(file.getName().replace(ImageFs.USER + "-", "")), this
-                            );
+                            // A directory like "xuser-" or "xuser-foo" (a stray mkdir, a half-made
+                            // copy) must not take the whole app down at launch: skip it.
+                            int id;
+                            try { id = Integer.parseInt(file.getName().substring(ImageFs.USER.length() + 1)); }
+                            catch (NumberFormatException e) {
+                                Log.w("ContainerManager", "skipping malformed container dir " + file.getName());
+                                continue;
+                            }
+                            if (!new File(file, ".container").isFile()) {
+                                Log.w("ContainerManager", "skipping container dir without config " + file.getName());
+                                continue;
+                            }
+                            Container container = new Container(id, this);
 
                             container.setRootDir(new File(homeDir, ImageFs.USER + "-" + container.id));
                             JSONObject data = new JSONObject(FileUtils.readString(container.getConfigFile()));
