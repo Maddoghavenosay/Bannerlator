@@ -6007,6 +6007,8 @@ public class XServerDisplayActivity extends AppCompatActivity {
             appSteamPlan = com.winlator.star.store.AppSteamLauncher.prepare(
                     this, driveC, wineLibDir, guestHome, shortcut, ref.appId, agentPort);
             if (appSteamPlan != null) {
+                if (preferences.getBoolean("enable_headless_steam_logs", false))
+                    com.winlator.star.core.HeadlessSteamLogCollector.startLiveCapture(getApplicationContext());
                 Log.i("BH_APPSTEAM", "AppSteam launch armed (appId=" + appSteamPlan.appId
                         + (agentPort > 0 ? ", agent channel port " + agentPort : ", no agent channel")
                         + ", layerHasLsteamclient=" + appSteamPlan.layerHasLsteamclient + ")");

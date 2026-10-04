@@ -193,7 +193,8 @@ object SteamHost {
         }
         // The kernel may keep the listener a moment after the owner dies; the host refuses to start
         // while it is held, so wait (bounded) for Steam3Master to be bindable again.
-        val deadline = System.currentTimeMillis() + 3_000L
+        // A force-stopped session's host does its 6 s graceful logoff first; wait that out.
+        val deadline = System.currentTimeMillis() + 12_000L
         while (System.currentTimeMillis() < deadline) {
             if (portFree(57343)) return
             try { Thread.sleep(100) } catch (_: InterruptedException) { return }

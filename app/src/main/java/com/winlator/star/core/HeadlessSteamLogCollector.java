@@ -105,7 +105,10 @@ public final class HeadlessSteamLogCollector {
             }
             String since = SteamLiteLogCollector.sessionStart(steamRaw.get("gameprocess_log.txt"), appId);
 
-            List<String> bridgeLines = bridgeLines(captureBridgeLogcat());
+            // Live capture first (started when the plan armed: survives the 256 KiB logcat ring that a
+            // long session overruns), then the ring snapshot, then the app-pid capture.
+            List<String> bridgeLines = bridgeLines(readLiveCapture(context));
+            for (String l : bridgeLines(captureBridgeLogcat())) if (!bridgeLines.contains(l)) bridgeLines.add(l);
             if (bridgeLines.isEmpty()) bridgeLines = bridgeLines(logcatText);
             String wineText = SteamLiteLogCollector.readTail(new File(perGameLogDir, "wine_debug.log"), 1L * 1024 * 1024);
             List<String> engineLines = SteamLiteLogCollector.engineLines(context);
@@ -438,6 +441,38 @@ public final class HeadlessSteamLogCollector {
             Log.w(TAG, "bridge logcat capture failed", e);
             return null;
         }
+    }
+
+    // ── Live capture: `logcat` streaming the feature's tags to a cache file for the whole session ──
+    private static Process liveProc;
+
+    private static File liveFile(Context ctx) { return new File(ctx.getCacheDir(), "headless_bridge_logcat.txt"); }
+
+    /** Start streaming the launcher/host/bridge tags to a file (idempotent; call when the plan arms). */
+    public static synchronized void startLiveCapture(Context ctx) {
+        stopLiveCapture();
+        File f = liveFile(ctx);
+        //noinspection ResultOfMethodCallIgnored
+        f.delete();
+        try {
+            liveProc = new ProcessBuilder("logcat", "-v", "threadtime",
+                    "BH_APPSTEAM:*", "BH_APPSTEAM_SB:*", "BH_STEAMHOST:*", "BlSteamHost:*", "lsteamclient:*", "SteamHost:*", "*:S")
+                    .redirectErrorStream(true).redirectOutput(f).start();
+        } catch (Exception e) {
+            Log.w(TAG, "live logcat capture failed to start", e);
+            liveProc = null;
+        }
+    }
+
+    public static synchronized void stopLiveCapture() {
+        if (liveProc != null) { try { liveProc.destroy(); } catch (Throwable ignored) {} liveProc = null; }
+    }
+
+    private static String readLiveCapture(Context ctx) {
+        stopLiveCapture();
+        File f = liveFile(ctx);
+        if (!f.isFile() || f.length() == 0) return null;
+        return SteamLiteLogCollector.readTail(f, 2L * 1024 * 1024);
     }
 
     /** The app's logcat lines that belong to this feature: the game-side bridge + host + launcher tags. */
