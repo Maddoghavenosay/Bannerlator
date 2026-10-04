@@ -568,10 +568,18 @@ int main(int argc, char** argv) {
 
     // steamservice: WinNative starts its thread before the client loads; GameNative falls back
     // to the same call when InitIPC is absent ("in-process only"). Non-fatal either way.
+    //
+    // The argument is the pipe the service LISTENS on. On this Android build the pipe is a TCP
+    // endpoint (processpipe_posix): handing it the plain name "SteamClientService" makes it try
+    // to listen on "SteamClientService_<pid>", which fails every time with
+    // `invalid name/address:port string provided to BSetIpPortFromName`, the service never
+    // binds :57344, and anything the client routes through the service — the in-game server
+    // browser is the first — hangs waiting for it. Pass the same ip:port the client reads from
+    // the SteamClientService env var, so both sides agree on the endpoint.
     {
         typedef void* (*StartThreadFn)(const char*);
         auto start = reinterpret_cast<StartThreadFn>(dlsym(RTLD_DEFAULT, "SteamService_StartThread"));
-        if (start) LOGI("SteamService_StartThread(\"SteamClientService\") -> %p", start("SteamClientService"));
+        if (start) LOGI("SteamService_StartThread(\"%s\") -> %p", scs.c_str(), start(scs.c_str()));
         else LOGW("SteamService_StartThread not resolvable (steamservice.so preload failed?)");
     }
 
