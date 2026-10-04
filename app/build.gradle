@@ -161,6 +161,11 @@ android {
             applicationId "com.tencent.ig"
             resValue "string", "app_name", "Bannerlator Bionic PuBG"
         }
+        antutu {
+            dimension "version"
+            applicationId "com.antutu.ABenchMark"
+            resValue "string", "app_name", "Bannerlator Bionic AnTuTu"
+        }
     }
 
     ndkVersion '29.0.14206865'
@@ -168,11 +173,6 @@ android {
     externalNativeBuild {
         cmake {
             path 'src/main/cpp/CMakeLists.txt'
-        }
-        antutu {
-            dimension "version"
-            applicationId "com.antutu.ABenchMark"
-            resValue "string", "app_name", "Bannerlator Bionic AnTuTu"
         }
     }
 
