@@ -1509,7 +1509,7 @@ private fun TopLevelFields(
         // StringUtils.parseIdentifier() persists as "box64". See EmulatorLabels.
         if (viewModel.isArm64EC) {
             LabeledDropdown(
-                label = "Emulator",
+                label = "Emulator (32-bit)",
                 options = EmulatorLabels.options(viewModel.emulatorEntries, true),
                 selectedOption = EmulatorLabels.display(viewModel.selectedEmulator, true),
                 enabled = viewModel.emulatorEnabled,

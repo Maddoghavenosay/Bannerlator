@@ -6363,6 +6363,8 @@ internal fun ShortcutSettingsDialogScreen(
 
     // Async-loaded state
     var isArm64EC by remember { mutableStateOf(false) }
+    // A Box64EC component is installed, so the per-game "Emulator (64-bit)" override is offered.
+    var box64ECInstalled by remember { mutableStateOf(false) }
     // isArm64EC is resolved asynchronously (WineInfo load below). Until it lands we must not
     // relabel the Emulator field, or an arm64ec container would flash "Box64" on first frame.
     var archLoaded by remember { mutableStateOf(false) }
@@ -6783,6 +6785,14 @@ internal fun ShortcutSettingsDialogScreen(
         mutableStateOf(emulatorEntries.firstOrNull { StringUtils.parseIdentifier(it) == id }
             ?: emulatorEntries.firstOrNull() ?: id)
     }
+    // x86-64 translator override. Entry 0 = no extra, so the game follows the container
+    // (existing shortcuts never carry the extra and keep doing exactly that).
+    val emulator64Entries = remember { listOf("Container default", "FEXCore", "Box64EC") }
+    var selectedEmulator64 by remember {
+        val id = shortcut.getExtra("emulator64", "") ?: ""
+        mutableStateOf(emulator64Entries.drop(1).firstOrNull { StringUtils.parseIdentifier(it) == id }
+            ?: emulator64Entries.first())
+    }
 
     // MIDI
     var selectedMidi by remember {
@@ -7053,6 +7063,7 @@ internal fun ShortcutSettingsDialogScreen(
 
             val b64Presets = Box64PresetManager.getPresets("box64", context)
             val fexPresets = FEXCorePresetManager.getPresets(context)
+            val ecInstalled = (cm.getProfiles(ContentProfile.ContentType.CONTENT_TYPE_BOX64EC) ?: emptyList()).isNotEmpty()
             val profiles = InputControlsManager(context).getProfiles(true)
 
             val midi = mutableListOf("-- ${context.getString(R.string.disabled)} --", MidiManager.DEFAULT_SF2_FILE)
@@ -7061,6 +7072,7 @@ internal fun ShortcutSettingsDialogScreen(
 
             withContext(Dispatchers.Main) {
                 isArm64EC = arm64ec
+                box64ECInstalled = ecInstalled
                 archLoaded = true
                 box64Versions = b64Arr
                 fexCoreVersions = fexList
@@ -7193,6 +7205,8 @@ internal fun ShortcutSettingsDialogScreen(
                 if (it == "directaudio" && !directAudioSupported) Container.DEFAULT_AUDIO_DRIVER else it
             })
             putExtra("emulator", StringUtils.parseIdentifier(selectedEmulator))
+            putExtra("emulator64", if (selectedEmulator64 == emulator64Entries.first()) null
+                                   else StringUtils.parseIdentifier(selectedEmulator64))
             putExtra("midiSoundFont", midiVal.ifEmpty { null })
             putExtra("lc_all", lcAll)
             // #71: write the per-game mode override (or null = use container default) and clear the
@@ -7339,6 +7353,7 @@ internal fun ShortcutSettingsDialogScreen(
                 add("frameGen"); add("fpsLimiter"); add("audio")
                 if (!isLinuxEntry) {
                     add("emulator")
+                    if (isArm64EC && box64ECInstalled) add("emulator64")
                     if (midiList.isNotEmpty()) add("midi")
                     add("lcAll")
                 }
@@ -8862,7 +8877,7 @@ internal fun ShortcutSettingsDialogScreen(
                         else EmulatorLabels.display(selectedEmulator, isArm64EC)
                     DpDrop(
                         dp, "emulator",
-                        label = "Emulator",
+                        label = "Emulator (32-bit)",
                         options = EmulatorLabels.options(emulatorEntries, isArm64EC),
                         selected = emulatorShown,
                         onSelect = {
@@ -8870,6 +8885,19 @@ internal fun ShortcutSettingsDialogScreen(
                         },
                         enabled = isArm64EC
                     )
+
+                    // x86-64 translator override (arm64ec only, once a Box64EC component exists).
+                    // "Container default" stores no extra: the game follows the container's
+                    // Emulator (64-bit) choice, which is what every existing shortcut does.
+                    if (isArm64EC && box64ECInstalled) {
+                        DpDrop(
+                            dp, "emulator64",
+                            label = "Emulator (64-bit)",
+                            options = emulator64Entries,
+                            selected = selectedEmulator64,
+                            onSelect = { selectedEmulator64 = it }
+                        )
+                    }
 
                     // MIDI
                     if (midiList.isNotEmpty()) {
