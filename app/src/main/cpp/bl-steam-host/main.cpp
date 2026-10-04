@@ -569,17 +569,20 @@ int main(int argc, char** argv) {
     // steamservice: WinNative starts its thread before the client loads; GameNative falls back
     // to the same call when InitIPC is absent ("in-process only"). Non-fatal either way.
     //
-    // The argument is the pipe the service LISTENS on. On this Android build the pipe is a TCP
-    // endpoint (processpipe_posix): handing it the plain name "SteamClientService" makes it try
-    // to listen on "SteamClientService_<pid>", which fails every time with
-    // `invalid name/address:port string provided to BSetIpPortFromName`, the service never
-    // binds :57344, and anything the client routes through the service — the in-game server
-    // browser is the first — hangs waiting for it. Pass the same ip:port the client reads from
-    // the SteamClientService env var, so both sides agree on the endpoint.
+    // The argument names the in-process IPC server the service registers. The client half later
+    // looks the service up by the Windows named-pipe convention "SteamClientService_<pid>" (its
+    // OWN pid — verified from the assertion text, which is the same whatever we pass here). If an
+    // IPC server with exactly that name exists in-process it is used through the single-process
+    // pipe; otherwise the client falls back to a cross-process pipe, tries to parse the name as
+    // ip:port (processpipe_posix) and fails every time with `invalid name/address:port string
+    // provided to BSetIpPortFromName SteamClientService_<pid>` — the service is then unreachable
+    // and anything the client routes through it (the in-game server browser first) hangs.
+    // So register the service under the exact name the client will look for.
     {
         typedef void* (*StartThreadFn)(const char*);
         auto start = reinterpret_cast<StartThreadFn>(dlsym(RTLD_DEFAULT, "SteamService_StartThread"));
-        if (start) LOGI("SteamService_StartThread(\"%s\") -> %p", scs.c_str(), start(scs.c_str()));
+        std::string svcName = "SteamClientService_" + std::to_string(getpid());
+        if (start) LOGI("SteamService_StartThread(\"%s\") -> %p", svcName.c_str(), start(svcName.c_str()));
         else LOGW("SteamService_StartThread not resolvable (steamservice.so preload failed?)");
     }
 
