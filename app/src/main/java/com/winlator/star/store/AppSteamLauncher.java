@@ -182,6 +182,9 @@ public final class AppSteamLauncher {
             Map<String, String> env = new LinkedHashMap<>();
             // A. lsteamclient's unix side → Valve's bionic client (both arches: the unix side is
             //    always aarch64 under arm64ec/wow64, so the same lib serves 32-bit games).
+            //    The v9+ layers build lsteamclient DEFAULT-OFF: ntdll only redirects steamclient
+            //    to it when WINE_LSTEAMCLIENT=1 (SteamLite/Goldberg/Raw never set it).
+            env.put("WINE_LSTEAMCLIENT", "1");
             env.put("WINESTEAMCLIENTPATH64", valveLib.getAbsolutePath());
             env.put("WINESTEAMCLIENTPATH", valveLib.getAbsolutePath());
             // B. the in-game client instance's bootstrap-gate handshake + IPC endpoints (= the host's)
