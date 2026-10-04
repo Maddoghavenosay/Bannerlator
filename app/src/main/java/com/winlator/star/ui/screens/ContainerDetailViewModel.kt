@@ -254,6 +254,11 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
     var selectedEmulator by mutableStateOf(Container.DEFAULT_EMULATOR)
     var emulatorEnabled by mutableStateOf(false); private set
 
+    // x86-64 translator (arm64ec only): FEXCore, or Box64EC when a Box64EC component is installed.
+    // Stored lowercase on the container ("fexcore" / "box64ec"), shown as the entry labels.
+    val emulator64Entries = listOf("FEXCore", "Box64EC")
+    var selectedEmulator64 by mutableStateOf("FEXCore")
+
     var midiEntries by mutableStateOf(emptyList<String>()); private set
     var selectedMidiIndex by mutableStateOf(0)
 
@@ -416,6 +421,10 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
     var box64PresetEntries by mutableStateOf(emptyList<String>()); private set
     var selectedBox64PresetIndex by mutableStateOf(0)
     private var box64PresetIds = emptyList<String>()
+
+    // ── Box64EC (arm64ec only; installed components only, nothing is bundled) ──
+    var box64ECVersionEntries by mutableStateOf(emptyList<String>()); private set
+    var selectedBox64ECVersion by mutableStateOf("")
 
     // ── FEXCore (arm64ec only) ────────────────────────────────────────────────
     var fexCoreVersionEntries by mutableStateOf(emptyList<String>()); private set
@@ -950,6 +959,13 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         loadFEXCoreVersions()
         selectedFEXCoreVersion = archSeed?.getFEXCoreVersion() ?: DefaultVersion.FEXCORE
 
+        // x86-64 translator + Box64EC version (installed components only).
+        selectedEmulator64 = identifierToDisplay(archSeed?.emulator64 ?: Container.DEFAULT_EMULATOR64, emulator64Entries)
+        loadBox64ECVersions()
+        selectedBox64ECVersion = archSeed?.box64ECVersion
+            ?.takeIf { it.isNotEmpty() && box64ECVersionEntries.contains(it) }
+            ?: (box64ECVersionEntries.firstOrNull() ?: "")
+
         // FEXCore preset.
         val fexPreset = archSeed?.getFEXCorePreset() ?: prefs.getString("fexcore_preset", FEXCorePreset.INTERMEDIATE) ?: FEXCorePreset.INTERMEDIATE
         selectedFEXCorePresetIndex = fexCorePresetIds.indexOf(fexPreset).takeIf { it >= 0 } ?: 0
@@ -1006,6 +1022,16 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         }
         box64VersionEntries = b64Array
         selectedBox64Version = box64VersionEntries.firstOrNull() ?: ""
+    }
+
+    private fun loadBox64ECVersions() {
+        val list = mutableListOf<String>()
+        for (p in contentsManager.getProfiles(ContentProfile.ContentType.CONTENT_TYPE_BOX64EC) ?: emptyList()) {
+            val name = ContentsManager.getEntryName(p)
+            val dash = name.indexOf('-')
+            list.add(name.substring(dash + 1))
+        }
+        box64ECVersionEntries = list
     }
 
     private fun loadFEXCoreVersions() {
@@ -1105,6 +1131,13 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshFEXCoreVersions() {
         contentsManager.syncContents()
         loadFEXCoreVersions()
+    }
+
+    fun refreshBox64ECVersions() {
+        contentsManager.syncContents()
+        loadBox64ECVersions()
+        if (selectedBox64ECVersion !in box64ECVersionEntries)
+            selectedBox64ECVersion = box64ECVersionEntries.firstOrNull() ?: ""
     }
 
     fun onExclusiveXInputChanged(checked: Boolean) {
@@ -1374,6 +1407,8 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         c.setBox64Preset(box64PresetIds.getOrElse(selectedBox64PresetIndex) { Box64Preset.COMPATIBILITY })
         c.setFEXCoreVersion(selectedFEXCoreVersion)
         c.setFEXCorePreset(fexCorePresetIds.getOrElse(selectedFEXCorePresetIndex) { FEXCorePreset.INTERMEDIATE })
+        c.setEmulator64(StringUtils.parseIdentifier(selectedEmulator64))
+        c.setBox64ECVersion(selectedBox64ECVersion)
         c.desktopTheme       = buildDesktopThemeStr(colorAsString)
         c.setMidiSoundFont(if (selectedMidiIndex == 0) "" else midiEntries.getOrElse(selectedMidiIndex) { "" })
         c.setLC_ALL(lcAll)

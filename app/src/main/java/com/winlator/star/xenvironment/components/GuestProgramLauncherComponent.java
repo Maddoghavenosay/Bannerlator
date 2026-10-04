@@ -29,6 +29,7 @@ import com.winlator.star.core.ProcessHelper;
 import com.winlator.star.store.SteamLogRedactor;
 import com.winlator.star.core.TarCompressorUtils;
 import com.winlator.star.core.WineInfo;
+import com.winlator.star.core.WineRegistryEditor;
 import com.winlator.star.core.WinebusRumblePatcher;
 import com.winlator.star.fexcore.FEXCoreManager;
 import com.winlator.star.fexcore.FEXCorePreset;
@@ -157,7 +158,57 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         // with the effective per-game/per-container FEXCore choice, even after arbitrary flipping.
         reconcileFexUnixlib(fexcoreVersion);
 
+        if (applyX64Translator(system32dir)) containerDataChanged = true;
+
         if (containerDataChanged) container.saveData();
+    }
+
+    /**
+     * The x86-64 translator on an arm64ec layer. Wine's ntdll loads whichever DLL the
+     * {@code HKLM\Software\Microsoft\Wow64\amd64} default value names (libarm64ecfex.dll unless
+     * told otherwise), so the choice is a registry write, done here before the first wineserver
+     * starts. Box64EC ships only as an installable component (no bundled copy): when it is picked
+     * but no version is installed, Wine stays on FEX rather than failing to load a missing DLL.
+     * Returns true when container data changed.
+     */
+    private boolean applyX64Translator(File system32dir) {
+        String emulator64 = container.getEmulator64();
+        String box64ecVersion = container.getBox64ECVersion();
+        if (shortcut != null) {
+            emulator64 = shortcut.getExtra("emulator64", shortcut.container.getEmulator64());
+            box64ecVersion = shortcut.getExtra("box64ecVersion", shortcut.container.getBox64ECVersion());
+        }
+        boolean box64ec = Container.EMULATOR64_BOX64EC.equalsIgnoreCase(emulator64);
+        boolean changed = false;
+
+        if (box64ec && box64ecVersion != null && !box64ecVersion.isEmpty()
+                && !box64ecVersion.equals(container.getExtra("box64ecVersion"))) {
+            ContentProfile profile = contentsManager.getProfileByEntryName("box64ec-" + box64ecVersion);
+            if (profile != null) {
+                contentsManager.applyContent(profile);
+                container.putExtra("box64ecVersion", box64ecVersion);
+                changed = true;
+            } else {
+                Log.w("GuestProgramLauncherComponent", "Box64EC " + box64ecVersion + " is not installed");
+            }
+        }
+        if (box64ec && !new File(system32dir, "box64ec.dll").exists()) {
+            Log.w("GuestProgramLauncherComponent", "Box64EC selected but system32/box64ec.dll is missing, using FEXCore");
+            box64ec = false;
+        }
+
+        String wanted = box64ec ? "box64ec.dll" : "libarm64ecfex.dll";
+        File systemRegFile = new File(system32dir.getParentFile().getParentFile().getParentFile(), "system.reg");
+        if (!systemRegFile.exists()) return changed;
+        try (WineRegistryEditor registryEditor = new WineRegistryEditor(systemRegFile)) {
+            String key = "Software\\Microsoft\\Wow64\\amd64";
+            String current = registryEditor.getStringValue(key, null, "");
+            if (!wanted.equals(current)) {
+                registryEditor.setStringValue(key, null, wanted);
+                Log.d("GuestProgramLauncherComponent", "x86-64 translator: " + current + " -> " + wanted);
+            }
+        }
+        return changed;
     }
 
     // The FEX unixlib .so names we own. The truncated variants are defensive: old testing produced

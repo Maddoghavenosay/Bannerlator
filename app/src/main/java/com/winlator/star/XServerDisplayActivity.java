@@ -11675,7 +11675,10 @@ public class XServerDisplayActivity extends AppCompatActivity {
         String arch = arm64ec ? "arm64ec" : "x86-64";
         String emu = emulator == null ? "" : emulator.toLowerCase();
         String translator;
+        String emu64 = shortcut != null
+                ? shortcut.getExtra("emulator64", container.getEmulator64()) : container.getEmulator64();
         if (!arm64ec) translator = "Box64";                 // x86-64 always runs under box64
+        else if (Container.EMULATOR64_BOX64EC.equalsIgnoreCase(emu64)) translator = "Box64EC";
         else if (emu.contains("wowbox64")) translator = "wowbox64";
         else translator = "FEXCore";
 

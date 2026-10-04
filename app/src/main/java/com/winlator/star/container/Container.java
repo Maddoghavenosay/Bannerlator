@@ -69,6 +69,10 @@ public class Container {
     public static final String GRAPHICS_DRIVER_GAMENATIVE = "wrapper-gamenative";
     public static final String DEFAULT_AUDIO_DRIVER = "pulseaudio";
     public static final String DEFAULT_EMULATOR = "FEXCore";
+    // x86-64 translator on arm64ec layers ("fexcore" | "box64ec"). Wine picks it from the
+    // HKLM\Software\Microsoft\Wow64\amd64 registry value, written at launch.
+    public static final String DEFAULT_EMULATOR64 = "fexcore";
+    public static final String EMULATOR64_BOX64EC = "box64ec";
     public static final String DEFAULT_DXWRAPPER = "dxvk+vkd3d";
     public static final String DEFAULT_DXWRAPPERCONFIG = "version=" + DefaultVersion.getVegasDefault() + ",framerate=0,async=0,asyncCache=0" + ",vkd3dVersion=2.8" + ",vkd3dLevel=12_1" + ",ddrawrapper=" + Container.DEFAULT_DDRAWRAPPER + ",csmt=3" + ",gpuName=NVIDIA GeForce GTX 480" + ",videoMemorySize=2048" + ",strict_shader_math=1" + ",OffscreenRenderingMode=fbo" + ",renderer=gl";
     public static final String DEFAULT_GRAPHICSDRIVERCONFIG =
@@ -175,6 +179,8 @@ public class Container {
     private String controllerMapping = new String(new char[XrControllerMapping.values().length]);
     private String box64Version;
     private String emulator;
+    private String emulator64 = DEFAULT_EMULATOR64;
+    private String box64ecVersion = "";
     private String renderer = "vulkan";
     private boolean exclusiveXInput = true;
     private ContainerManager containerManager;
@@ -423,6 +429,26 @@ public class Container {
 
     public String getEmulator() {
         return this.emulator;
+    }
+
+    public void setEmulator64(String emulator64) {
+        this.emulator64 = emulator64 != null && !emulator64.isEmpty() ? emulator64 : DEFAULT_EMULATOR64;
+    }
+
+    public String getEmulator64() {
+        return this.emulator64;
+    }
+
+    public boolean usesBox64EC() {
+        return EMULATOR64_BOX64EC.equalsIgnoreCase(emulator64);
+    }
+
+    public void setBox64ECVersion(String version) {
+        this.box64ecVersion = version != null ? version : "";
+    }
+
+    public String getBox64ECVersion() {
+        return this.box64ecVersion;
     }
 
     public File getRootDir() {
@@ -1366,6 +1392,9 @@ public class Container {
             data.put("startupSelection", startupSelection);
             data.put("startupServices", startupServices);
             data.put("box64Version", box64Version);
+            // Only written once set away from the defaults, so untouched containers serialize as before.
+            if (!DEFAULT_EMULATOR64.equals(emulator64)) data.put("emulator64", emulator64);
+            if (!box64ecVersion.isEmpty()) data.put("box64ecVersion", box64ecVersion);
             data.put("fexcorePreset", fexcorePreset);
             data.put("fexcoreVersion", fexcoreVersion);
             data.put("box64Preset", box64Preset);
@@ -1479,6 +1508,12 @@ public class Container {
                     break;
                 case "box64Version":
                     setBox64Version(data.getString(key));
+                    break;
+                case "emulator64":
+                    setEmulator64(data.getString(key));
+                    break;
+                case "box64ecVersion":
+                    setBox64ECVersion(data.getString(key));
                     break;
                 case "fexcoreVersion":
                     setFEXCoreVersion(data.getString(key));

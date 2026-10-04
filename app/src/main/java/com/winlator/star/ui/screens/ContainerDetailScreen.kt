@@ -144,6 +144,7 @@ fun ContainerDetailScreen(
     var showWineDownloadSheet    by remember { mutableStateOf(false) }
     var showBox64DownloadSheet   by remember { mutableStateOf(false) }
     var showFexCoreDownloadSheet by remember { mutableStateOf(false) }
+    var showBox64ECDownloadSheet by remember { mutableStateOf(false) }
     var showDxvkDownloadSheet    by remember { mutableStateOf(false) }
     // null = hidden; "" = glossary open unfiltered (the button); "term" = open at a field's term.
     var glossaryQuery            by remember { mutableStateOf<String?>(null) }
@@ -262,6 +263,7 @@ fun ContainerDetailScreen(
                                 cpuListWoW64Ref,
                                 onShowBox64DownloadSheet = { showBox64DownloadSheet = true },
                                 onShowFexCoreDownloadSheet = { showFexCoreDownloadSheet = true },
+                                onShowBox64ECDownloadSheet = { showBox64ECDownloadSheet = true },
                             )
                             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                             XRTab(viewModel)
@@ -435,6 +437,14 @@ fun ContainerDetailScreen(
             onDismiss = { showFexCoreDownloadSheet = false },
             onContentChanged = { viewModel.refreshFEXCoreVersions() },
             inUseKey = viewModel.selectedFEXCoreVersion,
+        )
+    }
+    if (showBox64ECDownloadSheet) {
+        ContentDownloadSheet(
+            contentType = com.winlator.star.contents.ContentProfile.ContentType.CONTENT_TYPE_BOX64EC,
+            onDismiss = { showBox64ECDownloadSheet = false },
+            onContentChanged = { viewModel.refreshBox64ECVersions() },
+            inUseKey = viewModel.selectedBox64ECVersion,
         )
     }
     if (showDxvkDownloadSheet) {
@@ -1509,6 +1519,26 @@ private fun TopLevelFields(
                 }
             )
             Spacer(Modifier.height(8.dp))
+
+            // x86-64 translator — FEXCore (libarm64ecfex.dll) or Box64EC (box64ec.dll). Wine reads
+            // the choice from the Wow64\amd64 registry value the launcher writes. Box64EC is only
+            // offered once a Box64EC component is installed (Advanced tab).
+            val box64ECInstalled = viewModel.box64ECVersionEntries.isNotEmpty()
+            LabeledDropdown(
+                label = "Emulator (64-bit)",
+                options = viewModel.emulator64Entries,
+                selectedOption = viewModel.selectedEmulator64,
+                enabled = box64ECInstalled,
+                onSelect = { viewModel.selectedEmulator64 = it }
+            )
+            if (!box64ECInstalled) {
+                Text(
+                    "Install a Box64EC component (Advanced tab) to switch 64-bit games off FEXCore",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.5.sp
+                )
+            }
+            Spacer(Modifier.height(8.dp))
         }
 
         // MIDI Sound Font
@@ -2361,6 +2391,7 @@ private fun AdvancedTab(
     cpuListWoW64Ref: MutableState<CPUListView?>,
     onShowBox64DownloadSheet: () -> Unit = {},
     onShowFexCoreDownloadSheet: () -> Unit = {},
+    onShowBox64ECDownloadSheet: () -> Unit = {},
 ) {
     val context = LocalContext.current
     // Per-field "?" help — centered scrollable Compose dialog (same as the General tab).
@@ -2398,6 +2429,31 @@ private fun AdvancedTab(
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+        // Box64EC — the x86-64 translator alternative to FEXCore on arm64ec. Installed components
+        // only (nothing is bundled); the General tab's "Emulator (64-bit)" picks between them.
+        if (viewModel.isArm64EC) {
+            SectionBox(title = "Box64EC") {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    LabeledDropdown(
+                        label = "Box64EC Version",
+                        options = viewModel.box64ECVersionEntries,
+                        selectedOption = viewModel.selectedBox64ECVersion,
+                        enabled = viewModel.box64ECVersionEntries.isNotEmpty(),
+                        onSelect = { viewModel.selectedBox64ECVersion = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    ContentInstallGear(onDownloadFile = onShowBox64ECDownloadSheet)
+                }
+                if (viewModel.box64ECVersionEntries.isEmpty()) {
+                    Text(
+                        "No Box64EC installed. Import a Box64EC .wcp with the gear button.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.5.sp
+                    )
+                }
+            }
+        }
 
         // Box64 / WOWBox64 section — arm64ec wrappers use WOWBox64, everything else Box64.
         val emulatorLabel = if (viewModel.isArm64EC) "WOWBox64" else "Box64"
