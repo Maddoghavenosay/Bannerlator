@@ -5545,8 +5545,11 @@ public class XServerDisplayActivity extends AppCompatActivity {
                         // collector itself also no-ops when the marker/logs aren't present. Fully guarded —
                         // logging must never break a game exiting.
                         try {
-                            if ((realSteamPlan != null || appSteamPlan != null)
-                                    && preferences.getBoolean("enable_steamlite_logs", false)) {
+                            boolean wantSteamLite = realSteamPlan != null
+                                    && preferences.getBoolean("enable_steamlite_logs", false);
+                            boolean wantHeadless = appSteamPlan != null
+                                    && preferences.getBoolean("enable_headless_steam_logs", false);
+                            if (wantSteamLite || wantHeadless) {
                                 Context appCtx = getApplicationContext();
                                 String gameName = currentLogGameName();
                                 File driveC = new File(container.getRootDir(), ".wine/drive_c");
@@ -5561,11 +5564,32 @@ public class XServerDisplayActivity extends AppCompatActivity {
                                                 dxwrapper,
                                                 dxwrapperConfig != null ? dxwrapperConfig.get("version") : null,
                                                 dxwrapperConfig != null ? dxwrapperConfig.get("vkd3dVersion") : null);
-                                com.winlator.star.core.SteamLiteLogCollector.collect(
-                                        appCtx, driveC, perGameLogDir, gameName,
-                                        realSteamPlan != null ? realSteamPlan.appId : appSteamPlan.appId, info,
-                                        steamAgentChannel != null ? steamAgentChannel.eventLines() : null,
-                                        appSteamPlan != null ? appSteamPlan.hostLog : null);
+                                List<String> channelEvents =
+                                        steamAgentChannel != null ? steamAgentChannel.eventLines() : null;
+                                if (wantSteamLite) {
+                                    com.winlator.star.core.SteamLiteLogCollector.collect(
+                                            appCtx, driveC, perGameLogDir, gameName,
+                                            realSteamPlan.appId, info, channelEvents, null);
+                                }
+                                if (wantHeadless) {
+                                    // Headless Steam: its own bundle (headless_steam.txt) — checklist +
+                                    // host events + host log + Valve's session logs + bridge lines.
+                                    String valveBuild = com.winlator.star.store.SteamHostComponent.INSTANCE.installedVersion(appCtx);
+                                    com.winlator.star.core.HeadlessSteamLogCollector.Launch launch =
+                                            new com.winlator.star.core.HeadlessSteamLogCollector.Launch(
+                                                    true, appSteamPlan.appId, valveBuild,
+                                                    com.winlator.star.store.SteamHostComponent.INSTANCE.getVERIFIED_BUILDS().contains(valveBuild),
+                                                    appSteamPlan.layerHasLsteamclient,
+                                                    appSteamPlan.env != null ? new ArrayList<>(appSteamPlan.env.keySet()) : null,
+                                                    appSteamPlan.envRemove != null ? java.util.Arrays.asList(appSteamPlan.envRemove) : null,
+                                                    appSteamHostReady, null);
+                                    String logcatText = null;
+                                    try { logcatText = com.winlator.star.core.LogcatCapture.capture(
+                                            com.winlator.star.core.LogcatCapture.DEFAULT_LINES); } catch (Throwable ignored) {}
+                                    com.winlator.star.core.HeadlessSteamLogCollector.collect(
+                                            appCtx, perGameLogDir, gameName, info, launch,
+                                            appSteamPlan.hostLog, channelEvents, logcatText);
+                                }
                             }
                         } catch (Throwable t) {
                             Log.w("SteamLiteLogs", "collect on exit errored", t);
