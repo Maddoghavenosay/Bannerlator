@@ -6073,6 +6073,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
     /** Stop the App Steam session host (clean logoff); idempotent, never throws. */
     private void stopAppSteamHost(String why) {
         if (appSteamPlan == null) return;
+        try { com.winlator.star.store.HeadlessServerBrowser.stop(); } catch (Throwable ignored) {}
         try {
             com.winlator.star.store.SteamHost.INSTANCE.stop(why, 6000L);
         } catch (Throwable t) {
@@ -6332,8 +6333,20 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 case "port_busy":
                 case "host_failed": {
                     agentLoginResolved = true;
-                    if (steamAgentChannel != null) steamAgentChannel.setLastFailure(ev + " " + obj.optString("reason", ""));
+                    String reason = obj.optString("reason", "");
+                    if (steamAgentChannel != null) steamAgentChannel.setLastFailure(ev + " " + reason);
                     Log.w(AGENT_TAG, ev + ": " + obj);
+                    showAgentFailure("Headless Steam",
+                            "port_busy".equals(ev) ? "The Steam session host could not start: its port is in use"
+                                                   : "The Steam session host failed to start",
+                            (reason.isEmpty() ? "" : reason + "\n\n")
+                                    + ("port_busy".equals(ev)
+                                        ? "Another Steam client is holding 127.0.0.1:57343 — usually a Steam client "
+                                          + "left running in the background by another app (e.g. a Linux Steam session). "
+                                          + "Close it and retry. Without the host the game will report "
+                                          + "\"Steam client must be running\"."
+                                        : "See the Headless Steam log for the host's own message."),
+                            true);
                     break;
                 }
                 case "game_exited":

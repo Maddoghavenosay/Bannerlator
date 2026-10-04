@@ -308,8 +308,23 @@ public final class HeadlessSteamLogCollector {
 
         // 13b. In-game signatures (wine_debug.log, this run)
         String wine = wineText != null ? wineText : "";
-        if (wine.contains("RequestInternetServerList") || wine.contains("RequestLANServerList"))
-            rows.add(info("SERVER BROWSER", "the game opened the server browser this session"));
+        boolean sbOpened = wine.contains("RequestInternetServerList") || wine.contains("RequestLANServerList");
+        boolean sbOurs = false, sbListening = false, sbListOk = false, sbListErr = false;
+        String sbDetail = "";
+        for (String l : bridgeLines) {
+            if (l.contains("Bannerlator server browser enabled")) sbOurs = true;
+            if (l.contains("server-list service listening")) sbListening = true;
+            if (l.contains("BH_APPSTEAM_SB") && l.contains("LIST app=") && l.contains("servers in")) { sbListOk = true; sbDetail = l.substring(l.indexOf("LIST app=")); }
+            if (l.contains("BH_APPSTEAM_SB") && l.contains("failed:")) { sbListErr = true; sbDetail = l.substring(l.indexOf("LIST app=")); }
+        }
+        if (sbListening) rows.add(pass("SERVER LIST SERVICE", "app served the server list on 127.0.0.1:57345 (Web API GetServerList, engine web token)"));
+        else if (lo.find(0)) rows.add(warn("SERVER LIST SERVICE", "not listening — Find Servers returns an empty list (layer v13+ bridge expects it)"));
+        if (sbOpened) {
+            if (sbListOk) rows.add(pass("SERVER BROWSER", "Bannerlator browser answered the game — " + sbDetail));
+            else if (sbListErr) rows.add(fail("SERVER BROWSER", "list request failed — " + sbDetail));
+            else if (sbOurs) rows.add(warn("SERVER BROWSER", "Bannerlator browser active but no LIST reached the app (host/app port mismatch?)"));
+            else rows.add(fail("SERVER BROWSER", "the game used Valve's in-game browser (layer without the Bannerlator browser, or BL_SERVER_BROWSER unset) — it hangs on this library"));
+        }
         if (wine.contains("Thread synchronization object is unuseable"))
             rows.add(fail("IN-GAME CLIENT", "Valve's in-game half reported 'Thread synchronization object is unuseable' "
                     + "(tier0 threadtools) — the game hangs after this; seen when the client service is not listening"));
@@ -394,7 +409,7 @@ public final class HeadlessSteamLogCollector {
         if (cbLines > 0) out.append("(").append(cbLines).append(" callback-trace lines omitted)\n");
     }
 
-    private static final Pattern BRIDGE_TAGS = Pattern.compile("\\b(lsteamclient|BH_APPSTEAM|BH_STEAMHOST|BlSteamHost|SteamHost)\\b");
+    private static final Pattern BRIDGE_TAGS = Pattern.compile("\\b(lsteamclient|BH_APPSTEAM|BH_APPSTEAM_SB|BH_STEAMHOST|BlSteamHost|SteamHost)\\b");
 
     private static void replaceFirst(StringBuilder sb, String from, String to) {
         int i = sb.indexOf(from);

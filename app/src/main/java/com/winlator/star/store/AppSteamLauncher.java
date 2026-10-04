@@ -178,9 +178,12 @@ public final class AppSteamLauncher {
             hostExtra.put("STEAMVIDEOTOKEN", "1");
             hostExtra.put("SteamOS", "1");
             hostExtra.put("ENABLE_VK_LAYER_VALVE_steam_overlay_1", "0");
-            hostExtra.put("BL_SB_PORT", String.valueOf(SERVER_BROWSER_PORT));
+            // Server list for the layer's browser: served by HeadlessServerBrowser (app, Web API) by
+            // default. `bl.sb.mode=valve|gms` hands the port to the host's experimental in-process
+            // sources instead (Valve's in-host browser proved dead on build 1788652215).
             String sbMode = System.getProperty("bl.sb.mode", "");
-            if (!sbMode.isEmpty()) hostExtra.put("BL_SB_MODE", sbMode);
+            boolean sbInHost = !sbMode.isEmpty();
+            if (sbInHost) { hostExtra.put("BL_SB_PORT", String.valueOf(SERVER_BROWSER_PORT)); hostExtra.put("BL_SB_MODE", sbMode); }
             SteamHost.Config hostCfg = new SteamHost.Config(appId, hostHome, hostLog, STEAM3_MASTER,
                     STEAM_CLIENT_SERVICE, agentPort, persona, hostExtra);
 
@@ -227,11 +230,14 @@ public final class AppSteamLauncher {
                 Log.w(TAG, "prepare: host did not start — fallback");
                 return null;
             }
+            if (!sbInHost && !HeadlessServerBrowser.start(SERVER_BROWSER_PORT))
+                Log.w(TAG, "prepare: server-list service did not start — Find Servers will come back empty");
             Log.i(TAG, "prepare: AppSteam plan armed (appId=" + appId + ", host log " + hostLog.getName()
                     + ", agentPort " + agentPort + ", layerHasLsteamclient=" + layerOk + ")");
             return new Plan(env, remove, hostCfg, appId, steamId64, hostLog, layerOk);
         } catch (Throwable t) {
             Log.w(TAG, "prepare: errored — fallback", t);
+            HeadlessServerBrowser.stop();
             SteamHost.INSTANCE.stop("prepare errored");
             return null;
         }
