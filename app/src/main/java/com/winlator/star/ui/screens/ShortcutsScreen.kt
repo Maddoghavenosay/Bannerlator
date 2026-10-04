@@ -6369,6 +6369,7 @@ internal fun ShortcutSettingsDialogScreen(
     // relabel the Emulator field, or an arm64ec container would flash "Box64" on first frame.
     var archLoaded by remember { mutableStateOf(false) }
     var box64Versions by remember { mutableStateOf(listOf<String>()) }
+    var box64ECVersions by remember { mutableStateOf(listOf<String>()) }
     var box64Presets by remember { mutableStateOf(listOf<Box64Preset>()) }
     var fexCoreVersions by remember { mutableStateOf(listOf<String>()) }
     var fexCorePresets by remember { mutableStateOf(listOf<FEXCorePreset>()) }
@@ -6865,6 +6866,8 @@ internal fun ShortcutSettingsDialogScreen(
     var selectedFexCoreVersion by remember {
         mutableStateOf(shortcut.getExtra("fexcoreVersion", shortcut.container.getFEXCoreVersion()) ?: "")
     }
+    // Box64EC build for this game; "" = no extra = the container's pick (BOX64EC_CONTAINER_DEFAULT shown).
+    var selectedBox64ECVersion by remember { mutableStateOf(shortcut.getExtra("box64ecVersion", "") ?: "") }
     var selectedFexCorePresetIndex by remember { mutableIntStateOf(0) }
     var selectedControlsProfileIndex by remember { mutableIntStateOf(0) }
 
@@ -6974,6 +6977,7 @@ internal fun ShortcutSettingsDialogScreen(
     var glossaryQuery by remember { mutableStateOf<String?>(null) }
     var showBox64DownloadSheet by remember { mutableStateOf(false) }
     var showFexCoreDownloadSheet by remember { mutableStateOf(false) }
+    var showBox64ECDownloadSheet by remember { mutableStateOf(false) }
     var showDxvkDownloadSheet by remember { mutableStateOf(false) }
     var showVegasDownloadSheet by remember { mutableStateOf(false) }
     var showVkd3dDownloadSheet by remember { mutableStateOf(false) }
@@ -7063,7 +7067,12 @@ internal fun ShortcutSettingsDialogScreen(
 
             val b64Presets = Box64PresetManager.getPresets("box64", context)
             val fexPresets = FEXCorePresetManager.getPresets(context)
-            val ecInstalled = (cm.getProfiles(ContentProfile.ContentType.CONTENT_TYPE_BOX64EC) ?: emptyList()).isNotEmpty()
+            val ecList = mutableListOf<String>()
+            for (p in cm.getProfiles(ContentProfile.ContentType.CONTENT_TYPE_BOX64EC) ?: emptyList()) {
+                val n = ContentsManager.getEntryName(p)
+                ecList.add(n.substring(n.indexOf('-') + 1))
+            }
+            val ecInstalled = ecList.isNotEmpty()
             val profiles = InputControlsManager(context).getProfiles(true)
 
             val midi = mutableListOf("-- ${context.getString(R.string.disabled)} --", MidiManager.DEFAULT_SF2_FILE)
@@ -7073,6 +7082,7 @@ internal fun ShortcutSettingsDialogScreen(
             withContext(Dispatchers.Main) {
                 isArm64EC = arm64ec
                 box64ECInstalled = ecInstalled
+                box64ECVersions = ecList
                 archLoaded = true
                 box64Versions = b64Arr
                 fexCoreVersions = fexList
@@ -7227,6 +7237,7 @@ internal fun ShortcutSettingsDialogScreen(
             putExtra("box64Preset", b64PresetId)
             putExtra("fexcoreVersion", selectedFexCoreVersion)
             putExtra("fexcorePreset", fexPresetId)
+            putExtra("box64ecVersion", selectedBox64ECVersion.ifEmpty { null })
             putExtra("controlsProfile", if (ctrlProfileId > 0) ctrlProfileId.toString() else null)
             putExtra("startupSelection", startupIdx.toString())
             // Persist the Custom enabled set alongside the selection (launch reads it only when
@@ -9281,7 +9292,11 @@ internal fun ShortcutSettingsDialogScreen(
             },
             reshadeSupported = StringUtils.parseIdentifier(selectedDxWrapper).let { it.contains("dxvk") || it.contains("vegas") },
             onShowBox64DownloadSheet = { showBox64DownloadSheet = true },
-            onShowFexCoreDownloadSheet = { showFexCoreDownloadSheet = true }
+            onShowFexCoreDownloadSheet = { showFexCoreDownloadSheet = true },
+            box64ECVersions = box64ECVersions,
+            selectedBox64ECVersion = selectedBox64ECVersion,
+            onBox64ECVersionChange = { selectedBox64ECVersion = it },
+            onShowBox64ECDownloadSheet = { showBox64ECDownloadSheet = true },
         )
                             5 -> ScTvTab(
                                 dp = dp,
@@ -9440,6 +9455,13 @@ internal fun ShortcutSettingsDialogScreen(
         ContentDownloadSheet(
             contentType = com.winlator.star.contents.ContentProfile.ContentType.CONTENT_TYPE_FEXCORE,
             onDismiss = { showFexCoreDownloadSheet = false },
+            onContentChanged = {}
+        )
+    }
+    if (showBox64ECDownloadSheet) {
+        ContentDownloadSheet(
+            contentType = com.winlator.star.contents.ContentProfile.ContentType.CONTENT_TYPE_BOX64EC,
+            onDismiss = { showBox64ECDownloadSheet = false },
             onContentChanged = {}
         )
     }
@@ -10154,6 +10176,11 @@ private fun ScAdvancedTab(
     reshadeSupported: Boolean = true,
     onShowBox64DownloadSheet: () -> Unit = {},
     onShowFexCoreDownloadSheet: () -> Unit = {},
+    /** Installed Box64EC builds ("verName-verCode"); "" selection = follow the container. */
+    box64ECVersions: List<String> = emptyList(),
+    selectedBox64ECVersion: String = "",
+    onBox64ECVersionChange: (String) -> Unit = {},
+    onShowBox64ECDownloadSheet: () -> Unit = {},
 ) {
     val context = LocalContext.current
     // Bumped when a preset's values or the preset list change, so the "customised" badges
@@ -10236,6 +10263,41 @@ private fun ScAdvancedTab(
                 onValuesChanged = { presetRevision++ },
             )
         }
+        }
+
+        // Box64EC — the x86-64 translator alternative to FEXCore on arm64ec (General tab picks which
+        // one runs). Per-game build override; the first entry keeps the container's choice.
+        if (isArm64EC && !isLinuxEntry) {
+            SectionBox(title = "Box64EC") {
+                val containerDefault = "Container default"
+                val ecOptions = listOf(containerDefault) + box64ECVersions
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    LabeledDropdown(
+                        label = "Box64EC Version",
+                        options = ecOptions,
+                        selectedOption = if (selectedBox64ECVersion.isEmpty() || selectedBox64ECVersion !in box64ECVersions)
+                            containerDefault else selectedBox64ECVersion,
+                        onSelect = { onBox64ECVersionChange(if (it == containerDefault) "" else it) },
+                        enabled = box64ECVersions.isNotEmpty(),
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedButton(
+                        onClick = onShowBox64ECDownloadSheet,
+                        modifier = Modifier.size(40.dp),
+                        border = androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+                        contentPadding = PaddingValues(0.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Download Box64EC", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                Text(
+                    if (box64ECVersions.isEmpty()) "No Box64EC installed. Import a Box64EC .wcp with the gear button."
+                    else "Runs 64-bit games when Emulator (64-bit) is set to Box64EC. Presets: the WOWBox64 preset's BOX64_* variables apply to Box64EC too.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.5.sp
+                )
+            }
         }
 
         // A Linux session hands the FEXCore preset to the games the Steam client launches whatever the
