@@ -47,7 +47,8 @@ object HeadlessServerBrowser {
     fun start(port: Int): Boolean {
         stop()
         val ss = try {
-            ServerSocket(port, 8, InetAddress.getLoopbackAddress()).also { it.reuseAddress = true }
+            // Explicit IPv4: getLoopbackAddress() is ::1 on some devices and the layer connects to 127.0.0.1.
+            ServerSocket(port, 8, InetAddress.getByName("127.0.0.1")).also { it.reuseAddress = true }
         } catch (t: Throwable) {
             Log.w(TAG, "listen on 127.0.0.1:$port failed: $t"); return false
         }

@@ -313,7 +313,7 @@ public final class HeadlessSteamLogCollector {
         String sbDetail = "";
         for (String l : bridgeLines) {
             if (l.contains("Bannerlator server browser enabled")) sbOurs = true;
-            if (l.contains("server-list service listening")) sbListening = true;
+            if (l.contains("server-list service listening") || l.contains("server-list service stopped") || l.contains("LIST app=")) sbListening = true;
             if (l.contains("BH_APPSTEAM_SB") && l.contains("LIST app=") && l.contains("servers in")) { sbListOk = true; sbDetail = l.substring(l.indexOf("LIST app=")); }
             if (l.contains("BH_APPSTEAM_SB") && l.contains("failed:")) { sbListErr = true; sbDetail = l.substring(l.indexOf("LIST app=")); }
         }
