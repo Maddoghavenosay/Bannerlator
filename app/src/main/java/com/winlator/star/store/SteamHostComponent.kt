@@ -55,7 +55,10 @@ object SteamHostComponent {
     private const val VERSION_MARKER_REL = ".valve_version"
 
     /** The Valve builds whose private-interface slots the host has been verified against (client_iface.h). */
-    val VERIFIED_BUILDS: Set<String> = setOf("1788291500")
+    // 1788652215 (2026-10-03): same libsteamclient.so layout as 1788291500 — every slot the host
+    // calls resolves to the same position and the InterfaceMapBase<IClientUser> name run sits at
+    // the same file offset (0x662e03), so the September slot table applies unchanged.
+    val VERIFIED_BUILDS: Set<String> = setOf("1788291500", "1788652215")
 
     /** Every file the host needs; the extract refuses a package missing any of them. */
     private val REQUIRED = listOf(

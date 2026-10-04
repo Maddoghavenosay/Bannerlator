@@ -79,6 +79,16 @@ static constexpr SlotTable kSlotTables[] = {
         /* friends*/ 5,
         /* check  */ 70,
     },
+    // 2026-10-03: re-verified against build 1788652215 — identical layout (same slot positions,
+    // InterfaceMapBase<IClientUser> name run at the same file offset 0x662e03).
+    {
+        "1788652215",
+        /* engine */ 8, 13, 17,
+        /* user   */ 1, 3, 49, 50, 54, 56, 69,
+        /* apps   */ 7,
+        /* friends*/ 5,
+        /* check  */ 70,
+    },
 };
 
 // Interface version strings (CreateInterface / Get* names). CLIENTUSER_… is what the
