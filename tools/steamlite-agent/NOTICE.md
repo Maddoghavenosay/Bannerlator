@@ -17,7 +17,7 @@ This code therefore inherits GPL-3.0. Keep attribution to the WinNative project.
 ```
 x86_64-w64-mingw32-g++-posix -std=c++17 -O2 -static -static-libgcc -static-libstdc++ \
   -Wl,--subsystem,windows -I. -o steam.exe main.cpp clean_shutdown.cpp \
-  -ladvapi32 -lkernel32 -luser32
+  -ladvapi32 -lkernel32 -luser32 -lws2_32
 ```
 (`steam_input.h`, `agent_channel.h`, `agent_friends.h` are header-only and need no extra objects; CI builds this
 exact line in `.github/workflows/build-steamlite-agent.yml`.)

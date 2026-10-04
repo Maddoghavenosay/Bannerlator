@@ -28,7 +28,7 @@ jobs:
         run: |
           x86_64-w64-mingw32-g++-posix -std=c++17 -O2 -static -static-libgcc -static-libstdc++ \
             -Wl,--subsystem,windows -I. -o steam.exe main.cpp clean_shutdown.cpp \
-            -ladvapi32 -lkernel32 -luser32
+            -ladvapi32 -lkernel32 -luser32 -lws2_32
           file steam.exe | grep -q 'PE32+ executable' || { echo "FATAL: not a PE32+ image"; file steam.exe; exit 1; }
           file steam.exe | grep -q 'x86-64' || { echo "FATAL: not x86-64"; file steam.exe; exit 1; }
           ls -la steam.exe
