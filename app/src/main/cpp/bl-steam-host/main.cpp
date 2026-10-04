@@ -200,6 +200,9 @@ int port_of(const std::string& hostport, int dflt) {
 bool port_free(int port) {
     int s = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (s < 0) return true;
+    // SO_REUSEADDR: a previous session's TIME_WAIT entries on this port (the game's connections to
+    // the old host) must not count as "busy" for up to a minute — only a live listener does.
+    int yes = 1; setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
     sockaddr_in a{};
     a.sin_family = AF_INET;
     a.sin_port = htons((uint16_t)port);
