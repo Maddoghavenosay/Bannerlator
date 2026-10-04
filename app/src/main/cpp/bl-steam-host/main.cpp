@@ -75,6 +75,8 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <poll.h>
+#include <deque>
 #include <thread>
 #include <vector>
 
@@ -436,6 +438,210 @@ static void server_browser_probe(Client& c, unsigned appId, const std::string& l
     }
     c.vslot<RelFn>(mms, 6)(mms, h);
 }
+
+// ── Server-list service for the game-side bridge (BL_SB_PORT) ──────────────────────────────
+// lsteamclient's Bannerlator server browser (unix_bl_server_browser.cpp) connects here with
+// "LIST <appid> <filter>\n" and expects "D ..." (complete item) / "S ip port" (to be pinged by the
+// bridge) lines, then "END". The query itself runs on the host MAIN thread because Valve's
+// callbacks are only delivered while that thread drains Steam_BGetCallback; the listener thread
+// just queues the socket and the pump finishes the job.
+//
+// BL_SB_MODE=valve (default): Valve's own ISteamMatchmakingServers inside this process — the full
+//   client engine lives here, so unlike the copy inside the game it has what it needs. Items carry
+//   ping/map/players, so the bridge needs no pings.
+// BL_SB_MODE=gms: IClientMatchmaking::BeginGMSQuery (master-server list only, ip:port); the bridge
+//   pings. Fallback for a Valve build whose in-host browser does not complete either.
+namespace {
+struct SBJob {
+    int fd;
+    unsigned appId;
+    std::string filter;
+    long long started = 0;
+    void* request = nullptr;
+    void* gmsQuery = nullptr;
+    bool complete = false;
+};
+std::mutex g_sb_lock;
+std::deque<SBJob*> g_sb_pending;
+SBJob* g_sb_active = nullptr;
+
+struct SBResponse {
+    struct VT {
+        void (*ServerResponded)(SBResponse*, void*, int);
+        void (*ServerFailedToRespond)(SBResponse*, void*, int);
+        void (*RefreshComplete)(SBResponse*, void*, unsigned);
+    };
+    const VT* vt;
+    std::atomic<int> responded{0}, failed{0};
+    std::atomic<bool> complete{false};
+    unsigned result = 0;
+    static void s_responded(SBResponse* self, void*, int) { self->responded++; }
+    static void s_failed(SBResponse* self, void*, int) { self->failed++; }
+    static void s_complete(SBResponse* self, void*, unsigned r) { self->result = r; self->complete = true; }
+    static const VT kVT;
+    SBResponse() : vt(&kVT) {}
+};
+const SBResponse::VT SBResponse::kVT = { &SBResponse::s_responded, &SBResponse::s_failed, &SBResponse::s_complete };
+SBResponse g_sb_resp;
+
+void* g_sb_mms = nullptr;      // ISteamMatchmakingServers002 (Valve, in-host)
+void* g_sb_clientmm = nullptr; // IClientMatchmaking (gms mode)
+
+#pragma pack(push, 4)
+struct sb_item_t {
+    uint16_t connPort, queryPort; uint32_t ip;
+    int32_t ping; int8_t hadResponse, doNotRefresh;
+    char gameDir[32], map[32], gameDesc[64]; uint8_t pad0[2];
+    uint32_t appId; int32_t players, maxPlayers, bots; int8_t password, secure; uint8_t pad1[2];
+    uint32_t timeLastPlayed; int32_t serverVersion; char name[64], tags[128]; uint64_t steamId;
+};
+struct gms_result_t { uint32_t ip; uint16_t port; int32_t authPlayers; };
+#pragma pack(pop)
+
+void sb_send(int fd, const std::string& s) {
+    size_t off = 0;
+    while (off < s.size()) { ssize_t n = send(fd, s.data() + off, s.size() - off, 0); if (n <= 0) return; off += (size_t)n; }
+}
+
+std::string sb_tabsafe(const char* s, size_t cap) {
+    std::string out(s, strnlen(s, cap));
+    for (char& c : out) if (c == '\t' || c == '\n' || c == '\r') c = ' ';
+    return out;
+}
+
+bool sb_mode_gms() { const char* m = getenv("BL_SB_MODE"); return m && !strcmp(m, "gms"); }
+
+void sb_listener(int port) {
+    int srv = socket(AF_INET, SOCK_STREAM, 0);
+    if (srv < 0) { LOGW("sb: socket failed"); return; }
+    int yes = 1; setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    sockaddr_in sa = {}; sa.sin_family = AF_INET; sa.sin_port = htons((uint16_t)port); sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (bind(srv, (sockaddr*)&sa, sizeof(sa)) < 0 || listen(srv, 4) < 0) {
+        LOGW("sb: bind/listen %d failed: %s", port, strerror(errno)); close(srv); return;
+    }
+    LOGI("sb: server-list service listening on 127.0.0.1:%d (mode %s)", port, sb_mode_gms() ? "gms" : "valve");
+    while (!g_stop.load()) {
+        pollfd pf = { srv, POLLIN, 0 };
+        if (poll(&pf, 1, 500) <= 0) continue;
+        int fd = accept(srv, nullptr, nullptr);
+        if (fd < 0) continue;
+        std::string line; char ch;
+        while (recv(fd, &ch, 1, 0) == 1 && ch != '\n' && line.size() < 4096) line += ch;
+        unsigned appId = 0; char filter[2048] = {0};
+        if (sscanf(line.c_str(), "LIST %u %2047s", &appId, filter) < 1) { sb_send(fd, "ERR bad request\n"); close(fd); continue; }
+        SBJob* job = new SBJob{ fd, appId, filter };
+        { std::lock_guard<std::mutex> g(g_sb_lock); g_sb_pending.push_back(job); }
+        LOGI("sb: queued LIST app=%u filter=%s", appId, filter);
+    }
+    close(srv);
+}
+
+// Called from the main pump every iteration (callbacks are drained right before).
+void sb_pump(Client& c, const std::string& libPath) {
+    using GetIfaceFn = void* (*)(void*, int, int, const char*);
+    if (!g_sb_active) {
+        std::lock_guard<std::mutex> g(g_sb_lock);
+        if (g_sb_pending.empty()) return;
+        g_sb_active = g_sb_pending.front(); g_sb_pending.pop_front();
+    }
+    SBJob* job = g_sb_active;
+    if (!job->started) {
+        job->started = now_ms();
+        int err = 0;
+        if (!sb_mode_gms()) {
+            if (!g_sb_mms) {
+                void* sc = c.CreateInterface("SteamClient020", &err);
+                if (!sc) sc = c.CreateInterface("SteamClient017", &err);
+                if (sc && vtable_sane(sc, 14, "ISteamClient", libPath))
+                    g_sb_mms = c.vslot<GetIfaceFn>(sc, 11)(sc, c.user, c.pipe, "SteamMatchMakingServers002");
+                if (g_sb_mms && !vtable_sane(g_sb_mms, 17, "ISteamMatchmakingServers", libPath)) g_sb_mms = nullptr;
+                LOGI("sb: ISteamMatchmakingServers002 = %p", g_sb_mms);
+            }
+            if (!g_sb_mms) { sb_send(job->fd, "ERR no ISteamMatchmakingServers in host\n"); job->complete = true; }
+            else {
+                using ReqFn = void* (*)(void*, unsigned, void*, unsigned, void*);
+                g_sb_resp.responded = 0; g_sb_resp.failed = 0; g_sb_resp.complete = false;
+                // No key/value filters are forwarded; the appid is implicit per request and the
+                // bridge applies the rest client-side.
+                job->request = c.vslot<ReqFn>(g_sb_mms, 0)(g_sb_mms, job->appId, nullptr, 0, &g_sb_resp);
+                LOGI("sb: RequestInternetServerList(%u) -> %p", job->appId, job->request);
+                if (!job->request) { sb_send(job->fd, "ERR request failed\n"); job->complete = true; }
+            }
+        } else {
+            if (!g_sb_clientmm) {
+                void* sc = c.CreateInterface("SteamClient020", &err);
+                if (!sc) sc = c.CreateInterface("SteamClient017", &err);
+                if (sc && vtable_sane(sc, 14, "ISteamClient", libPath))
+                    g_sb_clientmm = c.vslot<GetIfaceFn>(sc, 12)(sc, c.user, c.pipe, "CLIENTMATCHMAKING_INTERFACE_VERSION001");
+                LOGI("sb: IClientMatchmaking = %p", g_sb_clientmm);
+            }
+            int base = (int)env_long("BL_GMS_SLOT_BASE", 40);
+            if (!g_sb_clientmm || !vtable_sane(g_sb_clientmm, base + 4, "IClientMatchmaking", libPath)) {
+                sb_send(job->fd, "ERR no IClientMatchmaking\n"); job->complete = true;
+            } else {
+                using BeginFn = void* (*)(void*, unsigned, int, const char*);
+                job->gmsQuery = c.vslot<BeginFn>(g_sb_clientmm, base)(g_sb_clientmm, job->appId, -1, job->filter.c_str());
+                LOGI("sb: BeginGMSQuery(%u, %s) -> %p", job->appId, job->filter.c_str(), job->gmsQuery);
+                if (!job->gmsQuery) { sb_send(job->fd, "ERR BeginGMSQuery failed\n"); job->complete = true; }
+            }
+        }
+    }
+    if (!job->complete) {
+        long long age = now_ms() - job->started;
+        if (job->request) {
+            if (g_sb_resp.complete || age > 25000) {
+                using CountFn = int (*)(void*, void*);
+                using DetailsFn = sb_item_t* (*)(void*, void*, int);
+                using RelFn = void (*)(void*, void*);
+                int n = c.vslot<CountFn>(g_sb_mms, 11)(g_sb_mms, job->request);
+                LOGI("sb: list done complete=%d responded=%d failed=%d count=%d (%lld ms)", g_sb_resp.complete ? 1 : 0,
+                     g_sb_resp.responded.load(), g_sb_resp.failed.load(), n, age);
+                std::string out;
+                char b[512];
+                for (int i = 0; i < n; ++i) {
+                    sb_item_t* it = c.vslot<DetailsFn>(g_sb_mms, 7)(g_sb_mms, job->request, i);
+                    if (!it || !it->hadResponse) continue;
+                    snprintf(b, sizeof(b), "D %u.%u.%u.%u %u %u %d %d %d %d %d %d %u %d\t", (it->ip >> 24) & 255, (it->ip >> 16) & 255,
+                             (it->ip >> 8) & 255, it->ip & 255, it->connPort, it->queryPort, it->ping, it->players, it->maxPlayers,
+                             it->bots, it->secure ? 1 : 0, it->password ? 1 : 0, it->appId, it->serverVersion);
+                    out += b;
+                    out += sb_tabsafe(it->map, sizeof(it->map)) + "\t" + sb_tabsafe(it->gameDir, sizeof(it->gameDir)) + "\t"
+                         + sb_tabsafe(it->gameDesc, sizeof(it->gameDesc)) + "\t" + sb_tabsafe(it->name, sizeof(it->name)) + "\t"
+                         + sb_tabsafe(it->tags, sizeof(it->tags)) + "\n";
+                }
+                out += "END\n";
+                sb_send(job->fd, out);
+                c.vslot<RelFn>(g_sb_mms, 6)(g_sb_mms, job->request);
+                job->request = nullptr;
+                job->complete = true;
+            }
+        } else if (job->gmsQuery) {
+            using PollFn = int (*)(void*, void*);
+            using ResultsFn = int (*)(void*, void*, gms_result_t*, int);
+            using RelFn = void (*)(void*, void*);
+            int base = (int)env_long("BL_GMS_SLOT_BASE", 40);
+            int st = c.vslot<PollFn>(g_sb_clientmm, base + 1)(g_sb_clientmm, job->gmsQuery);
+            if (st != 0 || age > 20000) {
+                static gms_result_t results[4096];
+                int n = c.vslot<ResultsFn>(g_sb_clientmm, base + 2)(g_sb_clientmm, job->gmsQuery, results, 4096);
+                LOGI("sb: GMS poll=%d results=%d (%lld ms)", st, n, age);
+                std::string out; char b[96];
+                for (int i = 0; i < n && i < 4096; ++i) {
+                    snprintf(b, sizeof(b), "S %u.%u.%u.%u %u\n", (results[i].ip >> 24) & 255, (results[i].ip >> 16) & 255,
+                             (results[i].ip >> 8) & 255, results[i].ip & 255, results[i].port);
+                    out += b;
+                }
+                out += "END\n";
+                sb_send(job->fd, out);
+                c.vslot<RelFn>(g_sb_clientmm, base + 3)(g_sb_clientmm, job->gmsQuery);
+                job->gmsQuery = nullptr;
+                job->complete = true;
+            }
+        }
+    }
+    if (job->complete) { close(job->fd); delete job; g_sb_active = nullptr; }
+}
+} // namespace
 
 const char* eresult_name(int e) {
     switch (e) {
@@ -856,6 +1062,11 @@ int main(int argc, char** argv) {
         LOGI("sb-probe: start (appId %u)", appId);
         server_browser_probe(c, appId, libPath);
     }
+    std::thread sb_thread;
+    {
+        int sbPort = (int)env_long("BL_SB_PORT", 0);
+        if (sbPort > 0) sb_thread = std::thread(sb_listener, sbPort);
+    }
 
     // ── 9. command reader (app → host) ─────────────────────────────────────────────────────
     std::thread reader([&]() {
@@ -883,6 +1094,7 @@ int main(int argc, char** argv) {
     while (!g_stop.load() && !g_logoff_requested.load()) {
         CallbackSummary s;
         drain_callbacks(c, &s, &log_budget);
+        sb_pump(c, libPath);
         bool now_logged = c.logged_on();
         if (was_logged && !now_logged) {
             char b[120];
@@ -922,6 +1134,7 @@ int main(int argc, char** argv) {
     g_status.close_now();
     g_stop.store(true);
     if (reader.joinable()) reader.join();
+    if (sb_thread.joinable()) sb_thread.join();
     LOGI("bye (uptime %llds)", (long long)((now_ms() - t0) / 1000));
     // _exit: the client's own threads are still alive; a normal exit would run their static
     // destructors under them (the crash every embedded-Steam launcher surveyed avoids this way).

@@ -48,6 +48,9 @@ public final class AppSteamLauncher {
     public static final String STEAM_DIR_WIN = "C:\\Program Files (x86)\\Steam";
     public static final String STEAM3_MASTER = "127.0.0.1:57343";
     public static final String STEAM_CLIENT_SERVICE = "127.0.0.1:57344";
+    /** Loopback port of the host's server-list service (lsteamclient's Bannerlator server browser
+     *  asks it for the master-server list; Valve's Android client has no working in-game browser). */
+    public static final int SERVER_BROWSER_PORT = 57345;
     /** Host log file name inside the per-launch state dir (collected by SteamLiteLogCollector). */
     public static final String HOST_LOG_NAME = "steam_host.log";
 
@@ -175,6 +178,9 @@ public final class AppSteamLauncher {
             hostExtra.put("STEAMVIDEOTOKEN", "1");
             hostExtra.put("SteamOS", "1");
             hostExtra.put("ENABLE_VK_LAYER_VALVE_steam_overlay_1", "0");
+            hostExtra.put("BL_SB_PORT", String.valueOf(SERVER_BROWSER_PORT));
+            String sbMode = System.getProperty("bl.sb.mode", "");
+            if (!sbMode.isEmpty()) hostExtra.put("BL_SB_MODE", sbMode);
             SteamHost.Config hostCfg = new SteamHost.Config(appId, hostHome, hostLog, STEAM3_MASTER,
                     STEAM_CLIENT_SERVICE, agentPort, persona, hostExtra);
 
@@ -196,6 +202,10 @@ public final class AppSteamLauncher {
             env.put("STEAMVIDEOTOKEN", "1");
             env.put("Steam3Master", STEAM3_MASTER);
             env.put("SteamClientService", STEAM_CLIENT_SERVICE);
+            // B2. Bannerlator server browser (layer v13+): Valve's Android client half hangs the game on
+            //     the first Request*ServerList, so lsteamclient serves its own browser fed by the host.
+            env.put("BL_SERVER_BROWSER", "1");
+            env.put("BL_SB_PORT", String.valueOf(SERVER_BROWSER_PORT));
             // C. Wine-side Steam identity expected by steam_api / Steamworks games
             env.put("SteamUser", username);
             env.put("SteamAppUser", username);
