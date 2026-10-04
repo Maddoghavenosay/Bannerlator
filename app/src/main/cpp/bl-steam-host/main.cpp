@@ -370,6 +370,73 @@ int drain_callbacks(Client& c, CallbackSummary* out, int* log_budget) {
     return n;
 }
 
+// ── Server-browser probe (experiment, opt-in via <state>/bl_sb_test) ─────────────────────────
+// Asks Valve's library for the PUBLIC ISteamMatchmakingServers inside THIS process (the client
+// engine lives here) and requests the internet list for the app. Inside the game the same call
+// hangs on an uninitialised thread-sync object; if it works here, the game-side bridge can proxy
+// the browser to the host instead of running Valve's dead in-process copy.
+namespace {
+struct SBProbeResponse {
+    struct VT {
+        void (*ServerResponded)(SBProbeResponse*, void*, int);
+        void (*ServerFailedToRespond)(SBProbeResponse*, void*, int);
+        void (*RefreshComplete)(SBProbeResponse*, void*, unsigned);
+    };
+    const VT* vt;
+    int responded = 0, failed = 0; bool complete = false; unsigned result = 0;
+    static void s_responded(SBProbeResponse* self, void*, int i) { self->responded++; if (self->responded <= 3) LOGI("sb-probe: ServerResponded #%d", i); }
+    static void s_failed(SBProbeResponse* self, void*, int) { self->failed++; }
+    static void s_complete(SBProbeResponse* self, void*, unsigned r) { self->complete = true; self->result = r; LOGI("sb-probe: RefreshComplete result=%u", r); }
+    static const VT kVT;
+    SBProbeResponse() : vt(&kVT) {}
+};
+const SBProbeResponse::VT SBProbeResponse::kVT = { &SBProbeResponse::s_responded, &SBProbeResponse::s_failed, &SBProbeResponse::s_complete };
+
+#pragma pack(push, 4)
+struct sb_gameserveritem_t {
+    uint16_t connPort, queryPort; uint32_t ip;
+    int32_t ping; int8_t hadResponse, doNotRefresh;
+    char gameDir[32], map[32], gameDesc[64]; uint8_t pad0[2];
+    uint32_t appId; int32_t players, maxPlayers, bots; int8_t password, secure; uint8_t pad1[2];
+    uint32_t timeLastPlayed; int32_t serverVersion; char name[64], tags[128]; uint64_t steamId;
+};
+#pragma pack(pop)
+}
+
+bool vtable_sane(void* obj, int slots_to_check, const char* what, const std::string& libPath);
+static void server_browser_probe(Client& c, unsigned appId, const std::string& libPath) {
+    using GetIfaceFn = void* (*)(void*, int, int, const char*);
+    int err = 0;
+    void* sc = c.CreateInterface("SteamClient020", &err);
+    if (!sc) sc = c.CreateInterface("SteamClient017", &err);
+    LOGI("sb-probe: ISteamClient = %p (err=%d)", sc, err);
+    if (!sc || !vtable_sane(sc, 14, "ISteamClient", libPath)) return;
+    // ISteamClient public vtable: ... GetISteamUtils(9) GetISteamMatchmaking(10) GetISteamMatchmakingServers(11)
+    void* mms = c.vslot<GetIfaceFn>(sc, 11)(sc, c.user, c.pipe, "SteamMatchMakingServers002");
+    LOGI("sb-probe: ISteamMatchmakingServers002 = %p", mms);
+    if (!mms || !vtable_sane(mms, 17, "ISteamMatchmakingServers", libPath)) return;
+    using ReqFn = void* (*)(void*, unsigned, void*, unsigned, void*);
+    using RelFn = void (*)(void*, void*);
+    using CountFn = int (*)(void*, void*);
+    using DetailsFn = sb_gameserveritem_t* (*)(void*, void*, int);
+    SBProbeResponse resp;
+    void* h = c.vslot<ReqFn>(mms, 0)(mms, appId, nullptr, 0, &resp);
+    LOGI("sb-probe: RequestInternetServerList(%u) -> %p", appId, h);
+    if (!h) return;
+    long long until = now_ms() + 20000;
+    int budget = 0;
+    while (now_ms() < until && !resp.complete && !g_stop.load()) { drain_callbacks(c, nullptr, &budget); usleep(50 * 1000); }
+    int n = c.vslot<CountFn>(mms, 11)(mms, h);
+    LOGI("sb-probe: done complete=%d responded=%d failed=%d count=%d", resp.complete ? 1 : 0, resp.responded, resp.failed, n);
+    for (int i = 0; i < n && i < 3; ++i) {
+        sb_gameserveritem_t* it = c.vslot<DetailsFn>(mms, 7)(mms, h, i);
+        if (it) LOGI("sb-probe: [%d] %u.%u.%u.%u:%u ping=%d %d/%d map=%s name=%s", i,
+                     (it->ip >> 24) & 255, (it->ip >> 16) & 255, (it->ip >> 8) & 255, it->ip & 255, it->connPort,
+                     it->ping, it->players, it->maxPlayers, it->map, it->name);
+    }
+    c.vslot<RelFn>(mms, 6)(mms, h);
+}
+
 const char* eresult_name(int e) {
     switch (e) {
         case 1: return "OK";
@@ -784,6 +851,11 @@ int main(int argc, char** argv) {
     g_status.send_line("{\"ev\":\"host_ready\"}");
     LOGI("serving Steam3Master=%s SteamClientService=%s (ready after %lld ms)", s3m.c_str(), scs.c_str(),
          (long long)(now_ms() - t0));
+
+    if (access((home + "/../bl_sb_test").c_str(), F_OK) == 0) {
+        LOGI("sb-probe: start (appId %u)", appId);
+        server_browser_probe(c, appId, libPath);
+    }
 
     // ── 9. command reader (app → host) ─────────────────────────────────────────────────────
     std::thread reader([&]() {
