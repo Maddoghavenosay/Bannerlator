@@ -95,8 +95,12 @@ object SteamHost {
         env["PATH"] = "/system/bin"
         env["HOME"] = cfg.home.absolutePath
         env["TMPDIR"] = File(app.filesDir, "imagefs/usr/tmp").absolutePath
-        // libc++_shared.so next to the binary + Valve's siblings next to libsteamclient.so.
-        env["LD_LIBRARY_PATH"] = bin.parentFile!!.absolutePath + ":" + lib.parentFile!!.absolutePath
+        // Valve's siblings next to libsteamclient.so — and NOTHING else. The host links libc++
+        // statically and needs only libc/libdl/libm/liblog, so the app's own nativeLibraryDir
+        // must stay off the path: it ships a liblzma.so (archive tools) that would shadow
+        // Android's /system/lib64/liblzma.so for the system libunwindstack that Valve's libs pull
+        // in, and the preloads then fail with `cannot locate symbol "Xzs_Construct"`.
+        env["LD_LIBRARY_PATH"] = lib.parentFile!!.absolutePath
         env["BL_STEAM_HOST_LIB"] = lib.absolutePath
         env["BL_STEAM_HOST_HOME"] = cfg.home.absolutePath
         env["BL_STEAM_HOST_CACERT"] = cacert
