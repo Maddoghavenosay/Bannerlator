@@ -80,7 +80,7 @@ layout, so the slots were read off `steamclient64.dll` itself:
 | `ActivateConfig` | 40 (+0x140) | `(0, appid, true)` |
 | `EnumerateControllers` | 102 (+0x330) | `(0, 0)` |
 
-Pinned vftable RVAs (`CSteamControllerSerialized`): **0x13172b8** for 10.52.09.55 (linked 2026-03-13,
+Pinned vftable RVAs for 10.52.09.55 (linked 2026-03-13, the steamlite-v1 build): **0x12f2360** = `IClientControllerSerializedMap` (the proxy class in-process callers actually receive — device-observed), 0x13172b8 = `CSteamControllerSerialized` (the implementation);
 md5 `8a1a7892…`, the steamlite-v1 build); 0x12ee7e8 for 10.41.26.25 (2026-01-29). A new client build
 must be re-read before its RVA is added.
 

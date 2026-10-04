@@ -53,10 +53,13 @@ static const int kVtCtrl_LoadConfigFromVDFString          = 38;   // (0, appid, 
 static const int kVtCtrl_ActivateConfig                   = 40;   // (0, appid, true)
 static const int kVtCtrl_EnumerateControllers             = 102;  // (0, 0)
 
-// CSteamControllerSerialized vftable RVAs of the client builds the slots above were read from.
+// Vftable RVAs the pin accepts. In-process callers (us) get the client's own proxy class
+// `IClientControllerSerializedMap` (each slot serialises the call into a message for the controller
+// thread); its vftable has the interface's slot order (157 entries = 2 + the 155 named methods).
+// `CSteamControllerSerialized` is the implementation behind it. Both read off the same build.
 static const uintptr_t kKnownVftRva[] = {
-    0x13172b8,   // steamclient64.dll 10.52.09.55 (linked 2026-03-13) — the SteamLite package build
-    0x12ee7e8,   // steamclient64.dll 10.41.26.25 (linked 2026-01-29) — cross-check build
+    0x12f2360,   // IClientControllerSerializedMap — steamclient64.dll 10.52.09.55 (linked 2026-03-13), the SteamLite package build (device-observed)
+    0x13172b8,   // CSteamControllerSerialized   — same build
 };
 
 static const int kCbSteamInputDeviceConnected     = 2801;
