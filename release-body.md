@@ -20,6 +20,7 @@ Run Windows apps and games on Android — no PC and no root required.
 - **VAC:** Headless Steam is **not** VAC-protected (Valve's Android client has no VAC runtime). VAC-secured servers may still admit you; for a VAC session use **SteamLite**.
 - **Box64EC (experimental, unofficial):** a selectable x86-64 translator on arm64ec containers, built by The412Banner from the box64 project's work-in-progress ARM64EC target.
 - **Fixes:** a stray container folder no longer crashes the app at launch; a quick relaunch no longer reports "Steam client must be running".
+- **Four APKs:** a new **AnTuTu** build (`com.antutu.ABenchMark`) joins standard, PuBG and Ludashi — same app, a different package name for devices that key performance modes on it.
 
 <!-- update-summary: Bannerlator 3.1.6-pre1: Headless Steam, a second online launch option for Steam games on the app's own signed-in session (needs the new v13 Proton layers from the catalog) with a working server browser; Box64EC experimental x86-64 translator picker; Headless Steam log in the Log Manager; launch fixes. -->
 
@@ -58,6 +59,10 @@ All eight **Proton 11** layers (Proton 11.0-2, 11.0-1, GE-Proton 11.0-3 / 5 / 6 
 arm64ec containers gain an **Emulator (64-bit)** picker (container settings, and per game under Advanced → Box64EC) that switches the x86-64 translator between **FEXCore** (unchanged default) and **Box64EC**. The old picker is now labelled **Emulator (32-bit)**.
 
 > ⚠️ **Box64EC components are experimental and unofficial.** They are built by The412Banner from the [box64](https://github.com/ptitSeb/box64) project's work-in-progress ARM64EC target and [airidosas252's pull request #4480](https://github.com/ptitSeb/box64/pull/4480), with our own hookup of the fast engine; they are **not** releases of the box64 project. Nothing installs by itself: the picker only appears once you install a Box64EC component from the catalog. Expect games that run slower or not at all; FEXCore remains the supported path.
+
+## 📦 A fourth APK: AnTuTu
+
+Every release now ships four builds of the same app under different package names — **standard** (`com.winlator.banner`), **PuBG** (`com.tencent.ig`), **Ludashi** (`com.ludashi.benchmark`) and, new, **AnTuTu** (`com.antutu.ABenchMark`). Take standard unless your device gives a specific package a performance mode; the in-app updater follows whichever one you installed.
 
 ## 🛠️ Fixes
 
