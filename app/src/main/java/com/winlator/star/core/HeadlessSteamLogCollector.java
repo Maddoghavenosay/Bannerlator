@@ -260,8 +260,9 @@ public final class HeadlessSteamLogCollector {
                     + "x 'invalid name/address:port string provided to BSetIpPortFromName') — calls routed through "
                     + "the service, the in-game server browser first, hang. The host must start it on ip:port."));
         else if (svc.find())
-            rows.add(svc.group(1).contains(":") ? pass("CLIENT SERVICE", "steamservice started on " + svc.group(1))
-                    : warn("CLIENT SERVICE", "steamservice started with a bare name (" + svc.group(1) + ") — expected ip:port"));
+            rows.add(svc.group(1).matches("SteamClientService_\\d+")
+                    ? pass("CLIENT SERVICE", "steamservice registered in-process as " + svc.group(1) + " (the name the client looks up)")
+                    : warn("CLIENT SERVICE", "steamservice started as '" + svc.group(1) + "' — the client looks up SteamClientService_<pid>"));
         else if (pid.find(0)) rows.add(warn("CLIENT SERVICE", "no SteamService_StartThread line in the host log"));
 
         // 9. Logon
@@ -406,8 +407,9 @@ public final class HeadlessSteamLogCollector {
      * shared {@link LogcatCapture#capture} (--pid=app) never sees.
      */
     private static String captureBridgeLogcat() {
-        String[] cmd = { "logcat", "-d", "-t", "4000", "-v", "threadtime",
-                "lsteamclient:V", "BlSteamHost:V", "BH_APPSTEAM:V", "BH_STEAMHOST:V", "*:S" };
+        // No tag filter: filtered by BRIDGE_TAGS afterwards, so a tag spelled differently by one
+        // of the processes still lands here. 8000 lines covers a launch comfortably.
+        String[] cmd = { "logcat", "-d", "-t", "8000", "-v", "threadtime" };
         try {
             Process p = Runtime.getRuntime().exec(cmd);
             StringBuilder sb = new StringBuilder();
