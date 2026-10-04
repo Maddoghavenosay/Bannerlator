@@ -105,18 +105,21 @@ public final class HeadlessSteamLogCollector {
             }
             String since = SteamLiteLogCollector.sessionStart(steamRaw.get("gameprocess_log.txt"), appId);
 
-            List<String> bridgeLines = bridgeLines(logcatText);
+            List<String> bridgeLines = bridgeLines(captureBridgeLogcat());
+            if (bridgeLines.isEmpty()) bridgeLines = bridgeLines(logcatText);
+            String wineText = SteamLiteLogCollector.readTail(new File(perGameLogDir, "wine_debug.log"), 1L * 1024 * 1024);
             List<String> engineLines = SteamLiteLogCollector.engineLines(context);
             String sessionTail = engineLines.isEmpty() ? null : SteamLiteLogCollector.readEngineSessionTail(context);
 
             StringBuilder out = new StringBuilder(8 * 1024);
             SteamLiteLogCollector.appendSummary(out, context, gameName, appId, info, null, null);
+            replaceFirst(out, "===== SteamLite (Steam client) log =====", "===== Headless Steam (app session host) log =====");
             out.append("Launch mode: Headless Steam — the game ran on the app's own Steam session "
                     + "(bl-steam-host + Valve androidarm64 libsteamclient.so, reached through the Proton "
                     + "layer's lsteamclient bridge; no in-container Steam client)\n");
             if (!engineLines.isEmpty()) out.append("Steam engine: Rust (libblsteam.so) — app-side session log included\n");
 
-            appendChecklist(out, launch, hostText, agentEvents, steamRaw, bridgeLines, since);
+            appendChecklist(out, launch, hostText, agentEvents, steamRaw, bridgeLines, since, wineText);
             appendLaunchPlan(out, launch);
             appendHostEvents(out, agentEvents);
             appendHostLog(out, hostText);
@@ -164,10 +167,12 @@ public final class HeadlessSteamLogCollector {
     private static final Pattern BRIDGE_INIT = Pattern.compile("lsteamclient: init: dlopen");
     private static final Pattern BRIDGE_FAIL = Pattern.compile("(?i)lsteamclient:.*(fail|error|cannot|unable)");
     private static final Pattern RECONNECT_LOOP = Pattern.compile("(?i)ONLINE -> CONNECTING|presence: in game \\d+ \\(reconnect\\)");
+    private static final Pattern SERVICE_START = Pattern.compile("SteamService_StartThread\\(\"([^\"]*)\"\\)");
+    private static final Pattern SERVICE_PIPE_FAIL = Pattern.compile("invalid name/address:port string provided to BSetIpPortFromName");
 
     private static void appendChecklist(StringBuilder out, Launch launch, String hostText,
                                         List<String> events, Map<String, String> steamRaw,
-                                        List<String> bridgeLines, String since) {
+                                        List<String> bridgeLines, String since, String wineText) {
         out.append("\n===== CHECKLIST — every step of a Headless Steam launch, in order =====\n");
         List<String> rows = new ArrayList<>();
         String host = hostText != null ? hostText : "";
@@ -243,6 +248,22 @@ public final class HeadlessSteamLogCollector {
         }
         if (VTABLE_FAIL.matcher(host).find()) rows.add(fail("VTABLE", "a vtable slot did not resolve into libsteamclient.so — the slot table does not match this Valve build"));
 
+        // 8b. Valve's client service (steamservice.so): must LISTEN on SteamClientService (:57344).
+        //     Logon/cloud/stats bypass it; the in-game server browser (and anything else the client
+        //     routes through the service) hangs when it never bound.
+        Matcher svc = SERVICE_START.matcher(host);
+        int pipeFails = 0;
+        Matcher pf2 = SERVICE_PIPE_FAIL.matcher(host);
+        while (pf2.find()) pipeFails++;
+        if (pipeFails > 0)
+            rows.add(fail("CLIENT SERVICE", "Valve's client service never bound its endpoint (" + pipeFails
+                    + "x 'invalid name/address:port string provided to BSetIpPortFromName') — calls routed through "
+                    + "the service, the in-game server browser first, hang. The host must start it on ip:port."));
+        else if (svc.find())
+            rows.add(svc.group(1).contains(":") ? pass("CLIENT SERVICE", "steamservice started on " + svc.group(1))
+                    : warn("CLIENT SERVICE", "steamservice started with a bare name (" + svc.group(1) + ") — expected ip:port"));
+        else if (pid.find(0)) rows.add(warn("CLIENT SERVICE", "no SteamService_StartThread line in the host log"));
+
         // 9. Logon
         Matcher lo = LOGGED_ON.matcher(host);
         Matcher lf = LOGON_FAILED.matcher(host);
@@ -283,6 +304,16 @@ public final class HeadlessSteamLogCollector {
         boolean tracked = gameproc != null && GAME_TRACKED.matcher(since != null ? after(gameproc, since) : gameproc).find();
         if (tracked) rows.add(pass("GAME ATTACHED", "Valve's client tracked the game in its games list (gameprocess_log)"));
         else if (lo.find(0)) rows.add(warn("GAME ATTACHED", "no games-list change in gameprocess_log — the game may not have connected to the host"));
+
+        // 13b. In-game signatures (wine_debug.log, this run)
+        String wine = wineText != null ? wineText : "";
+        if (wine.contains("RequestInternetServerList") || wine.contains("RequestLANServerList"))
+            rows.add(info("SERVER BROWSER", "the game opened the server browser this session"));
+        if (wine.contains("Thread synchronization object is unuseable"))
+            rows.add(fail("IN-GAME CLIENT", "Valve's in-game half reported 'Thread synchronization object is unuseable' "
+                    + "(tier0 threadtools) — the game hangs after this; seen when the client service is not listening"));
+        if (wine.contains("steamclient64.dll") && wine.contains("failed to load"))
+            rows.add(fail("IN-GAME CLIENT", "steamclient64.dll failed to load in the game — the bridge did not take over"));
 
         // 14. Engine presence gate
         boolean loop = false;
@@ -363,6 +394,34 @@ public final class HeadlessSteamLogCollector {
     }
 
     private static final Pattern BRIDGE_TAGS = Pattern.compile("\\b(lsteamclient|BH_APPSTEAM|BH_STEAMHOST|BlSteamHost|SteamHost)\\b");
+
+    private static void replaceFirst(StringBuilder sb, String from, String to) {
+        int i = sb.indexOf(from);
+        if (i >= 0) sb.replace(i, i + from.length(), to);
+    }
+
+    /**
+     * Our own logcat read, tag-filtered and NOT limited to the app's pid: the bridge logs from the
+     * game process and the host logs from the host process, both other pids of our uid, which the
+     * shared {@link LogcatCapture#capture} (--pid=app) never sees.
+     */
+    private static String captureBridgeLogcat() {
+        String[] cmd = { "logcat", "-d", "-t", "4000", "-v", "threadtime",
+                "lsteamclient:V", "BlSteamHost:V", "BH_APPSTEAM:V", "BH_STEAMHOST:V", "*:S" };
+        try {
+            Process p = Runtime.getRuntime().exec(cmd);
+            StringBuilder sb = new StringBuilder();
+            try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()))) {
+                String line;
+                while ((line = r.readLine()) != null) sb.append(line).append('\n');
+            }
+            p.destroy();
+            return sb.toString();
+        } catch (Exception e) {
+            Log.w(TAG, "bridge logcat capture failed", e);
+            return null;
+        }
+    }
 
     /** The app's logcat lines that belong to this feature: the game-side bridge + host + launcher tags. */
     private static List<String> bridgeLines(String logcatText) {
