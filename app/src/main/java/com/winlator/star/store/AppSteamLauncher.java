@@ -149,6 +149,17 @@ public final class AppSteamLauncher {
                 File unix = new File(wineLibDir, "aarch64-unix/lsteamclient.so");
                 layerOk = pe.isFile() && unix.isFile();
                 Log.i(TAG, "prepare: Proton layer lsteamclient " + (layerOk ? "PRESENT" : "ABSENT (" + pe + " / " + unix + ")"));
+                // The browser's x86-64 front (layer v13+) is loaded by lsteamclient.dll by bare name,
+                // which Wine resolves in the prefix's system32 — stage it there (refreshed when the layer's
+                // copy changes). Without it the browser still works, only slower (ARM64EC calls).
+                File front = new File(wineLibDir, "aarch64-windows/blsteambrowser.dll");
+                File s32 = new File(driveC, "windows/system32/blsteambrowser.dll");
+                try {
+                    if (front.isFile() && (!s32.isFile() || s32.length() != front.length() || s32.lastModified() < front.lastModified())) {
+                        FileUtils.copy(front, s32);
+                        Log.i(TAG, "prepare: staged blsteambrowser.dll into system32");
+                    }
+                } catch (Throwable t) { Log.w(TAG, "prepare: blsteambrowser.dll staging failed", t); }
             }
 
             // ── 4. Stock-Proton fallback path: <HOME>/.steam/sdkarm64/steamclient.so → Valve lib ──
