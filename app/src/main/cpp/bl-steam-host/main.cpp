@@ -866,7 +866,10 @@ int main(int argc, char** argv) {
     Client c;
     c.slots = slots;
     c.lib = dlopen(libPath.c_str(), RTLD_NOW | RTLD_GLOBAL);
-    if (!c.lib) return fail(4, "host_failed", std::string("dlopen failed: ") + (dlerror() ? dlerror() : "?"));
+    if (!c.lib) {
+        const char* e = dlerror(); // read once: a second dlerror() returns NULL (tombstone_21: strlen(NULL))
+        return fail(4, "host_failed", std::string("dlopen failed: ") + (e ? e : "?"));
+    }
     LOGI("dlopen(libsteamclient.so) OK");
 
 #define RESOLVE(name) c.name = reinterpret_cast<decltype(c.name)>(dlsym(c.lib, #name))
