@@ -29,7 +29,8 @@ import java.io.File
  *   "apk": {
  *     "com.winlator.banner":    "Bannerlator-1.8-standard.apk",
  *     "com.ludashi.benchmark":  "Bannerlator-1.8-ludashi.apk",
- *     "com.tencent.ig":         "Bannerlator-1.8-pubg.apk"
+ *     "com.tencent.ig":         "Bannerlator-1.8-pubg.apk",
+ *     "com.antutu.ABenchMark":  "Bannerlator-1.8-antutu.apk"
  *   }
  * }
  */

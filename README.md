@@ -77,8 +77,8 @@ Before any **stable release** is published, all changes are **manually debugged 
 
 | | |
 |---|---|
-| **App label** | `Bannerlator Bionic` (standard) · `Bannerlator Bionic PuBG` (pubg) · `Bannerlator Bionic Ludashi` (ludashi) |
-| **Packages** | `com.winlator.banner` (standard) · `com.tencent.ig` (pubg) · `com.ludashi.benchmark` (ludashi) |
+| **App label** | `Bannerlator Bionic` (standard) · `Bannerlator Bionic PuBG` (pubg) · `Bannerlator Bionic Ludashi` (ludashi) · `Bannerlator Bionic AnTuTu` (antutu) |
+| **Packages** | `com.winlator.banner` (standard) · `com.tencent.ig` (pubg) · `com.ludashi.benchmark` (ludashi) · `com.antutu.ABenchMark` (antutu) |
 | **Version** | Bannerlator **V 3.1.6-pre1** — built from Star **marcescence** (`versionName 3.1.6-pre1`, `versionCode 95`) |
 | **Android SDK** | `compileSdk 34` · `targetSdk 28` · `minSdk 26` (Android 8.0+) |
 | **Lineage** | Winlator → cmod → Bionic Nightly → Star Bionic → **marcescence** → **Bannerlator** |
@@ -167,7 +167,7 @@ Every report gets its own **public discussion thread**. You can reply as the ori
 
 **Then:**
 
-1. **Download and install the APK.** There are three — just take **standard** unless you specifically use the pubg or ludashi build already.
+1. **Download and install the APK.** There are four — just take **standard** unless you specifically use the pubg, ludashi or antutu build already.
 2. **Open the app and go to Contents → Linux Runtime → Download.** This is about **755 MB**, once. It is not in the APK, so this step is required.
 3. When it finishes, a **Steam (Linux)** entry appears in your games list. **Tap it.**
 4. **First launch takes a few minutes.** A loading screen first downloads **Proton Experimental (ARM64)** (about 400 MB), then lets Steam download and update itself. There's a clock on screen so you know it's still working.
@@ -566,7 +566,7 @@ Besides the built-in download catalog, you can add **any** ReShade effect yourse
 Android/data/com.winlator.banner/files/ReShade/
 ```
 
-> 📁 That path is for the **Standard** build. For the other builds, swap the package name: **PuBG** → `Android/data/com.tencent.ig/files/ReShade/` · **Ludashi** → `Android/data/com.ludashi.benchmark/files/ReShade/`.
+> 📁 That path is for the **Standard** build. For the other builds, swap the package name: **PuBG** → `Android/data/com.tencent.ig/files/ReShade/` · **Ludashi** → `Android/data/com.ludashi.benchmark/files/ReShade/` · **AnTuTu** → `Android/data/com.antutu.ABenchMark/files/ReShade/`.
 
 **2. Make one folder per effect.** Name the folder whatever you want the effect to be **called in the menu** — for example `MySepia`.
 

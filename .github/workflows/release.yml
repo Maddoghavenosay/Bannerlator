@@ -69,7 +69,7 @@ jobs:
           short-notes.txt
         retention-days: 7
 
-  # Phase 1 — build all 3 flavors in parallel (reusable matrix build).
+  # Phase 1 — build all 4 flavors in parallel (reusable matrix build).
   build:
     needs: notes
     uses: ./.github/workflows/_build.yml
@@ -91,7 +91,7 @@ jobs:
       with:
         pattern: Bannerlator-${{ inputs.release_number }}-*
         path: dist
-        merge-multiple: true   # all 3 flavor APKs land flat in dist/
+        merge-multiple: true   # all 4 flavor APKs land flat in dist/
 
     - name: List downloaded APKs
       run: ls -la dist/
@@ -128,8 +128,9 @@ jobs:
           --arg std "Bannerlator-${N}-standard.apk" \
           --arg lud "Bannerlator-${N}-ludashi.apk" \
           --arg pbg "Bannerlator-${N}-pubg.apk" \
+          --arg atu "Bannerlator-${N}-antutu.apk" \
           '{versionCode:$vc, versionName:$vn, notes:$notes, minSupported:1,
-            apk:{"com.winlator.banner":$std,"com.ludashi.benchmark":$lud,"com.tencent.ig":$pbg}}' \
+            apk:{"com.winlator.banner":$std,"com.ludashi.benchmark":$lud,"com.tencent.ig":$pbg,"com.antutu.ABenchMark":$atu}}' \
           > update.json
         echo "Generated update.json:"; cat update.json
 
@@ -146,6 +147,7 @@ jobs:
           dist/Bannerlator-${{ inputs.release_number }}-standard.apk
           dist/Bannerlator-${{ inputs.release_number }}-ludashi.apk
           dist/Bannerlator-${{ inputs.release_number }}-pubg.apk
+          dist/Bannerlator-${{ inputs.release_number }}-antutu.apk
           update.json
         prerelease: ${{ inputs.make_prerelease == 'true' }}
         # Only a stable cut becomes "latest"; pre-releases never do, so the

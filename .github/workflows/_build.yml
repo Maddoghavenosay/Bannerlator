@@ -1,6 +1,6 @@
 name: _build (reusable matrix build)
 
-# MATRIX build (drafted 2026-07-12): each flavor (standard/ludashi/pubg) builds in
+# MATRIX build (drafted 2026-07-12): each flavor (standard/ludashi/pubg/antutu) builds in
 # its OWN parallel job. Because each runner now packages exactly ONE ~588MB APK, the
 # OOM that forced `--no-parallel --max-workers=1` in the old single-job build is gone
 # — each job uses full workers. Wall-clock ≈ one flavor's build (~5-7min) instead of
@@ -51,6 +51,7 @@ jobs:
           - { id: standard, task: assembleStandardRelease }
           - { id: ludashi,  task: assembleLudashiRelease  }
           - { id: pubg,     task: assemblePubgRelease     }
+          - { id: antutu,   task: assembleAntutuRelease   }
 
     name: build (${{ matrix.flavor.id }})
 

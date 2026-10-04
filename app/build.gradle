@@ -169,6 +169,19 @@ android {
         cmake {
             path 'src/main/cpp/CMakeLists.txt'
         }
+        antutu {
+            dimension "version"
+            applicationId "com.antutu.ABenchMark"
+            resValue "string", "app_name", "Bannerlator Bionic AnTuTu"
+        }
+    }
+
+    ndkVersion '29.0.14206865'
+
+    externalNativeBuild {
+        cmake {
+            path 'src/main/cpp/CMakeLists.txt'
+        }
     }
 
     packagingOptions {
