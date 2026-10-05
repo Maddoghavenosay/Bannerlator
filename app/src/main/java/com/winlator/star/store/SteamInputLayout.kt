@@ -81,12 +81,19 @@ object SteamInputLayout {
         return null
     }
 
-    /** The client's first-layout seed per `steamcontrollertemplateindex`; everything unknown → gamepad + mouse. */
+    /**
+     * Template per `steamcontrollertemplateindex`. Bias towards the plain **gamepad** template: with the
+     * layout active, Steam injects whatever the template maps — and a mouse/keyboard template turns the
+     * right stick into a mouse and buttons into keys, which a game that also reads the pad directly then
+     * receives twice (on Windows the overlay hides the raw pad; we run without it). The mouse template is
+     * used only for indexes that mean a keyboard-and-mouse game. Device note: L4D2 (index 1) froze mid-match
+     * under the gamepad+mouse template while buttons were mashed; a pad-only layout avoids the double input.
+     */
     private fun templateFor(index: Int): String = when (index) {
-        2, 12 -> "controller_xboxone_gamepad_fps"
-        6 -> "controller_xboxone_wasd"
-        4, 5 -> "controller_xboxone_gamepad_joystick"
-        else -> "gamepad+mouse"
+        6 -> "controller_xboxone_wasd"               // keyboard (WASD) + mouse game
+        3 -> "gamepad+mouse"                         // mouse-driven game
+        4, 5 -> "controller_xboxone_gamepad_joystick" // twin-stick
+        else -> "controller_xboxone_gamepad_fps"      // 1/2/12/unknown: the pad stays a pad
     }
 
     /** Walks [rel] (either slash style) under [root] matching each component case-insensitively. */
