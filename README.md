@@ -79,7 +79,7 @@ Before any **stable release** is published, all changes are **manually debugged 
 |---|---|
 | **App label** | `Bannerlator Bionic` (standard) · `Bannerlator Bionic PuBG` (pubg) · `Bannerlator Bionic Ludashi` (ludashi) · `Bannerlator Bionic AnTuTu` (antutu) |
 | **Packages** | `com.winlator.banner` (standard) · `com.tencent.ig` (pubg) · `com.ludashi.benchmark` (ludashi) · `com.antutu.ABenchMark` (antutu) |
-| **Version** | Bannerlator **V 3.1.6-pre1** — built from Star **marcescence** (`versionName 3.1.6-pre1`, `versionCode 95`) |
+| **Version** | Bannerlator **V 3.1.6-pre2** — built from Star **marcescence** (`versionName 3.1.6-pre2`, `versionCode 96`) |
 | **Android SDK** | `compileSdk 34` · `targetSdk 28` · `minSdk 26` (Android 8.0+) |
 | **Lineage** | Winlator → cmod → Bionic Nightly → Star Bionic → **marcescence** → **Bannerlator** |
 
@@ -111,6 +111,7 @@ Every report gets its own **public discussion thread**. You can reply as the ori
 - [🤖 AI Disclaimer](#-ai-disclaimer)
 - [ℹ️ Information](#ℹ️-information)
 - [🐛 Report a Mali GPU Issue](#-report-a-mali-gpu-game-issue)
+- [🆕 SteamLite Steam Input & Wayland xdg-shell v3 (3.1.6-pre2)](#-steamlite-steam-input--wayland-xdg-shell-v3-316-pre2)
 - [🎮 Headless Steam & Server Browser (3.1.6)](#-headless-steam--server-browser-316)
 - [🎬 Cutscenes & Codecs (3.1.5)](#-cutscenes--codecs-315)
 - [⚡ Fast OpenGL (3.1.4)](#-fast-opengl-314)
@@ -127,6 +128,14 @@ Every report gets its own **public discussion thread**. You can reply as the ori
 - [📄 License](#-license)
 
 ---
+
+## 🆕 SteamLite Steam Input & Wayland xdg-shell v3 (3.1.6-pre2)
+
+**[3.1.6-pre2](https://github.com/The412Banner/Bannerlator/releases/tag/3.1.6-pre2) adds Steam Input for SteamLite and xdg-shell version 3 to the Wayland compositor.**
+
+- **SteamLite Steam Input** — a per-game toggle and layout pick in the SteamLite launch options hands the controller to the game through Valve's own Steam Input layer (needs the **SteamLite v8** package, offered by the app). Keep it off for games that already read a controller themselves; the default layout keeps the pad a pad.
+- **Wayland xdg-shell v3** — the compositor now implements real positioners, pop-up windows and `reposition` and advertises version 3, which the Wayland driver of the new **Proton-CachyOS 11.0-20261005** layer requires to open any window. Layers asking for version 1 or 2 are unchanged.
+- **Proton-CachyOS 11.0-20261005** (arm64ec + x86_64, v13) is in the catalog — on app builds before 3.1.6-pre2 use it with X11.
 
 ## 🎮 Headless Steam & Server Browser (3.1.6)
 
