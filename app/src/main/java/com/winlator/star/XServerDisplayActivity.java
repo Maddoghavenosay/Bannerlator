@@ -1932,6 +1932,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
         com.winlator.star.core.PreloaderState.setOnOpenLog(() -> runOnUiThread(this::openLogFolder));
         com.winlator.star.core.PreloaderState.setOnCancel(() -> runOnUiThread(this::exit));
         preferences = PreferenceManager.getDefaultSharedPreferences(this);
+        menuButtonKeyCode = com.winlator.star.ui.components.GlobalControllerPrefs.getMenuButtonKeyCode(this);
 
         cursorLock = preferences.getBoolean("cursor_lock", false);
 
@@ -7620,6 +7621,37 @@ public class XServerDisplayActivity extends AppCompatActivity {
         linuxSteamButtons = layer;
         rootView.addView(layer, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+    }
+
+    // Input Controls › Device › Menu button: one button on the device's own pad opens the side menu
+    // (handhelds whose built-in controls have no Back key). Read once per session.
+    private int menuButtonKeyCode;
+    private boolean menuButtonHeld;
+
+    private boolean menuButtonEvent(KeyEvent event) {
+        int kc = event.getKeyCode();
+        if (menuButtonKeyCode <= 0 || kc != menuButtonKeyCode || kc == KeyEvent.KEYCODE_BUTTON_B) return false;
+        // A Back chosen as the menu button means the device's own Back key (KEY_BACK, scan 158), never
+        // the Back Android makes out of an unhandled B: that fallback keeps B's scan code, and some
+        // vendor dispatchers drop its FLAG_FALLBACK.
+        if (kc == KeyEvent.KEYCODE_BACK && ((event.getFlags() & KeyEvent.FLAG_FALLBACK) != 0
+                || (event.getScanCode() >= 0x130 && event.getScanCode() <= 0x13f))) return false;
+        // In a Linux Steam session Guide is the Steam button.
+        if (kc == KeyEvent.KEYCODE_BUTTON_MODE && isLinuxSteamSession()) return false;
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            if (event.getRepeatCount() > 0) return menuButtonHeld;
+            // A controller-profile binding for the same button wins.
+            if (inputControlsView != null && inputControlsView.onKeyEvent(event)) return true;
+            menuButtonHeld = true;
+            openXServerDrawer();
+            return true;
+        }
+        if (event.getAction() == KeyEvent.ACTION_UP && menuButtonHeld) {
+            // The release of a press that toggled the menu belongs to nobody else.
+            menuButtonHeld = false;
+            return true;
+        }
+        return false;
     }
 
     private void openXServerDrawer() {
@@ -13470,6 +13502,8 @@ public class XServerDisplayActivity extends AppCompatActivity {
             controllerTestFeedKeyEvent(event);
             return true;
         }
+
+        if (menuButtonEvent(event)) return true;
 
         // Wayland mode: route keyboard keys to wl_keyboard (the guest) instead of the X server.
         // Game controller buttons stay on the normal path below (WinHandler -> XInput, drawer

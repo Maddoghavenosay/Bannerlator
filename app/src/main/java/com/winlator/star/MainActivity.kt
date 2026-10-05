@@ -465,8 +465,35 @@ class MainActivity : AppCompatActivity() {
         return super.dispatchGenericMotionEvent(event)
     }
 
+    // The menu-button picker takes the next press of any key but volume. The screen's own Back
+    // (nav bar, gesture) cancels it; a Back key on a pad is a candidate like any other button.
+    private var menuCaptureDownKey = 0
+
+    private fun menuButtonCapture(event: android.view.KeyEvent): Boolean {
+        val listener = com.winlator.star.ui.components.MenuButtonCaptureBus.listener ?: run {
+            menuCaptureDownKey = 0
+            return false
+        }
+        val kc = event.keyCode
+        if (kc == android.view.KeyEvent.KEYCODE_VOLUME_UP || kc == android.view.KeyEvent.KEYCODE_VOLUME_DOWN
+            || kc == android.view.KeyEvent.KEYCODE_VOLUME_MUTE || kc == android.view.KeyEvent.KEYCODE_POWER) return false
+        // B is never the menu button: it is swallowed and the picker keeps waiting.
+        if (kc == android.view.KeyEvent.KEYCODE_BUTTON_B) return true
+        val screenBack = kc == android.view.KeyEvent.KEYCODE_BACK &&
+            !com.winlator.star.inputcontrols.ExternalController.isGameController(event.device)
+        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+            if (event.repeatCount == 0) menuCaptureDownKey = kc
+        } else if (event.action == android.view.KeyEvent.ACTION_UP && kc == menuCaptureDownKey) {
+            // Taken on release, so the dialog closing can't hand a lone release to the screen behind it.
+            menuCaptureDownKey = 0
+            listener(if (screenBack) -1 else kc)
+        }
+        return true
+    }
+
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (isSettingsSteamShadowEvent(event.device)) return true
+        if (menuButtonCapture(event)) return true
         if (settingsTestArmed() &&
             com.winlator.star.inputcontrols.ExternalController.isGameController(event.device)) {
             controllerTestFeedKeyEvent(event)
