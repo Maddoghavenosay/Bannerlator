@@ -1526,7 +1526,7 @@ private fun MenuButtonCaptureDialog(onResult: (Int) -> Unit) {
             Text("Press the button you want to open the menu", color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
-            Text("Use your device's own controls. Volume keys are ignored.",
+            Text("Use your device's own controls. B and the volume keys can't be used.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             Spacer(Modifier.height(12.dp))
             TextButton(onClick = { onResult(-1) }) { Text(stringResource(R.string.cancel)) }

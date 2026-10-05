@@ -477,6 +477,8 @@ class MainActivity : AppCompatActivity() {
         val kc = event.keyCode
         if (kc == android.view.KeyEvent.KEYCODE_VOLUME_UP || kc == android.view.KeyEvent.KEYCODE_VOLUME_DOWN
             || kc == android.view.KeyEvent.KEYCODE_VOLUME_MUTE || kc == android.view.KeyEvent.KEYCODE_POWER) return false
+        // B is never the menu button: it is swallowed and the picker keeps waiting.
+        if (kc == android.view.KeyEvent.KEYCODE_BUTTON_B) return true
         val screenBack = kc == android.view.KeyEvent.KEYCODE_BACK &&
             !com.winlator.star.inputcontrols.ExternalController.isGameController(event.device)
         if (event.action == android.view.KeyEvent.ACTION_DOWN) {

@@ -1700,7 +1700,7 @@ E.g. <b>META</b> for <i>META key</i>, \n
         <b>Menu button</b><br /><br />
         Picks one button on your device that opens Bannerlator\'s <b>in-game side menu</b> (the same menu a swipe from the left edge opens).<br /><br />
         <b>Who it\'s for</b> — handhelds with built-in controls, such as the <b>AYANEO Pocket FIT</b>, <b>AYN Odin 2 Portal</b>, Retroid and similar devices. During a game their controls go to the game, so without this none of their buttons reaches the menu, not even a Back key on the controls.<br /><br />
-        It is <b>off until you set it</b>: no controller button opens the menu by default. The B button never opens it.<br /><br />
+        It is <b>off until you set it</b>: no controller button opens the menu by default. The B button never opens it and can\'t be picked.<br /><br />
         <b>Set button</b> — tap it, then press the button you want on your device. Guide/Home, a Back key, Select or a stick click work well. Pick a button your games don\'t need: <b>that button only opens the menu and is no longer sent to the game</b>. Press it again to close the menu.<br />
         <b>None</b> — turns the menu button off.<br /><br />
         If your controller profile binds the same button, the profile wins. In a Linux Steam session the Guide button stays the Steam button.<br /><br />

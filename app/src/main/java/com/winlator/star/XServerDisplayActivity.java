@@ -7630,7 +7630,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
     private boolean menuButtonEvent(KeyEvent event) {
         int kc = event.getKeyCode();
-        if (menuButtonKeyCode <= 0 || kc != menuButtonKeyCode) return false;
+        if (menuButtonKeyCode <= 0 || kc != menuButtonKeyCode || kc == KeyEvent.KEYCODE_BUTTON_B) return false;
         // A Back chosen as the menu button means the device's own Back key (KEY_BACK, scan 158), never
         // the Back Android makes out of an unhandled B: that fallback keeps B's scan code, and some
         // vendor dispatchers drop its FLAG_FALLBACK.
