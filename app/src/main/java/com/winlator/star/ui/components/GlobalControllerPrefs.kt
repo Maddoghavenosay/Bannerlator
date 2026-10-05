@@ -126,40 +126,19 @@ object GlobalControllerPrefs {
     }
     // ───── Menu button (Input Controls › Device) ─────
     // One button on the device's own pad that opens the in-game side menu, for handhelds whose
-    // built-in controls have no Back key. LIVE: each game session reads it. Unset = this device's
-    // default (Guide on an AYANEO Pocket FIT, nothing elsewhere); 0 = turned off.
+    // built-in controls have no Back key. LIVE: each game session reads it. Off (0) until the user
+    // picks one: no pad button opens the menu by default.
     private const val KEY_MENU_BUTTON = "global_menu_button_keycode"
 
     @JvmStatic
-    fun getMenuButtonKeyCode(context: Context): Int {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return if (prefs.contains(KEY_MENU_BUTTON)) prefs.getInt(KEY_MENU_BUTTON, 0) else defaultMenuButtonKeyCode()
-    }
-
-    @JvmStatic
-    fun isMenuButtonDefault(context: Context): Boolean =
-        !PreferenceManager.getDefaultSharedPreferences(context).contains(KEY_MENU_BUTTON)
+    fun getMenuButtonKeyCode(context: Context): Int =
+        PreferenceManager.getDefaultSharedPreferences(context).getInt(KEY_MENU_BUTTON, 0)
 
     /** [keyCode] 0 turns the menu button off. */
     @JvmStatic
     fun setMenuButtonKeyCode(context: Context, keyCode: Int) {
         PreferenceManager.getDefaultSharedPreferences(context).edit().putInt(KEY_MENU_BUTTON, keyCode).apply()
     }
-
-    @JvmStatic
-    fun resetMenuButton(context: Context) {
-        PreferenceManager.getDefaultSharedPreferences(context).edit().remove(KEY_MENU_BUTTON).apply()
-    }
-
-    /** The Pocket FIT's pad (it reports as an Xbox 360 pad) has Guide but no Back key. */
-    @JvmStatic
-    fun defaultMenuButtonKeyCode(): Int = if (isPocketFit()) android.view.KeyEvent.KEYCODE_BUTTON_MODE else 0
-
-    @JvmStatic
-    fun isPocketFit(): Boolean =
-        "AYANEO".equals(android.os.Build.MANUFACTURER, ignoreCase = true) &&
-            ("PocketFIT".equals(android.os.Build.DEVICE, ignoreCase = true) ||
-                "Pocket FIT".equals(android.os.Build.MODEL, ignoreCase = true))
 
     @JvmStatic
     fun menuButtonName(keyCode: Int): String = when (keyCode) {

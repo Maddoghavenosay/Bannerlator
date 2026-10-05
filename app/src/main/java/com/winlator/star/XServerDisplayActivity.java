@@ -7631,6 +7631,11 @@ public class XServerDisplayActivity extends AppCompatActivity {
     private boolean menuButtonEvent(KeyEvent event) {
         int kc = event.getKeyCode();
         if (menuButtonKeyCode <= 0 || kc != menuButtonKeyCode) return false;
+        // A Back chosen as the menu button means the device's own Back key (KEY_BACK, scan 158), never
+        // the Back Android makes out of an unhandled B: that fallback keeps B's scan code, and some
+        // vendor dispatchers drop its FLAG_FALLBACK.
+        if (kc == KeyEvent.KEYCODE_BACK && ((event.getFlags() & KeyEvent.FLAG_FALLBACK) != 0
+                || (event.getScanCode() >= 0x130 && event.getScanCode() <= 0x13f))) return false;
         // In a Linux Steam session Guide is the Steam button.
         if (kc == KeyEvent.KEYCODE_BUTTON_MODE && isLinuxSteamSession()) return false;
         if (event.getAction() == KeyEvent.ACTION_DOWN) {

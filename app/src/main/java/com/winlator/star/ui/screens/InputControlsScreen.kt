@@ -1449,14 +1449,12 @@ private fun MenuButtonSection() {
     val context = LocalContext.current
     val prefs = com.winlator.star.ui.components.GlobalControllerPrefs
     var keyCode by remember { mutableStateOf(prefs.getMenuButtonKeyCode(context)) }
-    var isDefault by remember { mutableStateOf(prefs.isMenuButtonDefault(context)) }
     var capturing by remember { mutableStateOf(false) }
     var helpRes by remember { mutableStateOf<Int?>(null) }
     helpRes?.let { HelpDialog(it) { helpRes = null } }
 
     fun refresh() {
         keyCode = prefs.getMenuButtonKeyCode(context)
-        isDefault = prefs.isMenuButtonDefault(context)
     }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1469,15 +1467,12 @@ private fun MenuButtonSection() {
     }
     FieldSet {
         Text(
-            "For handhelds with built-in controls: pick a button that opens the in-game side menu, " +
-                "for devices with no Back key on their controls. That button then only opens the menu " +
-                "and isn't sent to the game.",
+            "For handhelds with built-in controls: pick a button that opens the in-game side menu. " +
+                "Off until you set one. The chosen button then only opens the menu and isn't sent to the game.",
             color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp
         )
         Spacer(Modifier.height(8.dp))
-        val current = prefs.menuButtonName(keyCode) +
-            if (isDefault && keyCode != 0) " (default for this device)" else ""
-        Text("Current: $current", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
+        Text("Current: ${prefs.menuButtonName(keyCode)}", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Button(
@@ -1491,13 +1486,6 @@ private fun MenuButtonSection() {
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
                 modifier = Modifier.weight(1f)
             ) { Text("None", color = MaterialTheme.colorScheme.onBackground, fontSize = 12.sp) }
-            if (!isDefault) {
-                Button(
-                    onClick = { prefs.resetMenuButton(context); refresh() },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
-                    modifier = Modifier.weight(1f)
-                ) { Text("Default", color = MaterialTheme.colorScheme.onBackground, fontSize = 12.sp) }
-            }
         }
     }
 
