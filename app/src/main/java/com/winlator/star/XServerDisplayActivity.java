@@ -7795,10 +7795,11 @@ public class XServerDisplayActivity extends AppCompatActivity {
         WineStartMenuCreator.create(this, container);
         WineUtils.createDosdevicesSymlinks(container);
 
-        // Ship the current in-container file manager (wfm.exe) from the APK into this container's
-        // drive_c\windows on every launch, so an app update delivers a new wfm.exe to EVERY existing
+        // Ship the current in-container file manager (wfm.exe) and winhandler.exe from the APK into this
+        // container's drive_c\windows on every launch, so an app update delivers them to EVERY existing
         // container without an imagefs reinstall or a new container. Version-gated + best-effort.
         stageBundledFileManager();
+        stageBundledWinHandler();
 
         // Configure Wine joystick registry keys based on DInput setting
         int inputType = container.getInputType();
@@ -7871,57 +7872,78 @@ public class XServerDisplayActivity extends AppCompatActivity {
     // asset is replaced so a fresh APK restages the file into every container on next launch.
     private static final String BUNDLED_WFM_VERSION = "1.2.1";
 
+    // Version of the bundled winhandler.exe in app/src/main/assets/winhandler.exe: the prebuilt one from
+    // container_pattern_common.tzst (md5 3b550703…) with its two ShowWindow(hwnd, SW_RESTORE) calls in
+    // bringToFront changed to SW_SHOW (file offsets 0xd5c/0xd8c, 09 -> 05; md5 f64864e1…). The
+    // SwitchToThisWindow(hwnd, TRUE) right after still restores a minimized window (Wine does that for an
+    // iconic window), so the only behaviour change is that a maximized window is no longer
+    // un-maximized when the app brings it to the front. Toy Story 2 maximizes a "Screen Mode Select"
+    // window it created at 0x0; the restore shrank it back to 0x0 and the game waited on an invisible
+    // window (black screen on X11).
+    private static final String BUNDLED_WINHANDLER_VERSION = "1-no-unmaximize";
+
     // Stage the APK-bundled wfm.exe (the in-container file manager) into this container's
     // drive_c\windows, overwriting whatever the imagefs shipped. Previously wfm.exe lived only in the
     // imagefs, so updating it needed an imagefs reinstall; carrying it in the APK and copying it here
     // means an app update reaches every EXISTING container on its next launch — no reinstall, no new
-    // container. A tiny ".wfm_version" marker beside the exe records the staged version; we only rewrite
-    // when it's missing or doesn't match, so the steady-state launch does no work. Best-effort: any
-    // failure is logged and the launch continues on whatever wfm.exe the container already had. Runs on
-    // the background launch worker (setupWineSystemFiles), so the copy is off the UI thread.
+    // container.
     private void stageBundledFileManager() {
+        stageBundledWindowsExe("wfm.exe", ".wfm_version", BUNDLED_WFM_VERSION);
+    }
+
+    // Same for winhandler.exe (see BUNDLED_WINHANDLER_VERSION).
+    private void stageBundledWinHandler() {
+        stageBundledWindowsExe("winhandler.exe", ".winhandler_version", BUNDLED_WINHANDLER_VERSION);
+    }
+
+    // Copy assets/<exeName> into this container's drive_c\windows. A tiny marker file beside the exe
+    // records the staged version; we only rewrite when it's missing or doesn't match, so the
+    // steady-state launch does no work. Best-effort: any failure is logged and the launch continues on
+    // whatever copy the container already had. Runs on the background launch worker
+    // (setupWineSystemFiles), so the copy is off the UI thread.
+    private void stageBundledWindowsExe(String exeName, String markerName, String version) {
         try {
             // The launching container's own drive_c\windows — /home/xuser resolves here through the
-            // xuser symlink at launch, so this is exactly the C:\windows the guest reads wfm.exe from.
+            // xuser symlink at launch, so this is exactly the C:\windows the guest reads the exe from.
             File windowsDir = new File(container.getRootDir(), ".wine/drive_c/windows");
             if (!windowsDir.isDirectory() && !windowsDir.mkdirs()) {
-                Log.w("XServerDisplayActivity", "stageBundledFileManager: windows dir unavailable: " + windowsDir);
+                Log.w("XServerDisplayActivity", "stageBundledWindowsExe: windows dir unavailable: " + windowsDir);
                 return;
             }
-            File wfmFile = new File(windowsDir, "wfm.exe");
-            File marker = new File(windowsDir, ".wfm_version");
+            File exeFile = new File(windowsDir, exeName);
+            File marker = new File(windowsDir, markerName);
 
-            boolean upToDate = wfmFile.isFile() && marker.isFile()
-                    && BUNDLED_WFM_VERSION.equals(FileUtils.readString(marker).trim());
+            boolean upToDate = exeFile.isFile() && marker.isFile()
+                    && version.equals(FileUtils.readString(marker).trim());
             if (upToDate) return;
 
-            // Copy to a temp sibling then rename, so a crash mid-copy can't leave a truncated wfm.exe
+            // Copy to a temp sibling then rename, so a crash mid-copy can't leave a truncated exe
             // that the guest would then try to run.
-            File tmp = new File(windowsDir, "wfm.exe.tmp");
-            try (java.io.InputStream in = getAssets().open("wfm.exe");
+            File tmp = new File(windowsDir, exeName + ".tmp");
+            try (java.io.InputStream in = getAssets().open(exeName);
                  java.io.FileOutputStream out = new java.io.FileOutputStream(tmp)) {
                 byte[] buf = new byte[65536];
                 int n;
                 while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
             }
             if (!tmp.isFile() || tmp.length() == 0) {
-                Log.w("XServerDisplayActivity", "stageBundledFileManager: staged wfm.exe empty, skipping");
+                Log.w("XServerDisplayActivity", "stageBundledWindowsExe: staged " + exeName + " empty, skipping");
                 tmp.delete();
                 return;
             }
             // renameTo won't overwrite on some Android fs layers — clear the old exe first.
-            if (wfmFile.exists()) wfmFile.delete();
-            if (!tmp.renameTo(wfmFile)) {
-                Log.w("XServerDisplayActivity", "stageBundledFileManager: rename into place failed");
+            if (exeFile.exists()) exeFile.delete();
+            if (!tmp.renameTo(exeFile)) {
+                Log.w("XServerDisplayActivity", "stageBundledWindowsExe: rename into place failed for " + exeName);
                 tmp.delete();
                 return;
             }
-            wfmFile.setReadable(true, false);
-            wfmFile.setExecutable(true, false);
-            FileUtils.writeString(marker, BUNDLED_WFM_VERSION);
-            Log.i("XServerDisplayActivity", "Staged bundled wfm.exe " + BUNDLED_WFM_VERSION + " -> " + wfmFile);
+            exeFile.setReadable(true, false);
+            exeFile.setExecutable(true, false);
+            FileUtils.writeString(marker, version);
+            Log.i("XServerDisplayActivity", "Staged bundled " + exeName + " " + version + " -> " + exeFile);
         } catch (Exception e) {
-            Log.w("XServerDisplayActivity", "stageBundledFileManager failed (continuing launch)", e);
+            Log.w("XServerDisplayActivity", "stageBundledWindowsExe(" + exeName + ") failed (continuing launch)", e);
         }
     }
 
