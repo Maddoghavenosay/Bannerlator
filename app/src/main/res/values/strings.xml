@@ -1696,6 +1696,16 @@ E.g. <b>META</b> for <i>META key</i>, \n
         <b>Reset Input</b> (in-game side menu) rebuilds the controller connection without restarting the game.<br /><br />
         Changes made here (out of game) apply on the game\'s <b>next launch</b>; the in-game side menu changes players live. The app-drawer Input Controls copy of this sets the default for <b>newly-created</b> containers.
     ]]></string>
+    <string name="help_menu_button"><![CDATA[
+        <b>Menu button</b><br /><br />
+        Picks one button on your device that opens Bannerlator\'s <b>in-game side menu</b> (the same menu a swipe from the left edge opens).<br /><br />
+        <b>Who it\'s for</b> — handhelds with built-in controls, such as the <b>AYANEO Pocket FIT</b>, Odin, Retroid and similar devices. On many of them the built-in controls have no Back key, so there is no physical button that reaches the menu during a game.<br /><br />
+        <b>Set button</b> — tap it, then press the button you want on your device. Guide/Home, Select or a stick click work well. Pick a button your games don\'t need: <b>that button only opens the menu and is no longer sent to the game</b>. Press it again to close the menu.<br />
+        <b>None</b> — turns the menu button off.<br />
+        <b>Default</b> — goes back to this device\'s default. On an AYANEO Pocket FIT that\'s the Guide button; on other devices it\'s None.<br /><br />
+        If your controller profile binds the same button, the profile wins. In a Linux Steam session the Guide button stays the Steam button.<br /><br />
+        Works on every game; it takes effect the next time a game starts.
+    ]]></string>
     <!-- ── Audio settings: per-preset and per-row "?" help ────────────────────────────────────
          Latency figures are TOTALS (driver buffer + Android's fixed ~21 ms mixer/HAL cost), because
          the total is what a player hears; a bare buffer number is not comparable to it. -->
