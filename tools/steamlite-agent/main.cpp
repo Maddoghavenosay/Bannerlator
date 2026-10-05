@@ -641,6 +641,49 @@ static void stage_app_manifest(uint32_t appId, const char* gameExe) {
              installScriptsEnv && *installScriptsEnv ? installScriptsEnv : "(none)");
 }
 
+// ---- Launcher-chain awareness (agent p4, 2026-09-05) ------------------------------
+// Some Steam titles are not launched as their own exe: Steam opens a URL/stub
+// (EA titles: link2ea:// -> Link2EA.exe -> EADesktop.exe -> EASteamProxy.exe -> game),
+// and the real game exe appears only after that chain - and after the user has
+// signed in to EA, which can take minutes. The fixed 15 s appear-wait then gave up,
+// tore the Steam session down and killed the chain mid-login (device: EA "Couldn't
+// connect to servers ... log in to your EA account from Steam"). While any process
+// named in WN_STEAM_LAUNCH_CHAIN (';' or ',' separated exe names) is alive, the agent
+// keeps waiting for the game exe (cap WN_STEAM_CHAIN_WAIT_S, default 900 s), and it
+// never CreateProcess-forks a title whose chain was seen (the exe path would start an
+// unowned second instance).
+static std::vector<std::string> g_launchChain;
+static bool g_chainSeen = false;
+static void load_launch_chain() {
+    const char* e = getenv("WN_STEAM_LAUNCH_CHAIN");
+    if (!e || !*e) return;
+    std::string cur;
+    for (const char* p = e; ; ++p) {
+        if (*p == ';' || *p == ',' || *p == '\0') {
+            while (!cur.empty() && (cur.back() == ' ' || cur.back() == '\t')) cur.pop_back();
+            size_t b = 0; while (b < cur.size() && (cur[b] == ' ' || cur[b] == '\t')) ++b;
+            if (b < cur.size()) g_launchChain.push_back(cur.substr(b));
+            cur.clear();
+            if (*p == '\0') break;
+        } else cur.push_back(*p);
+    }
+}
+static int count_chain_processes() {
+    if (g_launchChain.empty()) return 0;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return 0;
+    PROCESSENTRY32 pe; pe.dwSize = sizeof(pe);
+    int count = 0;
+    if (Process32First(snap, &pe)) {
+        do {
+            for (const std::string& n : g_launchChain)
+                if (_stricmp(pe.szExeFile, n.c_str()) == 0) { count++; break; }
+        } while (Process32Next(snap, &pe));
+    }
+    CloseHandle(snap);
+    return count;
+}
+
 // Counts running game processes (matches LaunchApp's canonical name or the literal
 // fallback name via wn_game_image_matches).
 static int count_game_processes(const char* exeName) {
@@ -1975,6 +2018,9 @@ static int agent_main(int argc, char** argv) {
     // direct start after ~15s instead of sitting on a black screen for the ~60s secure window.
     // Absent or anything else (=1) keeps the full secure window — a wrong "0" on a VAC title would
     // cost the secure launch, so the app only sends 0 for titles its app-info marks as non-VAC.
+    load_launch_chain();
+    if (!g_launchChain.empty())
+        log_line("[wn-launcher] launcher chain configured: %zu exe name(s) (WN_STEAM_LAUNCH_CHAIN)", g_launchChain.size());
     const char* vacEnv = getenv("WN_STEAM_VAC");
     const bool vacRequired = !(vacEnv && vacEnv[0] == '0' && vacEnv[1] == '\0');
     log_line("[wn-launcher] secure-launch policy: WN_STEAM_VAC=%s -> %s",
@@ -2173,6 +2219,33 @@ static int agent_main(int argc, char** argv) {
                     }
                     Sleep(500);
                 }
+                // Launcher chain (EA & co.): the game exe comes only after the chain and the
+                // user's sign-in. Keep the session alive while any chain process is alive.
+                if (!launchedViaApp && !g_launchChain.empty()) {
+                    int chainWaitS = 900;
+                    if (const char* cw = getenv("WN_STEAM_CHAIN_WAIT_S")) { int v = atoi(cw); if (v > 0) chainWaitS = v; }
+                    const int kChainMaxTicks = chainWaitS * 2;
+                    int idle = 0;
+                    for (int t = 0; t < kChainMaxTicks && !launchedViaApp; ++t) {
+                        if (count_game_processes(exeName) > 0) { launchedViaApp = true; break; }
+                        const int c = count_chain_processes();
+                        if (c > 0) {
+                            if (!g_chainSeen) log_line("[wn-launcher] launcher chain detected (%d process) - holding the Steam session until \"%s\" appears (up to %ds)", c, exeName, chainWaitS);
+                            g_chainSeen = true;
+                            idle = 0;
+                            if ((t % 60) == 0 && t) log_line("[wn-launcher] launcher chain alive (%d process) - still waiting for \"%s\" (%ds)", c, exeName, t / 2);
+                        } else if (g_chainSeen) {
+                            if (++idle >= 20) { log_line("[wn-launcher] launcher chain gone for 10s without \"%s\" - giving up", exeName); break; }
+                        } else if (++idle >= 20) {
+                            break;   // no chain ever appeared within 10s: normal (non-chain) title
+                        }
+                        if (bGetCallback && freeLastCallback) {
+                            char cb[64];
+                            while (bGetCallback(pipe, cb)) { af::on_callback(cb); freeLastCallback(pipe); }
+                        }
+                        Sleep(500);
+                    }
+                }
                 if (launchedViaApp) {
                     log_line("[wn-launcher] LaunchApp: \"%s\" is running "
                              "(attempt %d/%d)", exeName, attempt,
@@ -2271,7 +2344,12 @@ static int agent_main(int argc, char** argv) {
                      exeName, launchFailureReason);
             ac::emit_insecure_fallback(exeName, launchFailureReason, vacRequired);
         }
-        launchedViaFallback = create_process_game(gameExe, exeName);
+        if (g_chainSeen) {
+            log_line("[wn-launcher] launcher chain was seen - not CreateProcess-forking \"%s\" (URL-launched title; a direct start would be an unowned second instance)", exeName);
+            launchedViaFallback = false;
+        } else {
+            launchedViaFallback = create_process_game(gameExe, exeName);
+        }
     }
 
     if (launchedViaApp || launchedViaFallback) {
@@ -2294,7 +2372,26 @@ static int agent_main(int argc, char** argv) {
         bool acSessionUp = loggedOn;
         bool acLogoffAcked = false;
         // Declare exit after 2 consecutive absent polls (~2s) — tolerates a brief gap.
+        // Launcher-chain titles (EA): the first game exe is a stub that exits after handing
+        // off to the chain (ActivationUI / EASteamProxy / EADesktop relaunch the real exe up
+        // to a minute later, after the user's EA sign-in). While the chain is alive and the
+        // exe has NOT yet been relaunched once, its absence is a hand-off, not an exit.
+        // (p6: later hand-offs are covered too, with a short window - see below.)
         int absent = 0;
+        int chainHoldTicks = 0;      // consecutive ticks spent holding for the relaunch
+        int relaunches = 0;          // times the exe came back after vanishing
+        bool gameGone = false;
+        int chainHoldCapS = 900;
+        if (const char* cw = getenv("WN_STEAM_CHAIN_WAIT_S")) { int v = atoi(cw); if (v > 0) chainHoldCapS = v; }
+        // p6: a chain title can hand off MORE than once - EA restarts the game a second time
+        // after a first-ever activation (licence written by ActivationUI, then EA Desktop
+        // relaunches). Later hand-offs get a SHORT window (WN_STEAM_CHAIN_RELAUNCH_S, default
+        // 60 s) so a resident EADesktop/EABackgroundService can't pin the session after a real
+        // quit, and there are at most WN_STEAM_CHAIN_RELAUNCHES (default 3) relaunches.
+        int maxRelaunches = 3;
+        if (const char* cr = getenv("WN_STEAM_CHAIN_RELAUNCHES")) { int v = atoi(cr); if (v >= 0) maxRelaunches = v; }
+        int relaunchHoldS = 60;
+        if (const char* cr = getenv("WN_STEAM_CHAIN_RELAUNCH_S")) { int v = atoi(cr); if (v > 0) relaunchHoldS = v; }
         while (absent < 2) {
             Sleep(1000);
             if (!relayStarted && ++relayTicks >= kRelayGraceTicks && absent == 0) {
@@ -2359,7 +2456,36 @@ static int agent_main(int argc, char** argv) {
                                      "C:\\wn-fire-achievement.txt",
                                      bGetCallback, freeLastCallback);
             }
-            absent = (count_game_processes(exeName) != 0) ? 0 : absent + 1;
+            if (count_game_processes(exeName) != 0) {
+                if (gameGone) {
+                    relaunches++;
+                    log_line("[wn-launcher] \"%s\" is back after the launcher-chain hand-off (%d s) - relaunch #%d, watching it",
+                             exeName, chainHoldTicks, relaunches);
+                    if (ac::alive()) ac::emit_game_spawned(exeName, find_game_pid(exeName), launchedViaApp && !directExe);
+                    gameGone = false;
+                    chainHoldTicks = 0;
+                }
+                absent = 0;
+            } else if (!g_launchChain.empty() && relaunches < maxRelaunches
+                       && chainHoldTicks < (relaunches == 0 ? chainHoldCapS : relaunchHoldS)
+                       && count_chain_processes() > 0) {
+                if (!gameGone) {
+                    gameGone = true;
+                    g_chainSeen = true;
+                    if (relaunches == 0)
+                        log_line("[wn-launcher] \"%s\" is gone but the launcher chain is alive - holding the Steam session for the relaunch (cap %d s)",
+                                 exeName, chainHoldCapS);
+                    else
+                        log_line("[wn-launcher] \"%s\" exited after relaunch #%d but the launcher chain is alive - holding %d s for another relaunch (activation restart?)",
+                                 exeName, relaunches, relaunchHoldS);
+                }
+                chainHoldTicks++;
+                if (chainHoldTicks % 60 == 0)
+                    log_line("[wn-launcher] still holding for \"%s\" (%d s, chain %d process)", exeName, chainHoldTicks, count_chain_processes());
+                absent = 0;
+            } else {
+                absent++;
+            }
         }
         log_line("[wn-launcher] game \"%s\" exited (%s)", exeName, path);
         ac::emit_game_exited(-1);  // exit code not observable (handles closed / adopted)

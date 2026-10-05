@@ -1,7 +1,8 @@
 name: Build SteamLite agent
 
 # Builds our clean-room SteamLite agent (tools/steamlite-agent → steam.exe, x86_64 PE) with MinGW-w64
-# exactly as tools/steamlite-agent/NOTICE.md documents, and uploads it as an artifact. The agent is
+# exactly as tools/steamlite-agent/README.md documents (the hosted package's corresponding source lives in
+# winlator-contents/steamlite/agent-src — keep the two in step), and uploads it as an artifact. The agent is
 # NOT part of the APK: it ships inside the hosted steamlite.tzst package (winlator-contents
 # release steamlite-vN). This workflow only produces the binary for device testing and for the next
 # package; repacking/hosting stays a separate, deliberate step after the build is device-proven.
@@ -26,9 +27,8 @@ jobs:
       - name: Build steam.exe
         working-directory: tools/steamlite-agent
         run: |
-          x86_64-w64-mingw32-g++-posix -std=c++17 -O2 -static -static-libgcc -static-libstdc++ \
-            -Wl,--subsystem,windows -I. -o steam.exe main.cpp clean_shutdown.cpp \
-            -ladvapi32 -lkernel32 -luser32 -lws2_32
+          x86_64-w64-mingw32-g++-posix -std=c++17 -O2 -s -static -static-libgcc -static-libstdc++ \
+            -Wl,--subsystem,windows -I. -o steam.exe main.cpp clean_shutdown.cpp -ladvapi32 -lws2_32
           file steam.exe | grep -q 'PE32+ executable' || { echo "FATAL: not a PE32+ image"; file steam.exe; exit 1; }
           file steam.exe | grep -q 'x86-64' || { echo "FATAL: not x86-64"; file steam.exe; exit 1; }
           ls -la steam.exe

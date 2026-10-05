@@ -17,17 +17,14 @@ This code therefore inherits GPL-3.0. Keep attribution to the WinNative project.
 ```
 x86_64-w64-mingw32-g++-posix -std=c++17 -O2 -static -static-libgcc -static-libstdc++ \
   -Wl,--subsystem,windows -I. -o steam.exe main.cpp clean_shutdown.cpp \
-  -ladvapi32 -lkernel32 -luser32 -lws2_32
+  -ladvapi32 -lkernel32 -luser32
 ```
-(`steam_input.h`, `agent_channel.h`, `agent_friends.h` are header-only and need no extra objects; CI builds this
-exact line in `.github/workflows/build-steamlite-agent.yml`.)
-
 
 **Runtime env:** `WN_STEAM_TOKEN` / `WN_STEAM_USERNAME` / `WN_STEAM_STEAMID` (login),
 `WN_STEAM_APPID` (optional; when 0 → skip Steam LaunchApp), plus
 `PROTON_DISABLE_LSTEAMCLIENT=1` (so the genuine PE `steamclient64.dll` loads instead
 of Proton's lsteamclient shim). Reads the genuine Valve DLLs from
-`C:\Program Files (x86)\Steam\`; sources them at runtime — never bundle.
+`C:\Program Files (x86)\Steam\` (provided in this package alongside the agent).
 
 **M0 proven 2026-08-27:** logs the genuine client to `SteamServersConnected` +
 `Steam_BLoggedOn=true` on the Bannerlator stack.
