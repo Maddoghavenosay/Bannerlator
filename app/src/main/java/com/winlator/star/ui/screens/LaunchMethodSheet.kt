@@ -173,6 +173,7 @@ private const val HELP_STEAMINPUT =
     "Some games never read the controller themselves — they ask Steam for it (the Steam Input API: No Man's " +
         "Sky and many newer titles). In SteamLite nobody answers, so those games see no pad. On: the SteamLite " +
         "agent switches Steam's controller layer on for this game with a fitting layout. Off: nothing changes. " +
+        "Keep it OFF for games that already read a pad themselves — they would get every press twice. " +
         "The opposite of Controller passthrough, so only one can be on. SteamLite only."
 private const val HELP_VAC =
     "On: the game must be started by Steam itself (VAC-secure). If Steam can't, you get a warning and " +
@@ -771,7 +772,7 @@ private fun ColumnScope.OptionsBlock(
         OptionRow(
             title = "Steam Input",
             badge = "NEW",
-            subtitle = if (compact) null else "For games that only see pads through Steam (No Man's Sky). Off = unchanged.",
+            subtitle = if (compact) null else "Only for games that see pads through Steam alone (No Man's Sky). Keep OFF for games that already use a pad.",
             accent = accent,
             compact = compact,
             onHelp = { toggleHelp(HELP_STEAMINPUT) },
