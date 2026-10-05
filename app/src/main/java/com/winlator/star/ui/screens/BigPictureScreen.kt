@@ -1008,13 +1008,15 @@ fun BigPictureScreen(navController: NavController) {
             // dismiss the sheet first (so no dialog is layered behind the ModalBottomSheet's window).
             onUpdateFiles = { launchChoiceFor = null; checkForUpdatesThenOffer(s) },
             onVerifyFiles = { launchChoiceFor = null; runSteamMaintenance(s, verify = true) },
-            onLaunch = { mode, goldbergMode, remember, controllerPassthrough, vacLaunch ->
+            onLaunch = { mode, goldbergMode, remember, controllerPassthrough, vacLaunch, steamInput ->
                 // Persist the choice on the shortcut (contract literals: launchMode ∈ RealSteam/Goldberg/Raw,
                 // launchModeRemembered="1"), then stage the picked component and launch.
                 s.putExtra("launchMode", mode)
                 s.putExtra("launchModeRemembered", if (remember) "1" else "0")
                 // Per-game "Controller passthrough" (read only on RealSteam launches; inert otherwise).
                 s.putExtra("controllerPassthrough", if (controllerPassthrough) "1" else "0")
+                // Per-game "Steam Input" (SteamLite only; the agent configures the client's controller layer).
+                s.putExtra("steamInput", if (steamInput) "1" else "0")
                 // Per-game "Requires secure (VAC) launch" override: "" = follow app-info detection, "1"/"0".
                 s.putExtra("steamVacLaunch", vacLaunch)
                 s.saveData()
