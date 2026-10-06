@@ -10407,13 +10407,26 @@ private fun ScAdvancedTab(
                 // Force SSBS — the Wine launcher's knob, so not offered to a Linux session.
                 if (!isLinuxEntry) {
                     Spacer(Modifier.height(8.dp))
-                    val ssbsOptions = listOf("Container default", "On", "Off")
-                    LabeledDropdown(
-                        label = stringResource(R.string.force_ssbs),
-                        options = ssbsOptions,
-                        selectedOption = when (forceSsbs) { "1" -> ssbsOptions[1]; "0" -> ssbsOptions[2]; else -> ssbsOptions[0] },
-                        onSelect = { onForceSsbsChange(when (it) { ssbsOptions[1] -> "1"; ssbsOptions[2] -> "0"; else -> "" }) }
+                    // Entry 0 names what the container is set to, so "follow the container" is not a guess.
+                    val ssbsOn = stringResource(R.string.force_ssbs_on)
+                    val ssbsOff = stringResource(R.string.force_ssbs_off)
+                    val ssbsOptions = listOf(
+                        stringResource(R.string.force_ssbs_container_default,
+                            if (shortcut.container.isForceSsbs) ssbsOn else ssbsOff),
+                        ssbsOn, ssbsOff
                     )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LabeledDropdown(
+                            label = stringResource(R.string.force_ssbs),
+                            options = ssbsOptions,
+                            selectedOption = when (forceSsbs) { "1" -> ssbsOptions[1]; "0" -> ssbsOptions[2]; else -> ssbsOptions[0] },
+                            onSelect = { onForceSsbsChange(when (it) { ssbsOptions[1] -> "1"; ssbsOptions[2] -> "0"; else -> "" }) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { helpRes = R.string.help_force_ssbs }) {
+                            Icon(Icons.Default.Help, contentDescription = "What is this?", modifier = Modifier.size(18.dp))
+                        }
+                    }
                     Text(
                         stringResource(R.string.force_ssbs_summary),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

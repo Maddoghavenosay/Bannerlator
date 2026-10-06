@@ -2549,6 +2549,9 @@ private fun AdvancedTab(
                             fontSize = 11.5.sp
                         )
                     }
+                    IconButton(onClick = { helpRes = R.string.help_force_ssbs }) {
+                        Icon(Icons.Default.Help, contentDescription = "What is this?", modifier = Modifier.size(18.dp))
+                    }
                 }
             }
         }
