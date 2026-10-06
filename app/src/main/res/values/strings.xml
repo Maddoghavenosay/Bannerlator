@@ -1498,6 +1498,8 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="pref_summary_requiresTrackpadAndNative">Requires "Touchscreen input mode" to be "Trackpad" and "Display resolution mode" to be not "native"</string>
     <string name="fexcore_config">FEXCore</string>
     <string name="fexcore_preset">FEXCore Preset</string>
+    <string name="force_ssbs">Force SSBS (CPU speed fix)</string>
+    <string name="force_ssbs_summary">Keeps the CPU\'s speculative-store fast path on for game threads (arm64ec Proton only). Experimental.</string>
     <!-- Preset action row shown under the preset pickers in Container and game-shortcut settings.
          Labels sit under the icons there (unlike App Settings, which is icon-only), so they must
          stay very short - six of them share one row on a phone. -->

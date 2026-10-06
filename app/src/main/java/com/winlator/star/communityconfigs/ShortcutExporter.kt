@@ -135,6 +135,8 @@ object ShortcutExporter {
         put(effective, "startupServices", orDefault(shortcut, "startupServices", container?.getStartupServices()))
         // Per-game upscaler override — a sticky extra on both shortcut and container (no dedicated getter).
         put(effective, "scalingMode", orDefault(shortcut, "scalingMode", container?.getExtra("scalingMode")))
+        // Force SSBS — effective shortcut-or-container, resolved to 1/0 like the launcher does.
+        put(effective, "forceSsbs", orDefault(shortcut, "forceSsbs", container?.let { if (it.isForceSsbs()) "1" else "0" }))
 
         val device = Build.MANUFACTURER + " " + Build.MODEL
         val soc = DeviceIdentity.gpu(context) ?: DeviceIdentity.soc()

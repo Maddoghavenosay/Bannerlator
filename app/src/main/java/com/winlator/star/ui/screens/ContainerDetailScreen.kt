@@ -2533,6 +2533,23 @@ private fun AdvancedTab(
                     onListChanged = { viewModel.reloadPresetLists(context); presetRevision++ },
                     onValuesChanged = { presetRevision++ },
                 )
+                Spacer(Modifier.height(8.dp))
+                // Force SSBS — WINE_FORCE_SSBS for rebuilt layers, libssbs.so preloaded for the rest.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(
+                        checked = viewModel.forceSsbs,
+                        onCheckedChange = { viewModel.forceSsbs = it }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.force_ssbs))
+                        Text(
+                            stringResource(R.string.force_ssbs_summary),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.5.sp
+                        )
+                    }
+                }
             }
         }
 

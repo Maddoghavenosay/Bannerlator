@@ -259,6 +259,9 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
     val emulator64Entries = listOf("FEXCore", "Box64EC")
     var selectedEmulator64 by mutableStateOf("FEXCore")
 
+    // Force SSBS (arm64ec only, opt-in): keeps the speculative-store fast path on for game threads.
+    var forceSsbs by mutableStateOf(false)
+
     var midiEntries by mutableStateOf(emptyList<String>()); private set
     var selectedMidiIndex by mutableStateOf(0)
 
@@ -965,6 +968,7 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         selectedBox64ECVersion = archSeed?.box64ECVersion
             ?.takeIf { it.isNotEmpty() && box64ECVersionEntries.contains(it) }
             ?: (box64ECVersionEntries.firstOrNull() ?: "")
+        forceSsbs = archSeed?.isForceSsbs ?: false
 
         // FEXCore preset.
         val fexPreset = archSeed?.getFEXCorePreset() ?: prefs.getString("fexcore_preset", FEXCorePreset.INTERMEDIATE) ?: FEXCorePreset.INTERMEDIATE
@@ -1409,6 +1413,7 @@ class ContainerDetailViewModel(app: Application) : AndroidViewModel(app) {
         c.setFEXCorePreset(fexCorePresetIds.getOrElse(selectedFEXCorePresetIndex) { FEXCorePreset.INTERMEDIATE })
         c.setEmulator64(StringUtils.parseIdentifier(selectedEmulator64))
         c.setBox64ECVersion(selectedBox64ECVersion)
+        c.setForceSsbs(forceSsbs)
         c.desktopTheme       = buildDesktopThemeStr(colorAsString)
         c.setMidiSoundFont(if (selectedMidiIndex == 0) "" else midiEntries.getOrElse(selectedMidiIndex) { "" })
         c.setLC_ALL(lcAll)

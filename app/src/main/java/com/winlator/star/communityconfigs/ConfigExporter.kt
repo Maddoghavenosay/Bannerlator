@@ -77,6 +77,8 @@ object ConfigExporter {
         // (debandEnabled/debandStrength) is shared by both renderers. Each round-trips as a scalar.
         "upscaleSharpness", "casEnabled", "casSharpness", "hdrEnabled",
         "sgsrEnabled", "sgsrSharpness", "glUpscaleSharpness", "debandEnabled", "debandStrength",
+        // Force SSBS ("1" / "0"); only acted on for arm64ec Wine at launch, inert anywhere else.
+        "forceSsbs",
     )
 
     /**

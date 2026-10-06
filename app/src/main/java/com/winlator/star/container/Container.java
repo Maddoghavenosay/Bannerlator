@@ -181,6 +181,9 @@ public class Container {
     private String emulator;
     private String emulator64 = DEFAULT_EMULATOR64;
     private String box64ecVersion = "";
+    // Force SSBS (arm64ec only, opt-in): WINE_FORCE_SSBS=1 for rebuilt layers plus libssbs.so preloaded
+    // for the rest, so game threads keep the CPU's speculative-store fast path after signal returns.
+    private boolean forceSsbs = false;
     private String renderer = "vulkan";
     private boolean exclusiveXInput = true;
     private ContainerManager containerManager;
@@ -449,6 +452,14 @@ public class Container {
 
     public String getBox64ECVersion() {
         return this.box64ecVersion;
+    }
+
+    public void setForceSsbs(boolean forceSsbs) {
+        this.forceSsbs = forceSsbs;
+    }
+
+    public boolean isForceSsbs() {
+        return this.forceSsbs;
     }
 
     public File getRootDir() {
@@ -1395,6 +1406,7 @@ public class Container {
             // Only written once set away from the defaults, so untouched containers serialize as before.
             if (!DEFAULT_EMULATOR64.equals(emulator64)) data.put("emulator64", emulator64);
             if (!box64ecVersion.isEmpty()) data.put("box64ecVersion", box64ecVersion);
+            if (forceSsbs) data.put("forceSsbs", true);
             data.put("fexcorePreset", fexcorePreset);
             data.put("fexcoreVersion", fexcoreVersion);
             data.put("box64Preset", box64Preset);
@@ -1514,6 +1526,9 @@ public class Container {
                     break;
                 case "box64ecVersion":
                     setBox64ECVersion(data.getString(key));
+                    break;
+                case "forceSsbs":
+                    setForceSsbs(data.getBoolean(key));
                     break;
                 case "fexcoreVersion":
                     setFEXCoreVersion(data.getString(key));

@@ -6901,6 +6901,8 @@ internal fun ShortcutSettingsDialogScreen(
     }
     // Box64EC build for this game; "" = no extra = the container's pick (BOX64EC_CONTAINER_DEFAULT shown).
     var selectedBox64ECVersion by remember { mutableStateOf(shortcut.getExtra("box64ecVersion", "") ?: "") }
+    // Force SSBS override: "" = no extra = the container's switch, "1" = on, "0" = off.
+    var forceSsbs by remember { mutableStateOf(shortcut.getExtra("forceSsbs", "") ?: "") }
     var selectedFexCorePresetIndex by remember { mutableIntStateOf(0) }
     var selectedControlsProfileIndex by remember { mutableIntStateOf(0) }
 
@@ -7271,6 +7273,7 @@ internal fun ShortcutSettingsDialogScreen(
             putExtra("fexcoreVersion", selectedFexCoreVersion)
             putExtra("fexcorePreset", fexPresetId)
             putExtra("box64ecVersion", selectedBox64ECVersion.ifEmpty { null })
+            putExtra("forceSsbs", forceSsbs.ifEmpty { null })
             putExtra("controlsProfile", if (ctrlProfileId > 0) ctrlProfileId.toString() else null)
             putExtra("startupSelection", startupIdx.toString())
             // Persist the Custom enabled set alongside the selection (launch reads it only when
@@ -9330,6 +9333,8 @@ internal fun ShortcutSettingsDialogScreen(
             selectedBox64ECVersion = selectedBox64ECVersion,
             onBox64ECVersionChange = { selectedBox64ECVersion = it },
             onShowBox64ECDownloadSheet = { showBox64ECDownloadSheet = true },
+            forceSsbs = forceSsbs,
+            onForceSsbsChange = { forceSsbs = it },
         )
                             5 -> ScTvTab(
                                 dp = dp,
@@ -10214,6 +10219,9 @@ private fun ScAdvancedTab(
     selectedBox64ECVersion: String = "",
     onBox64ECVersionChange: (String) -> Unit = {},
     onShowBox64ECDownloadSheet: () -> Unit = {},
+    /** Force SSBS override: "" = follow the container, "1" = on, "0" = off. */
+    forceSsbs: String = "",
+    onForceSsbsChange: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     // Bumped when a preset's values or the preset list change, so the "customised" badges
@@ -10396,6 +10404,22 @@ private fun ScAdvancedTab(
                     onListChanged = { onPresetListChanged(); presetRevision++ },
                     onValuesChanged = { presetRevision++ },
                 )
+                // Force SSBS — the Wine launcher's knob, so not offered to a Linux session.
+                if (!isLinuxEntry) {
+                    Spacer(Modifier.height(8.dp))
+                    val ssbsOptions = listOf("Container default", "On", "Off")
+                    LabeledDropdown(
+                        label = stringResource(R.string.force_ssbs),
+                        options = ssbsOptions,
+                        selectedOption = when (forceSsbs) { "1" -> ssbsOptions[1]; "0" -> ssbsOptions[2]; else -> ssbsOptions[0] },
+                        onSelect = { onForceSsbsChange(when (it) { ssbsOptions[1] -> "1"; ssbsOptions[2] -> "0"; else -> "" }) }
+                    )
+                    Text(
+                        stringResource(R.string.force_ssbs_summary),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.5.sp
+                    )
+                }
             }
         }
 

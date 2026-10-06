@@ -597,6 +597,39 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
             ld_preload += fakeinputDest.getAbsolutePath();
         }
 
+        // Force SSBS (arm64ec only): Wine's arm64 signal return rebuilds PSTATE from a Windows CONTEXT
+        // and clears SSBS, so game threads run with speculative store bypass disabled. Rebuilt layers
+        // honour WINE_FORCE_SSBS; libssbs.so sets the bit from outside for layers that predate it.
+        // Per-game "1"/"0" overrides the container switch; "" follows it.
+        if (wineInfo.isArm64EC()) {
+            boolean forceSsbs = container.isForceSsbs();
+            if (shortcut != null) {
+                String ssbsExtra = shortcut.getExtra("forceSsbs");
+                if (ssbsExtra.equals("1") || ssbsExtra.equals("0")) forceSsbs = ssbsExtra.equals("1");
+            }
+            Log.d("GuestLauncher", "Force SSBS: " + (forceSsbs ? "on" : "off"));
+            if (forceSsbs) {
+                File ssbsDest = new File(imageFs.getLibDir(), "libssbs.so");
+                File ssbsSrc = new File(nativeLibDir, "libssbs.so");
+                try {
+                    if (ssbsSrc.exists()) {
+                        FileUtils.copy(ssbsSrc, ssbsDest);
+                        Log.d("GuestLauncher", "Copied libssbs.so to imagefs");
+                    } else if (!ssbsDest.exists()) {
+                        Log.e("GuestLauncher", "libssbs.so NOT FOUND in APK: " + ssbsSrc.getAbsolutePath());
+                    }
+                } catch (Exception e) {
+                    Log.e("GuestLauncher", "Failed to copy libssbs.so: " + e.getMessage());
+                    e.printStackTrace();
+                }
+                if (ssbsDest.exists()) {
+                    if (!ld_preload.isEmpty()) ld_preload += ":";
+                    ld_preload += ssbsDest.getAbsolutePath();
+                }
+            }
+            envVars.put("WINE_FORCE_SSBS", forceSsbs ? "1" : "0");
+        }
+
         File devInputDir = new File(imageFs.getRootDir(), "dev/input");
         devInputDir.mkdirs();
         File event0 = new File(devInputDir, "event0");
