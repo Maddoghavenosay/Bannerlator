@@ -50,7 +50,10 @@ fun XboxCloudSettingsPanel(
     var naming by remember { mutableStateOf(false) }
 
     if (section == null || section == "stream") Section("Stream", if (live) "Applies to the next stream." else "Applies when a stream starts.") {
-        Choice("Resolution", listOf("720p" to "720p", "1080p" to "1080p", "1080p_hq" to "1080p HQ"), settings.resolution) { onChange(settings.copy(resolution = it)) }
+        // What Microsoft sends depends on the device profile we report: the PC profile gave 2560x1440 on the
+        // Pocket FIT (10-23), so it is labelled by profile, not by a fixed size.
+        Choice("Resolution", listOf("720p" to "720p (phone profile)", "1080p" to "Best (PC profile)", "1080p_hq" to "1080p HQ (TV profile)"),
+            settings.resolution) { onChange(settings.copy(resolution = it)) }
         Choice("Server region", listOf("" to "Automatic") + regions.map { it to it }, settings.region) { onChange(settings.copy(region = it)) }
         Choice("Game language", XboxCloudSettings.LANGUAGES, settings.language) { onChange(settings.copy(language = it)) }
         Choice("Video codec quality", listOf("default" to "Automatic", "high" to "High", "normal" to "Normal", "low" to "Low"), settings.codec) { onChange(settings.copy(codec = it)) }
