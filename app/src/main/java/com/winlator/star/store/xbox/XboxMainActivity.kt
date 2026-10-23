@@ -98,11 +98,14 @@ class XboxMainActivity : ComponentActivity() {
             .putExtra("id", game.id).putExtra("title", game.title).putExtra("hero", game.heroUrl)
             .putExtra("poster", game.posterUrl).putExtra("publisher", game.publisher).putExtra("developer", game.developer)
             .putExtra("description", game.description).putExtra("size", game.sizeBytes).putExtra("market", game.market)
-            .putExtra("access", game.access)
+            .putExtra("access", game.access).putExtra("pc", game.pc).putExtra("cloud", game.cloud)
 
         fun toCatalogItem(game: XboxGame, installed: Boolean = false) = CatalogItem(
             store = Store.XBOX, id = game.id, title = game.title, imageUrl = game.heroUrl, tallImageUrl = game.posterUrl,
-            tags = when { game.gamePass -> "PC Game Pass"; game.owned -> "Owned"; else -> "" },
+            tags = listOfNotNull(
+                when { game.gamePass -> if (game.pc) "PC Game Pass" else "Game Pass"; game.owned -> "Owned"; else -> null },
+                when { game.cloud && !game.pc -> "Cloud only"; game.cloud -> "Cloud"; else -> null },
+            ).joinToString(" · "),
             storeUrl = game.storeUrl, developer = game.developer, description = game.description,
             extra = mapOf("access" to game.access, "installed" to installed.toString()),
         )
@@ -166,6 +169,7 @@ class XboxMainActivity : ComponentActivity() {
             XboxCredentials.invalidate(app) {
                 XboxLibraryCache.clear(app)
                 XboxRuntime.stop()
+                XboxCloudActivity.clearWebSignIn(app)
             }
             XboxDiag.log(app, "signed out")
             runOnUiThread { account = null; message = "Signed out of Xbox. Installed games stay installed." }
@@ -215,8 +219,13 @@ fun rememberXboxLibrary(account: String, onMessage: (String) -> Unit): XboxLibra
                     val response = Xodus.run(app, listOf("library", "--json", "--market", market))
                     val licenses = XboxCatalog.access(response, account, market, report = { XboxDiag.log(app, it) })
                     val products = XboxCatalog.rawProducts(licenses.keys.toList(), market)
-                    val list = products.mapNotNull { XboxCatalog.product(it, licenses, market) }.sortedBy { it.title.lowercase() }
-                    XboxDiag.log(app, "library requested=${licenses.size} returned=${products.size} supported=${list.size}")
+                    // The cloud lists are public; without them the library still lists the PC games.
+                    val cloud = runCatching { XboxCatalog.cloudCatalog(market) }
+                        .onFailure { XboxDiag.log(app, "cloud catalog failed: ${it.javaClass.simpleName}") }.getOrNull()
+                    val list = products.mapNotNull { XboxCatalog.product(it, licenses, market, cloud) }.sortedBy { it.title.lowercase() }
+                    XboxDiag.log(app, "library requested=${licenses.size} returned=${products.size} supported=${list.size} " +
+                        "pc=${list.count { it.pc }} cloud=${list.count { it.cloud }} cloud-only=${list.count { !it.pc }} " +
+                        "cloud-lists=${cloud?.gamePass?.size ?: -1}/${cloud?.all?.size ?: -1}")
                     runCatching { XboxLibraryCache.write(app, account, market, list) }
                     list
                 }
@@ -273,7 +282,7 @@ private fun XboxStorefrontHost(
             }
             DownloadsButton()
             IconButton(onClick = { ctx.startActivity(XboxCloudActivity.intent(ctx)) }, modifier = Modifier.steamFocusRing()) {
-                Icon(Icons.Filled.Cloud, contentDescription = "Cloud gaming (test)", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Filled.Cloud, contentDescription = "Xbox Cloud Gaming", tint = MaterialTheme.colorScheme.primary)
             }
             IconButton(onClick = onSignOut, modifier = Modifier.steamFocusRing()) {
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Sign out", tint = MaterialTheme.colorScheme.primary)
@@ -284,7 +293,7 @@ private fun XboxStorefrontHost(
                 Icon(Icons.Filled.Refresh, contentDescription = "Sync library", tint = MaterialTheme.colorScheme.primary)
             }
             DownloadsButton()
-            StoreRailOverflow(items = listOf(Triple("Cloud gaming (test)", Icons.Filled.Cloud) { ctx.startActivity(XboxCloudActivity.intent(ctx)) }), onSignOut = onSignOut)
+            StoreRailOverflow(items = listOf(Triple("Xbox Cloud Gaming", Icons.Filled.Cloud) { ctx.startActivity(XboxCloudActivity.intent(ctx)) }), onSignOut = onSignOut)
         },
         message = message,
         onMessageTimeout = { message = null },
@@ -305,7 +314,7 @@ private fun XboxLibraryTab(state: XboxLibraryState, wide: Boolean, onOpen: (Xbox
     val shown = remember(state.games, state.installedIds, query, filter) {
         val q = query.trim().lowercase()
         state.games.filter { g ->
-            when (filter) { 1 -> g.id in state.installedIds; 2 -> g.gamePass; 3 -> g.owned; else -> true } &&
+            when (filter) { 1 -> g.id in state.installedIds; 2 -> g.gamePass; 3 -> g.owned; 4 -> g.cloud; else -> true } &&
                 (q.isEmpty() || g.title.lowercase().contains(q))
         }
     }
@@ -318,17 +327,18 @@ private fun XboxLibraryTab(state: XboxLibraryState, wide: Boolean, onOpen: (Xbox
             StoreFilterChip("Installed", filter == 1) { filter = 1 }
             StoreFilterChip("Game Pass", filter == 2) { filter = 2 }
             StoreFilterChip("Owned", filter == 3) { filter = 3 }
+            StoreFilterChip("Cloud", filter == 4) { filter = 4 }
             Spacer(Modifier.weight(1f))
             Text(state.statusText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
         val downloads by DownloadRegistry.entries.collectAsState()
         when {
             state.games.isEmpty() && state.syncing -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                StoreNotice(title = "Syncing your library", body = "Fetching the PC games your account owns or has through PC Game Pass…")
+                StoreNotice(title = "Syncing your library", body = "Fetching the games your account owns or has through Game Pass…")
             }
             state.games.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                StoreNotice(title = "No PC games found yet",
-                    body = "Only PC (Microsoft Store / Xbox app) games are listed; console-only titles are left out.",
+                StoreNotice(title = "No games found yet",
+                    body = "Games with a PC version, or that stream with Xbox Cloud Gaming, are listed.",
                     actionLabel = "Sync now", onAction = { state.refresh(true) })
             }
             shown.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -348,7 +358,7 @@ private fun XboxLibraryTab(state: XboxLibraryState, wide: Boolean, onOpen: (Xbox
                             it.state == com.winlator.star.store.download.DownloadState.QUEUED ||
                             it.state == com.winlator.star.store.download.DownloadState.PAUSED }
                     CatalogLibraryTile(item = XboxMainActivity.toCatalogItem(g, installed), installed = installed,
-                        onOpen = { onOpen(g) }, badgeText = if (g.gamePass) "Game Pass" else null,
+                        onOpen = { onOpen(g) }, badgeText = listOfNotNull(if (g.gamePass) "Game Pass" else null, if (g.cloud && !g.pc) "Cloud" else null).joinToString(" · ").ifEmpty { null },
                         progressLabel = download?.let { "Downloading ${it.pct}%" }, artOnly = true)
                 }
             }
@@ -372,7 +382,8 @@ private fun XboxStoreTab(state: XboxLibraryState, wide: Boolean, onOpen: (XboxGa
     fun action(item: CatalogItem): CatalogAction =
         if (item.extra["access"].isNullOrEmpty()) CatalogAction.ViewOnStore else CatalogAction.Open(item.extra["installed"] == "true")
     val byId = remember(featured, results) { (featured + results.orEmpty()).associateBy { it.id } }
-    fun open(item: CatalogItem) { byId[item.id]?.let(onOpen) }
+    // A library copy knows whether the game streams; catalog results do not.
+    fun open(item: CatalogItem) { (state.games.firstOrNull { it.id == item.id } ?: byId[item.id])?.let(onOpen) }
 
     Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         CatalogSearchField(query = query, placeholder = "Search PC games on the Microsoft Store…",

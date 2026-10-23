@@ -72,7 +72,7 @@ class XboxGameDetailActivity : ComponentActivity() {
         game = XboxGame(i.getStringExtra("id").orEmpty(), i.getStringExtra("title").orEmpty(), i.getStringExtra("hero"),
             i.getStringExtra("poster"), i.getStringExtra("publisher").orEmpty(), i.getStringExtra("developer").orEmpty(),
             i.getStringExtra("description").orEmpty(), i.getLongExtra("size", 0L), i.getStringExtra("market") ?: Xodus.market(),
-            i.getStringExtra("access").orEmpty())
+            i.getStringExtra("access").orEmpty(), i.getBooleanExtra("pc", true), i.getBooleanExtra("cloud", false))
         refresh()
         observeRegistry()
         setContent {
@@ -84,8 +84,10 @@ class XboxGameDetailActivity : ComponentActivity() {
                     busy != null -> StorePrimaryAction.Progress(busy!!, 0f)
                     inst != null -> StorePrimaryAction.Button("Add to Games", ::addToGames)
                     game.access.isEmpty() -> StorePrimaryAction.Button("Not in your library", {}, enabled = false)
+                    !game.pc -> StorePrimaryAction.Button("Stream", ::stream)
                     else -> StorePrimaryAction.Button("Install", ::install)
                 }
+                val secondary = if (game.cloud && game.pc && game.access.isNotEmpty()) StorePrimaryAction.Button("Stream", ::stream) else null
                 val gear = buildList {
                     if (downloading) add(StoreGearItem("🗑", "Cancel download", danger = true) { XboxDownloads.cancel(game.id) })
                     if (inst != null && !downloading) {
@@ -133,13 +135,14 @@ class XboxGameDetailActivity : ComponentActivity() {
                         Spacer(Modifier.height(4.dp))
                         when {
                             inst != null -> StoreStatusText("Installed · ${inst.exe.substringAfterLast('/')}${if (inst.version.isNotBlank()) " · v${inst.version}" else ""}", StoreDetailState.INSTALLED)
-                            game.gamePass -> StoreStatusText("Included with PC Game Pass")
-                            game.owned -> StoreStatusText("Owned")
+                            game.gamePass -> StoreStatusText(if (game.pc) "Included with PC Game Pass" else "Included with Game Pass · cloud only")
+                            game.owned -> StoreStatusText(if (game.pc) "Owned" else "Owned · cloud only")
                             else -> StoreStatusText("Not owned by this account")
                         }
                         status?.let { Spacer(Modifier.height(2.dp)); StoreStatusText(it, StoreDetailState.FAILED) }
                     },
                     primary = primary,
+                    secondary = secondary,
                     gear = gear,
                     tabs = listOf("Details"),
                     selectedTab = tab,
@@ -157,10 +160,14 @@ class XboxGameDetailActivity : ComponentActivity() {
                             Text(game.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         StoreSection(title = "How it runs") {
-                            Text("The PC version is downloaded with your license and runs in a Wine container you pick when " +
+                            if (game.pc) Text("Install: the PC version is downloaded with your license and runs in a Wine container you pick when " +
                                 "adding it to Games. Each launch checks the license with Microsoft, so play online the first time. " +
                                 "Cloud saves are ${if (XboxMainActivity.cloudSaves(this@XboxGameDetailActivity)) "on" else "off"} (Xbox › Profile).",
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (game.cloud) Text("Stream: plays on Microsoft's servers with Xbox Cloud Gaming — nothing to download, " +
+                                "but it needs a steady connection and an Xbox plan that includes cloud play. The first stream may ask you to sign in once.",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = if (game.pc) 6.dp else 0.dp))
                         }
                     }
                 }
@@ -211,6 +218,11 @@ class XboxGameDetailActivity : ComponentActivity() {
                     .setNegativeButton("Cancel", null).show()
             }
         }
+    }
+
+    private fun stream() {
+        XboxDiag.log(applicationContext, "cloud stream ${game.id}")
+        startActivity(XboxCloudActivity.intent(this, game.cloudUrl))
     }
 
     private fun update(inst: XboxInstallState.Installed) {

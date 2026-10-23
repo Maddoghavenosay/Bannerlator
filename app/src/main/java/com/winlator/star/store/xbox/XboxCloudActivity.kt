@@ -28,10 +28,10 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 
 /**
- * Xbox Cloud Gaming test: Microsoft's web player (xbox.com/play) in a full-screen WebView. Runs in its own
- * process (":xboxcloud") with its own WebView data directory, so its sign-in cookies persist and stay apart
- * from the store sign-in and the other stores' web logins. Extras "url" and "ua" override the start page
- * and the user agent for testing.
+ * Xbox Cloud Gaming: Microsoft's web player (xbox.com/play) in a full-screen WebView. It runs in the Xbox
+ * sign-in process (":xboxlogin") and shares its WebView data, so the Microsoft session left by the store
+ * sign-in also signs in the player; signing out of the store clears both ([clearWebSignIn]). The "url" extra
+ * opens a game (xbox.com only); "ua" overrides the user agent for testing.
  */
 class XboxCloudActivity : ComponentActivity() {
     private var web: WebView? = null
@@ -41,7 +41,7 @@ class XboxCloudActivity : ComponentActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
-        runCatching { WebView.setDataDirectorySuffix("xboxcloud") }
+        runCatching { WebView.setDataDirectorySuffix(XboxLoginActivity.WEBVIEW_SUFFIX) }
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideBars()
@@ -97,8 +97,18 @@ class XboxCloudActivity : ComponentActivity() {
         }
         root.addView(view, FrameLayout.LayoutParams(-1, -1))
         if (savedInstanceState != null) view.restoreState(savedInstanceState)
-        else view.loadUrl(intent.getStringExtra("url") ?: START_URL)
+        else view.loadUrl(startUrl(intent))
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        web?.loadUrl(startUrl(intent))
+    }
+
+    private fun startUrl(intent: Intent): String =
+        intent.getStringExtra("url")?.takeIf { url -> runCatching { java.net.URI(url) }.getOrNull()?.let {
+            it.scheme == "https" && it.host == "www.xbox.com" && it.userInfo == null && it.port == -1 } == true } ?: START_URL
 
     /** The WebView's own agent without the "; wv" and "Version/4.0" markers, so the page sees Chrome for Android. */
     private fun chromeUserAgent(default: String): String =
@@ -148,16 +158,24 @@ class XboxCloudActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "XboxCloud"
-        const val PROCESS_SUFFIX = ":xboxcloud"
         const val START_URL = "https://www.xbox.com/play"
 
-        fun intent(context: Context): Intent = Intent(context, XboxCloudActivity::class.java)
+        /** The player at [url] (default: the Cloud Gaming home); an open player is reused. */
+        fun intent(context: Context, url: String? = null): Intent = Intent(context, XboxCloudActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .apply { if (url != null) putExtra("url", url) }
 
-        /** True in the cloud-play process (BannerlatorApp skips its start-up work there). */
-        fun isCloudProcess(): Boolean = runCatching {
-            val name = if (android.os.Build.VERSION.SDK_INT >= 28) android.app.Application.getProcessName()
-                else java.io.File("/proc/self/cmdline").readText().trimEnd('\u0000')
-            name.endsWith(PROCESS_SUFFIX)
-        }.getOrDefault(false)
+        /**
+         * Signs the player and the sign-in window out of Microsoft's web pages: ends the ":xboxlogin" process
+         * (so nothing holds the files) and deletes its WebView data. Called from the main process on sign-out.
+         */
+        fun clearWebSignIn(context: Context) {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            am.runningAppProcesses.orEmpty().filter { it.processName.endsWith(XboxLoginActivity.PROCESS_SUFFIX) }
+                .forEach { android.os.Process.killProcess(it.pid) }
+            val suffix = XboxLoginActivity.WEBVIEW_SUFFIX
+            listOf(java.io.File(context.applicationInfo.dataDir, "app_webview_$suffix"), java.io.File(context.cacheDir.parentFile, "cache/webview_$suffix"))
+                .forEach { runCatching { it.deleteRecursively() } }
+        }
     }
 }
