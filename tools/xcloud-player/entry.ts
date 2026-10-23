@@ -113,6 +113,8 @@ async function run() {
     BLCloud.log(`controllers at attach: ${Array.from(navigator.getGamepads()).filter(Boolean).length}`)
     // The app's "Xbox button" (in the leave dialog) presses Nexus for a moment.
     ;(window as any).__blNexus = () => { pad.sendButtonState('Nexus', 1); setTimeout(() => pad.sendButtonState('Nexus', 0), 200) }
+    // The app's menu button / a controller's Guide button: Nexus follows the physical button.
+    ;(window as any).__blButton = (name: string, value: number) => pad.sendButtonState(name, value)
 
     setInterval(() => { call('keepalive') }, 30_000)
     ;(window as any).__blStop = () => { try { pad.detach(); player.destroy() } catch (e) { /* closing anyway */ } }

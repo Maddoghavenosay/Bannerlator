@@ -219,8 +219,40 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         if (hasFocus) hideBars()
     }
 
+    private val menuButton by lazy { com.winlator.star.ui.components.GlobalControllerPrefs.getMenuButtonKeyCode(this) }
+    private var nexusHeld = false
+    private var backDownAt = 0L
+
+    /**
+     * The Xbox button in the stream: a controller's Guide button, and the menu button chosen in Input
+     * Controls › Device (the one that opens the side menu in Wine games). Same rules as the game session:
+     * never B, never the Back Android makes out of an unhandled B. A Back chosen as the menu button opens
+     * the Xbox menu on a short press; holding it asks to leave.
+     */
+    private fun nexusKey(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        if (code == KeyEvent.KEYCODE_BUTTON_B) return false
+        val isMenuButton = menuButton > 0 && code == menuButton
+        if (code != KeyEvent.KEYCODE_BUTTON_MODE && !isMenuButton) return false
+        if (code == KeyEvent.KEYCODE_BACK && ((event.flags and KeyEvent.FLAG_FALLBACK) != 0 || event.scanCode in 0x130..0x13f)) return false
+        if (code == KeyEvent.KEYCODE_BACK) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) backDownAt = event.eventTime
+            if (event.action == KeyEvent.ACTION_DOWN && event.eventTime - backDownAt >= 600 && !nexusHeld) { backDownAt = Long.MAX_VALUE; confirmLeave() }
+            if (event.action == KeyEvent.ACTION_UP && backDownAt != Long.MAX_VALUE) pressNexus(1).also { web?.postDelayed({ pressNexus(0) }, 150) }
+            return true
+        }
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) { nexusHeld = true; pressNexus(1) }
+        if (event.action == KeyEvent.ACTION_UP && nexusHeld) { nexusHeld = false; pressNexus(0) }
+        return true
+    }
+
+    private fun pressNexus(value: Int) {
+        web?.evaluateJavascript("window.__blButton && window.__blButton('Nexus', $value)", null)
+    }
+
     // Controller back (the Pocket FIT's back button, or B the stream did not take) asks first; touch back leaves.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (notice == null && nexusKey(event)) return true
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             if (event.action == KeyEvent.ACTION_UP) {
                 val fromController = event.source and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD ||
