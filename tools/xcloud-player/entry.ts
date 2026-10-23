@@ -102,9 +102,15 @@ async function run() {
     const ice = expect('ice', await call('ice', local))
     player.setRemoteIceCandidates(JSON.parse(JSON.parse(ice.body).exchangeResponse))
 
+    // The control channel's authorization (sent on the message handshake) announces controller 0 and
+    // then removes it, clearing any handler attached before; attach the controller after that.
+    const handshake = Date.now()
+    while (!player._channels.message._handshakeCompleted && Date.now() - handshake < 20_000) await sleep(100)
+    BLCloud.log(`handshake ${player._channels.message._handshakeCompleted ? 'done' : 'missing'} after ${Date.now() - handshake} ms`)
+    await sleep(300)
     const pad = new Gamepad(0, { enable_keyboard: false })
     pad.attach(player)
-    BLCloud.log(`controllers at start: ${Array.from(navigator.getGamepads()).filter(Boolean).length}`)
+    BLCloud.log(`controllers at attach: ${Array.from(navigator.getGamepads()).filter(Boolean).length}`)
     // The app's "Xbox button" (in the leave dialog) presses Nexus for a moment.
     ;(window as any).__blNexus = () => { pad.sendButtonState('Nexus', 1); setTimeout(() => pad.sendButtonState('Nexus', 0), 200) }
 
