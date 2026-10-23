@@ -1,5 +1,10 @@
 # Star-Compose — Progress Log
 
+## 2026-10-23 — ☁️ Xbox Cloud Gaming WebView test (feat/xbox-cloud, CI)
+> - **Why:** user asked about streaming. The store lists only games with a PC version (XboxCatalog.kt:123); xCloud could add the console-only Game Pass titles. First step, on the user's go: does Microsoft's own web player (xbox.com/play) work in an in-app WebView?
+> - **Built b604bd5a:** `XboxCloudActivity` — full-screen WebView in its own process (`:xboxcloud`, own data directory, cookies kept), Chrome-for-Android user agent (no "; wv"), no X-Requested-With header, screen kept on, a controller's B never closes it. Test entry: cloud icon in the Xbox store header / rail menu. CI run 39990722107.
+> - **Next:** device test — page load, Microsoft sign-in, stream a game, controller + touch + sound, logcat. Not device-tested.
+
 ## 2026-10-23 — 🔎 Layer diagnostics: 60 Hz cap + missing FEX unixlib on DroidDeck 11-9.1 (fix/refresh-unlock-modeset, CI)
 > - **Why:** user reported, on the DroidDeck-Proton 11-9.1 layer, DiRT's refresh rate stuck at 60 and the drawer never showing FEX "unixlib". Part of the v15 layer plan (proton-wine).
 > - **Device tests (container 1, DiRT Showdown, Wayland; shortcut backed up and restored, md5 93d521b9…):** run 1 on 11-9.1 with `WINEDEBUG=+system` → the game reads only 60 Hz modes from the virtual-desktop source; run 2 with the container switched to Proton 10.0-4 (prefix + .container backed up to /data/local/tmp, restored afterwards, backup deleted on the user's OK) → refresh 60⇄144 selectable and drawer "unixlib" (user screenshots 11:37); run 3 back on 11-9.1 with `warn+module` → Wine tries `libarm64ecfe.so` / `libwow64fe.so`. Logs: /sdcard/Download/bannerlator/diag-20261023-*.log.
