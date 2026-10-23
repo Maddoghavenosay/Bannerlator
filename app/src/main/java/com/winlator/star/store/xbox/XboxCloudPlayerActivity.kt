@@ -282,7 +282,13 @@ class XboxCloudPlayerActivity : ComponentActivity() {
             if (event.action == KeyEvent.ACTION_UP) { if (notice == null) openMenu() else finish() }
             return true
         }
-        return super.dispatchKeyEvent(event)
+        // Controller buttons belong to the stream: the page reads them through the Gamepad API (fed by this
+        // dispatch), and reporting them handled stops Android adding its fallback key for an unhandled button
+        // (B became Home on the Pocket FIT).
+        val handled = super.dispatchKeyEvent(event)
+        val fromController = event.source and android.view.InputDevice.SOURCE_GAMEPAD == android.view.InputDevice.SOURCE_GAMEPAD ||
+            event.source and android.view.InputDevice.SOURCE_JOYSTICK == android.view.InputDevice.SOURCE_JOYSTICK
+        return handled || (notice == null && web != null && fromController)
     }
 
     /** The player menu: Resume / Xbox button / Leave, and every cloud setting (picture, stats and sound change live). */
