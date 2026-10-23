@@ -245,6 +245,8 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     private var guideDownAt = 0L
     private var lastGuideUp = 0L
     private var pendingNexus: Runnable? = null
+    /** The release of the press that opened the menu must not close it again. */
+    private var swallowGuideUp = false
 
     /** Guide or the Input Controls menu button (the one that opens the side menu in Wine games). */
     private fun isGuideKey(event: KeyEvent): Boolean {
@@ -267,10 +269,12 @@ class XboxCloudPlayerActivity : ComponentActivity() {
                 val pending = pendingNexus
                 if (pending != null && event.eventTime - lastGuideUp <= DOUBLE_PRESS_MS) {
                     root.removeCallbacks(pending); pendingNexus = null; guideDown = false
+                    swallowGuideUp = true
                     openMenu()
                 }
             } else if (guideDown && event.eventTime - guideDownAt >= 600) {
                 guideDown = false
+                swallowGuideUp = true
                 openMenu()
             }
         } else if (event.action == KeyEvent.ACTION_UP && guideDown) {
@@ -292,7 +296,10 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (menu != null) {
             // Guide closes the menu; Back goes up one page, then closes it.
-            if (isGuideKey(event)) { if (event.action == KeyEvent.ACTION_UP) closeMenu(); return true }
+            if (isGuideKey(event)) {
+                if (event.action == KeyEvent.ACTION_UP) { if (swallowGuideUp) swallowGuideUp = false else closeMenu() }
+                return true
+            }
             if (event.keyCode == KeyEvent.KEYCODE_BACK) {
                 if (event.action == KeyEvent.ACTION_UP) { if (menuPage.isNotEmpty()) menuPage = "" else closeMenu() }
                 return true
