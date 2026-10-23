@@ -23,12 +23,35 @@ data class XboxGame(
     val pc: Boolean = true,
     /** Can be streamed with Xbox Cloud Gaming on this account. */
     val cloud: Boolean = false,
+    /** The product that streams when it is not this one (the console edition of a PC game). */
+    val cloudId: String? = null,
 ) {
     val owned get() = access == "owned"
     val gamePass get() = access == "gamepass"
     val storeUrl get() = "https://www.xbox.com/games/store/$id"
     /** Starts the game in Microsoft's cloud player; the page also signs in when needed. */
-    val cloudUrl get() = "https://www.xbox.com/play/launch/${title.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifEmpty { "game" }}/$id"
+    val cloudUrl get() = "https://www.xbox.com/play/launch/${title.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifEmpty { "game" }}/${cloudId ?: id}"
+}
+
+/**
+ * One card per game: Microsoft lists a game's console and PC editions as separate products, so a cloud-only
+ * product whose title matches a PC game is folded into it (the PC card then also streams).
+ */
+internal fun mergeEditions(games: List<XboxGame>): List<XboxGame> {
+    fun key(title: String) = title.lowercase().replace(Regex("[^a-z0-9]+"), "")
+    val cloudOnly = games.filter { !it.pc && it.cloud }.groupBy { key(it.title) }
+    val folded = HashSet<String>()
+    val merged = games.mapNotNull { game ->
+        when {
+            !game.pc -> game
+            game.cloud -> game
+            else -> cloudOnly[key(game.title)]?.firstOrNull()?.let { console ->
+                folded.add(console.id)
+                game.copy(cloud = true, cloudId = console.id)
+            } ?: game
+        }
+    }
+    return merged.filter { it.id !in folded }
 }
 
 /**

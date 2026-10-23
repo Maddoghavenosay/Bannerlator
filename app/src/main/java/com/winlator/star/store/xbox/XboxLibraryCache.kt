@@ -31,7 +31,7 @@ internal object XboxLibraryCache {
                 for (game in games) put(JSONObject().put("id", game.id).put("title", game.title)
                     .put("image", game.heroUrl).put("poster", game.posterUrl).put("description", game.description)
                     .put("developer", game.developer).put("publisher", game.publisher).put("size", game.sizeBytes)
-                    .put("access", game.access).put("pc", game.pc).put("cloud", game.cloud))
+                    .put("access", game.access).put("pc", game.pc).put("cloud", game.cloud).put("cloudId", game.cloudId))
             }).toString()
 
     internal fun decode(text: String?, account: String, market: String, now: Long = System.currentTimeMillis()): Snapshot? = runCatching {
@@ -50,7 +50,7 @@ internal object XboxLibraryCache {
             require(id.matches(Regex("[A-Z0-9]{12}")) && title.isNotBlank() && access in setOf("owned", "gamepass"))
             XboxGame(id, title, row.optString("image").takeIf { it.isNotEmpty() }, row.optString("poster").takeIf { it.isNotEmpty() },
                 row.optString("publisher"), row.optString("developer"), row.optString("description"), row.optLong("size"), market, access,
-                row.getBoolean("pc"), row.getBoolean("cloud"))
+                row.getBoolean("pc"), row.getBoolean("cloud"), row.optString("cloudId").takeIf { it.matches(Regex("[A-Z0-9]{12}")) })
         }
         require(games.map { it.id }.distinct().size == games.size)
         Snapshot(games, savedAt)

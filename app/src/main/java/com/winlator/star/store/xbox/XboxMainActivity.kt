@@ -98,7 +98,7 @@ class XboxMainActivity : ComponentActivity() {
             .putExtra("id", game.id).putExtra("title", game.title).putExtra("hero", game.heroUrl)
             .putExtra("poster", game.posterUrl).putExtra("publisher", game.publisher).putExtra("developer", game.developer)
             .putExtra("description", game.description).putExtra("size", game.sizeBytes).putExtra("market", game.market)
-            .putExtra("access", game.access).putExtra("pc", game.pc).putExtra("cloud", game.cloud)
+            .putExtra("access", game.access).putExtra("pc", game.pc).putExtra("cloud", game.cloud).putExtra("cloudId", game.cloudId)
 
         fun toCatalogItem(game: XboxGame, installed: Boolean = false) = CatalogItem(
             store = Store.XBOX, id = game.id, title = game.title, imageUrl = game.heroUrl, tallImageUrl = game.posterUrl,
@@ -222,9 +222,9 @@ fun rememberXboxLibrary(account: String, onMessage: (String) -> Unit): XboxLibra
                     // The cloud lists are public; without them the library still lists the PC games.
                     val cloud = runCatching { XboxCatalog.cloudCatalog(market) }
                         .onFailure { XboxDiag.log(app, "cloud catalog failed: ${it.javaClass.simpleName}") }.getOrNull()
-                    val list = products.mapNotNull { XboxCatalog.product(it, licenses, market, cloud) }.sortedBy { it.title.lowercase() }
+                    val list = mergeEditions(products.mapNotNull { XboxCatalog.product(it, licenses, market, cloud) }).sortedBy { it.title.lowercase() }
                     XboxDiag.log(app, "library requested=${licenses.size} returned=${products.size} supported=${list.size} " +
-                        "pc=${list.count { it.pc }} cloud=${list.count { it.cloud }} cloud-only=${list.count { !it.pc }} " +
+                        "pc=${list.count { it.pc }} cloud=${list.count { it.cloud }} cloud-only=${list.count { !it.pc }} merged=${list.count { it.cloudId != null }} " +
                         "cloud-lists=${cloud?.gamePass?.size ?: -1}/${cloud?.all?.size ?: -1}")
                     runCatching { XboxLibraryCache.write(app, account, market, list) }
                     list
@@ -358,7 +358,7 @@ private fun XboxLibraryTab(state: XboxLibraryState, wide: Boolean, onOpen: (Xbox
                             it.state == com.winlator.star.store.download.DownloadState.QUEUED ||
                             it.state == com.winlator.star.store.download.DownloadState.PAUSED }
                     CatalogLibraryTile(item = XboxMainActivity.toCatalogItem(g, installed), installed = installed,
-                        onOpen = { onOpen(g) }, badgeText = listOfNotNull(if (g.gamePass) "Game Pass" else null, if (g.cloud && !g.pc) "Cloud" else null).joinToString(" · ").ifEmpty { null },
+                        onOpen = { onOpen(g) }, badgeText = listOfNotNull(if (g.gamePass) "Game Pass" else null, if (g.cloud) "Cloud" else null).joinToString(" · ").ifEmpty { null },
                         progressLabel = download?.let { "Downloading ${it.pct}%" }, artOnly = true)
                 }
             }

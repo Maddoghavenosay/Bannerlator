@@ -72,7 +72,8 @@ class XboxGameDetailActivity : ComponentActivity() {
         game = XboxGame(i.getStringExtra("id").orEmpty(), i.getStringExtra("title").orEmpty(), i.getStringExtra("hero"),
             i.getStringExtra("poster"), i.getStringExtra("publisher").orEmpty(), i.getStringExtra("developer").orEmpty(),
             i.getStringExtra("description").orEmpty(), i.getLongExtra("size", 0L), i.getStringExtra("market") ?: Xodus.market(),
-            i.getStringExtra("access").orEmpty(), i.getBooleanExtra("pc", true), i.getBooleanExtra("cloud", false))
+            i.getStringExtra("access").orEmpty(), i.getBooleanExtra("pc", true), i.getBooleanExtra("cloud", false),
+            i.getStringExtra("cloudId"))
         refresh()
         observeRegistry()
         setContent {
