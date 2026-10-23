@@ -12,10 +12,19 @@ import java.net.URL
  * expires. The request shapes follow Greenlight / xal-node by unknownskl (MIT).
  */
 internal object XboxCloudSession {
-    class Session(val account: String, val token: String, val offering: String, val baseUri: String, val regions: Int,
+    class Region(val name: String, val baseUri: String, val isDefault: Boolean)
+
+    class Session(val account: String, val token: String, val offering: String, val baseUri: String, val regionList: List<Region>,
                   /** Microsoft account token for a session's /connect step; null when the account could not get one. */
-                  val userToken: String?, private val expiresAt: Long) {
+                  val userToken: String?, private val expiresAt: Long,
+                  /** The os name sent with each request (it selects the stream resolution). */
+                  val osName: String = "windows") {
         val fresh get() = System.currentTimeMillis() < expiresAt - 5 * 60_000L
+        val regions get() = regionList.size
+
+        /** This session against [regionName]'s server (Microsoft's default when empty or unknown), asking as [os]. */
+        fun forStream(regionName: String, os: String): Session = Session(account, token, offering,
+            regionList.firstOrNull { it.name == regionName }?.baseUri ?: baseUri, regionList, userToken, expiresAt, os)
     }
 
     @Volatile private var cached: Session? = null
@@ -24,11 +33,12 @@ internal object XboxCloudSession {
         cached?.takeIf { it.account == account && it.fresh }?.let { return it }
         val json = Xodus.run(app, listOf("cloud-token"), timeout = 60)
         require(json.getInt("schema") == 1 && json.getString("account") == account)
-        val regions = json.getJSONArray("regions")
-        val default = (0 until regions.length()).map { regions.getJSONObject(it) }.let { list -> list.firstOrNull { it.optBoolean("isDefault") } ?: list.firstOrNull() }
-            ?: error("No Xbox Cloud Gaming region")
+        val array = json.getJSONArray("regions")
+        val regions = (0 until array.length()).map { array.getJSONObject(it) }
+            .map { Region(it.getString("name"), it.getString("baseUri"), it.optBoolean("isDefault")) }
+        val default = regions.firstOrNull { it.isDefault } ?: regions.firstOrNull() ?: error("No Xbox Cloud Gaming region")
         val seconds = json.optLong("durationInSeconds").coerceIn(0, 24 * 3600)
-        return Session(account, json.getString("gsToken"), json.getString("offering"), default.getString("baseUri"), regions.length(),
+        return Session(account, json.getString("gsToken"), json.getString("offering"), default.baseUri, regions,
             json.optString("userToken").takeIf { !json.isNull("userToken") && it.isNotEmpty() }, System.currentTimeMillis() + seconds * 1000).also { cached = it }
     }
 
@@ -64,7 +74,7 @@ internal object XboxCloudSession {
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("X-Gssv-Client", "XboxComBrowser")
-            connection.setRequestProperty("X-MS-Device-Info", DEVICE_INFO)
+            connection.setRequestProperty("X-MS-Device-Info", deviceInfo(session.osName))
             if (body != null) {
                 connection.doOutput = true
                 connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
@@ -76,12 +86,12 @@ internal object XboxCloudSession {
         } finally { connection.disconnect() }
     }
 
-    private val DEVICE_INFO = JSONObject()
+    private fun deviceInfo(os: String) = JSONObject()
         .put("appInfo", JSONObject().put("env", JSONObject().put("clientAppId", "www.xbox.com").put("clientAppType", "browser")
             .put("clientAppVersion", "21.1.98").put("clientSdkVersion", "8.5.3").put("httpEnvironment", "prod").put("sdkInstallId", "")))
         .put("dev", JSONObject()
             .put("hw", JSONObject().put("make", "Microsoft").put("model", "unknown").put("sdktype", "web"))
-            .put("os", JSONObject().put("name", "windows").put("ver", "22631.2715").put("platform", "desktop"))
+            .put("os", JSONObject().put("name", os).put("ver", "22631.2715").put("platform", "desktop"))
             .put("displayInfo", JSONObject().put("dimensions", JSONObject().put("widthInPixels", 1920).put("heightInPixels", 1080))
                 .put("pixelDensity", JSONObject().put("dpiX", 2).put("dpiY", 2)))
             .put("browser", JSONObject().put("browserName", "chrome").put("browserVersion", "119.0")))

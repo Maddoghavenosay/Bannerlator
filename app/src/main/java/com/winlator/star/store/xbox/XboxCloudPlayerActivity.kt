@@ -6,7 +6,6 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
-import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
@@ -23,6 +22,16 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewAssetLoader
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.Executors
@@ -44,7 +53,8 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     @Volatile private var titleId: String? = null
     @Volatile private var closed = false
     @Volatile private var webUrl: String? = null
-    private var leaving: android.app.AlertDialog? = null
+    @Volatile private var settings = XboxCloudSettings()
+    private var menu: androidx.compose.ui.platform.ComposeView? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,8 +74,10 @@ class XboxCloudPlayerActivity : ComponentActivity() {
                 webUrl = (cached ?: XboxGame(requested, intent.getStringExtra("title").orEmpty())).cloudUrl
                 val active = XboxCloudSession.get(applicationContext, account)
                 val title = XboxCloudSession.titles(active)[product] ?: error("This game can't be streamed with this account here.")
-                session = active; titleId = title
-                XboxDiag.log(applicationContext, "cloud player: $product -> title $title, region ${java.net.URI(active.baseUri).host}, transfer=${active.userToken != null}")
+                settings = XboxCloudSettings.load(applicationContext)
+                session = active.forStream(settings.region, settings.osName); titleId = title
+                XboxDiag.log(applicationContext, "cloud player: $product -> title $title, region ${java.net.URI(session!!.baseUri).host}, " +
+                    "transfer=${active.userToken != null}, settings ${settings.toJson()}")
             }
             runOnUiThread {
                 if (closed) return@runOnUiThread
@@ -132,6 +144,9 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
+        fun settings(): String = this@XboxCloudPlayerActivity.settings.toJson()
+
+        @JavascriptInterface
         fun log(text: String) { XboxDiag.log(applicationContext, "cloud player page: ${text.take(240)}") }
 
         @JavascriptInterface
@@ -148,9 +163,9 @@ class XboxCloudPlayerActivity : ComponentActivity() {
             "start" -> {
                 val body = JSONObject().put("clientSessionId", "").put("titleId", titleId).put("systemUpdateGroup", "")
                     .put("settings", JSONObject().put("nanoVersion", "V3;WebrtcTransport.dll").put("enableOptionalDataCollection", false)
-                        .put("enableTextToSpeech", false).put("highContrast", 0).put("locale", java.util.Locale.getDefault().toLanguageTag())
+                        .put("enableTextToSpeech", false).put("highContrast", 0).put("locale", settings.language.ifEmpty { java.util.Locale.getDefault().toLanguageTag() })
                         .put("useIceConnection", false).put("timezoneOffsetMinutes", java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)
-                        .put("sdkType", "web").put("osName", "windows"))
+                        .put("sdkType", "web").put("osName", settings.osName))
                     .put("serverId", "").put("fallbackRegionNames", JSONArray())
                 XboxCloudSession.request(active, "POST", "/v5/sessions/cloud/play", body.toString()).also { reply ->
                     if (reply.status in 200..299) sessionPath = JSONObject(reply.body).getString("sessionPath").trim('/')
@@ -242,7 +257,7 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         if (code == KeyEvent.KEYCODE_BACK && ((event.flags and KeyEvent.FLAG_FALLBACK) != 0 || event.scanCode in 0x130..0x13f)) return false
         if (code == KeyEvent.KEYCODE_BACK) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) backDownAt = event.eventTime
-            if (event.action == KeyEvent.ACTION_DOWN && event.eventTime - backDownAt >= 600 && !nexusHeld) { backDownAt = Long.MAX_VALUE; confirmLeave() }
+            if (event.action == KeyEvent.ACTION_DOWN && event.eventTime - backDownAt >= 600 && !nexusHeld) { backDownAt = Long.MAX_VALUE; openMenu() }
             if (event.action == KeyEvent.ACTION_UP && backDownAt != Long.MAX_VALUE) pressNexus(1).also { web?.postDelayed({ pressNexus(0) }, 150) }
             return true
         }
@@ -255,30 +270,75 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         web?.evaluateJavascript("window.__blButton && window.__blButton('Nexus', $value)", null)
     }
 
-    // Controller back (the Pocket FIT's back button, or B the stream did not take) asks first; touch back leaves.
+    // Back (the Pocket FIT's back button, B the stream did not take, or touch back) opens the player menu, so a
+    // stray press never ends a stream; Back again closes it. With an error notice up, Back leaves.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (menu != null) {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) { if (event.action == KeyEvent.ACTION_UP) closeMenu(); return true }
+            return super.dispatchKeyEvent(event)
+        }
         if (notice == null && nexusKey(event)) return true
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-            if (event.action == KeyEvent.ACTION_UP) {
-                val fromController = event.source and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD ||
-                    event.source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK
-                if (fromController && notice == null) confirmLeave() else finish()
-            }
+            if (event.action == KeyEvent.ACTION_UP) { if (notice == null) openMenu() else finish() }
             return true
         }
         return super.dispatchKeyEvent(event)
     }
 
-    private fun confirmLeave() {
-        if (leaving?.isShowing == true) return
-        leaving = android.app.AlertDialog.Builder(this, com.winlator.star.R.style.StoreAlertDialogDark)
-            .setTitle("Leave Xbox Cloud Gaming?")
-            .setMessage("The stream ends when you leave. \"Xbox button\" opens the game's Xbox menu (so does View + Menu together).")
-            .setPositiveButton("Leave") { _, _ -> finish() }
-            .setNeutralButton("Xbox button") { _, _ -> web?.evaluateJavascript("window.__blNexus && window.__blNexus()", null) }
-            .setNegativeButton("Stay", null)
-            .setOnDismissListener { web?.requestFocus() }
-            .show()
+    /** The player menu: Resume / Xbox button / Leave, and every cloud setting (picture, stats and sound change live). */
+    private fun openMenu() {
+        if (menu != null || web == null) return
+        web?.evaluateJavascript("window.__blInput && window.__blInput(false)", null)
+        val regions = session?.regionList?.map { it.name }.orEmpty()
+        val view = androidx.compose.ui.platform.ComposeView(this)
+        view.setContent {
+            com.winlator.star.ui.theme.WinlatorTheme {
+                var current by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(settings) }
+                val resume = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+                androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { resume.requestFocus() } }
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+                    androidx.compose.foundation.layout.Column(
+                        androidx.compose.ui.Modifier.fillMaxHeight().width(460.dp)
+                            .background(androidx.compose.material3.MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(vertical = 12.dp),
+                    ) {
+                        androidx.compose.material3.Text(intent.getStringExtra("title").orEmpty().ifEmpty { "Xbox Cloud Gaming" },
+                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+                            modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp))
+                        androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                            androidx.compose.material3.Button(onClick = { closeMenu() },
+                                modifier = androidx.compose.ui.Modifier.focusRequester(resume)) { androidx.compose.material3.Text("Resume") }
+                            androidx.compose.material3.OutlinedButton(onClick = {
+                                closeMenu(); web?.evaluateJavascript("window.__blNexus && window.__blNexus()", null)
+                            }) { androidx.compose.material3.Text("Xbox button") }
+                            androidx.compose.material3.OutlinedButton(onClick = { finish() }) { androidx.compose.material3.Text("Leave") }
+                        }
+                        androidx.compose.material3.Text("View + Menu together, Guide or your menu button also press the Xbox button.",
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp))
+                        XboxCloudSettingsPanel(current, regions, live = true) { changed ->
+                            current = changed
+                            settings = changed
+                            XboxCloudSettings.save(this@XboxCloudPlayerActivity, changed)
+                            web?.evaluateJavascript("window.__blApply && window.__blApply(${JSONObject.quote(changed.toJson())})", null)
+                        }
+                    }
+                }
+            }
+        }
+        menu = view
+        root.addView(view, FrameLayout.LayoutParams(-1, -1))
+        view.requestFocus()
+    }
+
+    private fun closeMenu() {
+        menu?.let { root.removeView(it) }
+        menu = null
+        web?.evaluateJavascript("window.__blInput && window.__blInput(true)", null)
+        web?.requestFocus()
     }
 
     override fun onDestroy() {

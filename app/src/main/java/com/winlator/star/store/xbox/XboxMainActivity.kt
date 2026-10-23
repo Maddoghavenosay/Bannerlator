@@ -457,6 +457,13 @@ private fun XboxProfileTab(account: String, state: XboxLibraryState, modifier: M
             Text("Off by default. Saves then stay on this device. Turning it on can overwrite your account's cloud saves; " +
                 "use a test account first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        StoreSection(title = "Cloud gaming") {
+            Text("Resolution, region, bitrate, picture effects, stats and sound for streamed games.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(6.dp))
+            androidx.compose.material3.OutlinedButton(onClick = { ctx.startActivity(android.content.Intent(ctx, XboxCloudSettingsActivity::class.java)) },
+                modifier = Modifier.steamFocusRing()) { Text("Cloud gaming settings") }
+        }
         StoreSection(title = "About") {
             Text("PC games from the Microsoft Store and PC Game Pass, downloaded with your own license and run in a Wine " +
                 "container. No console emulation; UWP/APPX apps are not supported. Microsoft may not welcome third-party " +
@@ -464,6 +471,8 @@ private fun XboxProfileTab(account: String, state: XboxLibraryState, modifier: M
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(6.dp))
             Text("Backend: Xodus (GPL-3.0) with Xodus Nexus (MIT) and DroidDeck's Android adaptation (GPL-3.0). " +
+                "Cloud player: Greenlight's WebRTC client by UnknownSKL (MIT); stream settings and sharpening after " +
+                "Better xCloud by redphx (MIT). " +
                 "Diagnostics: Download/Bannerlator/xbox_diag.txt", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

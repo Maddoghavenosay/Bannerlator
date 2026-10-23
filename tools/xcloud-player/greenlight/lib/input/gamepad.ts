@@ -384,8 +384,9 @@ export default class Gamepad {
         const rumbleData = {
             startDelay: 0,
             duration: report.durationMs,
-            weakMagnitude: report.rightMotorPercent,
-            strongMagnitude: report.leftMotorPercent,
+            // Bannerlator: the player's rumble strength setting (0..1).
+            weakMagnitude: report.rightMotorPercent * ((window as any).__blRumble ?? 1),
+            strongMagnitude: report.leftMotorPercent * ((window as any).__blRumble ?? 1),
 
             leftTrigger: report.leftTriggerMotorPercent,
             rightTrigger: report.rightTriggerMotorPercent,
@@ -397,7 +398,7 @@ export default class Gamepad {
             const intensityRumbleTriggers = (report.leftTriggerMotorPercent + report.rightTriggerMotorPercent) / 4
             const endIntensity = Math.min(intensityRumble, intensityRumbleTriggers)
             
-            rumbleData.weakMagnitude = Math.min(1, report.rightMotorPercent + endIntensity)
+            rumbleData.weakMagnitude = Math.min(1, (report.rightMotorPercent + endIntensity) * ((window as any).__blRumble ?? 1))
 
             // Set triggers to 0 as dual-rumble does not support Triggers
             // @TODO: Check if we can improve rumble: https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/main/GamepadHapticsActuatorTriggerRumble/explainer.md

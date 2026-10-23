@@ -2,9 +2,34 @@
 // through the app (BLCloud), which holds the tokens; this page only does WebRTC, video, sound and input.
 import xCloudPlayer from './greenlight/lib/player'
 import Gamepad from './greenlight/lib/input/gamepad'
+import { EffectRenderer, Effects, needsRenderer } from './renderer'
+import { StreamStats } from './streamstats'
+import { capVideoBitrate, preferH264Profile } from './sdp-tweaks'
 
 interface Reply { status: number, body: string }
-declare const BLCloud: { call(id: number, op: string, arg: string): void, status(text: string): void, failed(stage: string, detail: string): void, playing(): void, log(text: string): void }
+declare const BLCloud: { call(id: number, op: string, arg: string): void, status(text: string): void, failed(stage: string, detail: string): void, playing(): void, log(text: string): void, settings(): string }
+
+/** The player settings the app hands over (XboxCloudSettings.toJson); stream-start ones are applied by the app. */
+interface Settings extends Effects {
+    bitrateMbps: number      // 0 = Microsoft's own limit
+    codec: string            // 'default' | 'high' | 'normal' | 'low'
+    preventDrops: boolean
+    stats: boolean
+    volume: number           // 100..300 %
+    rumble: number           // 0..100 %
+}
+let settings: Settings = JSON.parse(BLCloud.settings())
+
+// Codec profile and bitrate cap go into our offer (Better xCloud's approach).
+const nativeSetLocalDescription = RTCPeerConnection.prototype.setLocalDescription
+RTCPeerConnection.prototype.setLocalDescription = function (this: RTCPeerConnection, description?: RTCLocalSessionDescriptionInit) {
+    if (description?.sdp) {
+        if (settings.codec === 'high' || settings.codec === 'normal' || settings.codec === 'low') description.sdp = preferH264Profile(description.sdp, settings.codec)
+        if (settings.bitrateMbps > 0) description.sdp = capVideoBitrate(description.sdp, settings.bitrateMbps * 1000)
+    }
+    return nativeSetLocalDescription.call(this, description as RTCLocalSessionDescriptionInit)
+} as typeof RTCPeerConnection.prototype.setLocalDescription
+;(window as any).__blRumble = settings.rumble / 100
 
 // Page errors go to the app's Xbox log (no tokens ever reach this page).
 window.addEventListener('error', event => BLCloud.log(`error: ${event.message} @${event.lineno}`))
@@ -83,8 +108,64 @@ async function run() {
     const player = new xCloudPlayer('player')
     player.init()
     const pc = player._peerConnection
+
+    // "Stop quality drops": report a short decode time so the server does not lower the resolution
+    // for a slow decoder (Better xCloud's patchStreamMetadata).
+    const input = player._channels.input as any
+    const queueMetadata = input.queueMetadataFrame.bind(input)
+    input.queueMetadataFrame = (frame: any) => {
+        if (settings.preventDrops) {
+            const render = frame.frameRenderedTimeMs - frame.frameDecodedTimeMs
+            frame.frameDecodedTimeMs = frame.frameSubmittedTimeMs + 10
+            frame.frameRenderedTimeMs = frame.frameDecodedTimeMs + render
+        }
+        queueMetadata(frame)
+    }
+
+    // Volume above 100 %: the stream's sound goes through a gain node instead of the <audio> element.
+    let gain: GainNode | undefined
+    let audioStream: MediaStream | undefined
+    const applyVolume = () => {
+        if (audioStream === undefined || (gain === undefined && settings.volume === 100)) return
+        if (gain === undefined) {
+            const context = new AudioContext()
+            gain = context.createGain()
+            context.createMediaStreamSource(audioStream).connect(gain).connect(context.destination)
+            const element = document.querySelector('#player audio') as HTMLAudioElement | null
+            if (element) element.muted = true
+        }
+        gain.gain.value = settings.volume / 100
+    }
+    pc.addEventListener('track', event => {
+        if (event.track.kind === 'audio') { audioStream = event.streams[0]; applyVolume() }
+    })
+
+    const stats = new StreamStats(pc)
+    let renderer: EffectRenderer | undefined
+    const applyEffects = () => {
+        const video = player.getVideoElement() as HTMLVideoElement | undefined
+        if (video === undefined) return
+        if (!needsRenderer(settings)) { renderer?.destroy(); renderer = undefined; return }
+        if (renderer === undefined) {
+            try { renderer = new EffectRenderer(video, settings) }
+            catch (error) { BLCloud.log(`effects unavailable: ${String(error).slice(0, 200)}`) }
+        } else renderer.update(settings)
+    }
+    // Live changes from the in-player menu.
+    ;(window as any).__blApply = (json: string) => {
+        settings = JSON.parse(json)
+        ;(window as any).__blRumble = settings.rumble / 100
+        stats.show(settings.stats)
+        applyVolume()
+        applyEffects()
+    }
     pc.addEventListener('connectionstatechange', () => {
-        if (pc.connectionState === 'connected') { show(''); BLCloud.playing() }
+        if (pc.connectionState === 'connected') {
+            show(''); BLCloud.playing()
+            stats.show(settings.stats)
+            // The video element exists once its track arrived; give it a moment for its first frame.
+            setTimeout(applyEffects, 500)
+        }
         else if (pc.connectionState === 'failed') BLCloud.failed('webrtc', 'connection failed')
         else if (pc.connectionState === 'disconnected') show('Connection lost…')
     })
@@ -115,9 +196,11 @@ async function run() {
     ;(window as any).__blNexus = () => { pad.sendButtonState('Nexus', 1); setTimeout(() => pad.sendButtonState('Nexus', 0), 200) }
     // The app's menu button / a controller's Guide button: Nexus follows the physical button.
     ;(window as any).__blButton = (name: string, value: number) => pad.sendButtonState(name, value)
+    // The in-player menu pauses controller input to the game while it is open.
+    ;(window as any).__blInput = (enabled: boolean) => { if (enabled) pad.onWindowFocus(); else pad.onWindowBlur() }
 
     setInterval(() => { call('keepalive') }, 30_000)
-    ;(window as any).__blStop = () => { try { pad.detach(); player.destroy() } catch (e) { /* closing anyway */ } }
+    ;(window as any).__blStop = () => { try { renderer?.destroy(); stats.destroy(); pad.detach(); player.destroy() } catch (e) { /* closing anyway */ } }
 }
 
 run().catch((error: unknown) => {
