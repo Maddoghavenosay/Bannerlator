@@ -14,7 +14,9 @@ interface Settings extends Effects {
     bitrateMbps: number      // 0 = Microsoft's own limit
     codec: string            // 'default' | 'high' | 'normal' | 'low'
     preventDrops: boolean
-    stats: boolean
+    statsLevel: number       // 0 off, 1 fps, 2 basic, 3 detailed, 4 full
+    statsLayout: string      // 'horizontal' | 'vertical'
+    server: string           // the region's host, for the full overlay
     volume: number           // 100..300 %
     rumble: number           // 0..100 %
 }
@@ -155,14 +157,14 @@ async function run() {
     ;(window as any).__blApply = (json: string) => {
         settings = JSON.parse(json)
         ;(window as any).__blRumble = settings.rumble / 100
-        stats.show(settings.stats)
+        stats.show(settings.statsLevel, settings.statsLayout === 'vertical', settings.server)
         applyVolume()
         applyEffects()
     }
     pc.addEventListener('connectionstatechange', () => {
         if (pc.connectionState === 'connected') {
             show(''); BLCloud.playing()
-            stats.show(settings.stats)
+            stats.show(settings.statsLevel, settings.statsLayout === 'vertical', settings.server)
             // The video element exists once its track arrived; give it a moment for its first frame.
             setTimeout(applyEffects, 500)
         }

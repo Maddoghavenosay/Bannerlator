@@ -41,13 +41,15 @@ fun XboxCloudSettingsPanel(
     settings: XboxCloudSettings,
     regions: List<String>,
     live: Boolean,
+    /** "stream", "picture" or "overlay" shows that section only; null shows all. */
+    section: String? = null,
     onChange: (XboxCloudSettings) -> Unit,
 ) {
     val ctx = LocalContext.current
     var profiles by remember { mutableStateOf(XboxCloudSettings.wineProfiles(ctx)) }
     var naming by remember { mutableStateOf(false) }
 
-    Section("Stream", if (live) "Applies to the next stream." else "Applies when a stream starts.") {
+    if (section == null || section == "stream") Section("Stream", if (live) "Applies to the next stream." else "Applies when a stream starts.") {
         Choice("Resolution", listOf("720p" to "720p", "1080p" to "1080p", "1080p_hq" to "1080p HQ"), settings.resolution) { onChange(settings.copy(resolution = it)) }
         Choice("Server region", listOf("" to "Automatic") + regions.map { it to it }, settings.region) { onChange(settings.copy(region = it)) }
         Choice("Game language", XboxCloudSettings.LANGUAGES, settings.language) { onChange(settings.copy(language = it)) }
@@ -56,7 +58,7 @@ fun XboxCloudSettingsPanel(
         Toggle("Stop quality drops", "Keeps the resolution up when this device decodes slowly.", settings.preventDrops) { onChange(settings.copy(preventDrops = it)) }
     }
 
-    Section("Picture", "Shader effects on the stream; the profiles are shared with the Wine games' screen effects.") {
+    if (section == null || section == "picture") Section("Picture", "Shader effects on the stream; the profiles are shared with the Wine games' screen effects.") {
         Choice("Profile", listOf("" to "None") + profiles.keys.map { it to it }, settings.profile) { name ->
             onChange(if (name.isEmpty()) settings.copy(profile = "") else settings.withEffects(profiles.getValue(name), name))
         }
@@ -86,8 +88,13 @@ fun XboxCloudSettingsPanel(
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
     }
 
-    Section("Overlay and sound", null) {
-        Toggle("Stats", "Resolution, fps, bitrate, ping, decode time and packet loss.", settings.stats) { onChange(settings.copy(stats = it)) }
+    if (section == null || section == "overlay") Section("Overlay and sound", null) {
+        Choice("Performance overlay", listOf(0 to "Off", 1 to "FPS only", 2 to "Basic", 3 to "Detailed", 4 to "Full"), settings.statsLevel) {
+            onChange(settings.copy(statsLevel = it))
+        }
+        Choice("Overlay layout", listOf("horizontal" to "Horizontal", "vertical" to "Vertical"), settings.statsLayout) { onChange(settings.copy(statsLayout = it)) }
+        Text("Top right. Basic: fps, ping, resolution. Detailed: + bitrate, decode time, packet loss. Full: + codec, jitter, " +
+            "dropped frames, server.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Step("Volume", "${settings.volume}%", { onChange(settings.copy(volume = (settings.volume - 25).coerceAtLeast(100))) },
             { onChange(settings.copy(volume = (settings.volume + 25).coerceAtMost(300))) })
         Step("Controller rumble", if (settings.rumble == 0) "Off" else "${settings.rumble}%", { onChange(settings.copy(rumble = (settings.rumble - 25).coerceAtLeast(0))) },
@@ -124,12 +131,12 @@ private fun Section(title: String, note: String?, content: @Composable ColumnSco
 
 @Composable
 private fun Step(label: String, value: String, onMinus: () -> Unit, onPlus: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-        OutlinedButton(onClick = onMinus, modifier = Modifier.size(48.dp), contentPadding = PaddingValues(0.dp)) { Text("−") }
-        Text(value, Modifier.widthIn(min = 120.dp).padding(horizontal = 6.dp), textAlign = TextAlign.Center,
+        OutlinedButton(onClick = onMinus, modifier = Modifier.size(40.dp), contentPadding = PaddingValues(0.dp)) { Text("−") }
+        Text(value, Modifier.width(112.dp).padding(horizontal = 4.dp), textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-        OutlinedButton(onClick = onPlus, modifier = Modifier.size(48.dp), contentPadding = PaddingValues(0.dp)) { Text("+") }
+        OutlinedButton(onClick = onPlus, modifier = Modifier.size(40.dp), contentPadding = PaddingValues(0.dp)) { Text("+") }
     }
 }
 

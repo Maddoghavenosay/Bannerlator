@@ -25,6 +25,7 @@ import androidx.webkit.WebViewAssetLoader
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
@@ -144,7 +145,7 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
-        fun settings(): String = this@XboxCloudPlayerActivity.settings.toJson()
+        fun settings(): String = pageSettings(this@XboxCloudPlayerActivity.settings)
 
         @JavascriptInterface
         fun log(text: String) { XboxDiag.log(applicationContext, "cloud player page: ${text.take(240)}") }
@@ -240,29 +241,45 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     }
 
     private val menuButton by lazy { com.winlator.star.ui.components.GlobalControllerPrefs.getMenuButtonKeyCode(this) }
-    private var nexusHeld = false
-    private var backDownAt = 0L
+    private var guideDown = false
+    private var guideDownAt = 0L
+    private var lastGuideUp = 0L
+    private var pendingNexus: Runnable? = null
 
-    /**
-     * The Xbox button in the stream: a controller's Guide button, and the menu button chosen in Input
-     * Controls › Device (the one that opens the side menu in Wine games). Same rules as the game session:
-     * never B, never the Back Android makes out of an unhandled B. A Back chosen as the menu button opens
-     * the Xbox menu on a short press; holding it asks to leave.
-     */
-    private fun nexusKey(event: KeyEvent): Boolean {
+    /** Guide or the Input Controls menu button (the one that opens the side menu in Wine games). */
+    private fun isGuideKey(event: KeyEvent): Boolean {
         val code = event.keyCode
         if (code == KeyEvent.KEYCODE_BUTTON_B) return false
-        val isMenuButton = menuButton > 0 && code == menuButton
-        if (code != KeyEvent.KEYCODE_BUTTON_MODE && !isMenuButton) return false
-        if (code == KeyEvent.KEYCODE_BACK && ((event.flags and KeyEvent.FLAG_FALLBACK) != 0 || event.scanCode in 0x130..0x13f)) return false
-        if (code == KeyEvent.KEYCODE_BACK) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) backDownAt = event.eventTime
-            if (event.action == KeyEvent.ACTION_DOWN && event.eventTime - backDownAt >= 600 && !nexusHeld) { backDownAt = Long.MAX_VALUE; openMenu() }
-            if (event.action == KeyEvent.ACTION_UP && backDownAt != Long.MAX_VALUE) pressNexus(1).also { web?.postDelayed({ pressNexus(0) }, 150) }
-            return true
+        if (code != KeyEvent.KEYCODE_BUTTON_MODE && !(menuButton > 0 && code == menuButton)) return false
+        // Same rule as the game session: never the Back Android makes out of an unhandled B.
+        return !(code == KeyEvent.KEYCODE_BACK && ((event.flags and KeyEvent.FLAG_FALLBACK) != 0 || event.scanCode in 0x130..0x13f))
+    }
+
+    /**
+     * One press presses the Xbox button in the stream (the game's Xbox menu), sent once a second press can no
+     * longer follow; two quick presses, or holding the button, open the player menu instead.
+     */
+    private fun guideKey(event: KeyEvent): Boolean {
+        if (!isGuideKey(event)) return false
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            if (event.repeatCount == 0) {
+                guideDown = true; guideDownAt = event.eventTime
+                val pending = pendingNexus
+                if (pending != null && event.eventTime - lastGuideUp <= DOUBLE_PRESS_MS) {
+                    root.removeCallbacks(pending); pendingNexus = null; guideDown = false
+                    openMenu()
+                }
+            } else if (guideDown && event.eventTime - guideDownAt >= 600) {
+                guideDown = false
+                openMenu()
+            }
+        } else if (event.action == KeyEvent.ACTION_UP && guideDown) {
+            guideDown = false
+            lastGuideUp = event.eventTime
+            val tap = Runnable { pendingNexus = null; pressNexus(1); root.postDelayed({ pressNexus(0) }, 150) }
+            pendingNexus = tap
+            root.postDelayed(tap, DOUBLE_PRESS_MS)
         }
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) { nexusHeld = true; pressNexus(1) }
-        if (event.action == KeyEvent.ACTION_UP && nexusHeld) { nexusHeld = false; pressNexus(0) }
         return true
     }
 
@@ -274,10 +291,15 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     // stray press never ends a stream; Back again closes it. With an error notice up, Back leaves.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (menu != null) {
-            if (event.keyCode == KeyEvent.KEYCODE_BACK) { if (event.action == KeyEvent.ACTION_UP) closeMenu(); return true }
+            // Guide closes the menu; Back goes up one page, then closes it.
+            if (isGuideKey(event)) { if (event.action == KeyEvent.ACTION_UP) closeMenu(); return true }
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                if (event.action == KeyEvent.ACTION_UP) { if (menuPage.isNotEmpty()) menuPage = "" else closeMenu() }
+                return true
+            }
             return super.dispatchKeyEvent(event)
         }
-        if (notice == null && nexusKey(event)) return true
+        if (notice == null && guideKey(event)) return true
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             if (event.action == KeyEvent.ACTION_UP) { if (notice == null) openMenu() else finish() }
             return true
@@ -291,45 +313,53 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         return handled || (notice == null && web != null && fromController)
     }
 
-    /** The player menu: Resume / Xbox button / Leave, and every cloud setting (picture, stats and sound change live). */
+    /** The open player-menu page: "" = the list, else a settings section. */
+    private var menuPage by androidx.compose.runtime.mutableStateOf("")
+
+    /**
+     * The player menu, like the Wine games' side menu: Resume, Xbox menu, Screen effects, Stream quality, Stats and
+     * sound, Leave; each settings entry opens its own page (screen effects, stats and sound change the stream live).
+     */
     private fun openMenu() {
         if (menu != null || web == null) return
         web?.evaluateJavascript("window.__blInput && window.__blInput(false)", null)
+        menuPage = ""
         val regions = session?.regionList?.map { it.name }.orEmpty()
         val view = androidx.compose.ui.platform.ComposeView(this)
         view.setContent {
             com.winlator.star.ui.theme.WinlatorTheme {
                 var current by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(settings) }
-                val resume = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
-                androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { resume.requestFocus() } }
+                val first = androidx.compose.runtime.remember(menuPage) { androidx.compose.ui.focus.FocusRequester() }
+                androidx.compose.runtime.LaunchedEffect(menuPage) { runCatching { first.requestFocus() } }
+                val cs = androidx.compose.material3.MaterialTheme.colorScheme
                 androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
                     androidx.compose.foundation.layout.Column(
-                        androidx.compose.ui.Modifier.fillMaxHeight().width(460.dp)
-                            .background(androidx.compose.material3.MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+                        androidx.compose.ui.Modifier.fillMaxHeight().width(400.dp).background(cs.surface.copy(alpha = 0.95f))
                             .verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(vertical = 12.dp),
                     ) {
                         androidx.compose.material3.Text(intent.getStringExtra("title").orEmpty().ifEmpty { "Xbox Cloud Gaming" },
-                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
-                            modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp))
-                        androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-                            androidx.compose.material3.Button(onClick = { closeMenu() },
-                                modifier = androidx.compose.ui.Modifier.focusRequester(resume)) { androidx.compose.material3.Text("Resume") }
-                            androidx.compose.material3.OutlinedButton(onClick = {
+                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = cs.onSurface,
+                            modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                        if (menuPage.isEmpty()) {
+                            MenuEntry("Resume", "Back to the game", first) { closeMenu() }
+                            MenuEntry("Xbox menu", "The game's Xbox menu (also: Guide once, or View + Menu)") {
                                 closeMenu(); web?.evaluateJavascript("window.__blNexus && window.__blNexus()", null)
-                            }) { androidx.compose.material3.Text("Xbox button") }
-                            androidx.compose.material3.OutlinedButton(onClick = { finish() }) { androidx.compose.material3.Text("Leave") }
-                        }
-                        androidx.compose.material3.Text("View + Menu together, Guide or your menu button also press the Xbox button.",
-                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp))
-                        XboxCloudSettingsPanel(current, regions, live = true) { changed ->
-                            current = changed
-                            settings = changed
-                            XboxCloudSettings.save(this@XboxCloudPlayerActivity, changed)
-                            web?.evaluateJavascript("window.__blApply && window.__blApply(${JSONObject.quote(changed.toJson())})", null)
+                            }
+                            MenuEntry("Screen effects", "Sharpen, colour, deband, FXAA, CRT, NTSC, Toon, fps cap") { menuPage = "picture" }
+                            MenuEntry("Stream quality", "Resolution, region, language, codec, bitrate (next stream)") { menuPage = "stream" }
+                            MenuEntry("Performance overlay and sound", "Overlay level and layout, volume, controller rumble") { menuPage = "overlay" }
+                            MenuEntry("Leave", "End the stream") { finish() }
+                            androidx.compose.material3.Text("Guide twice opens this menu; Back or Guide closes it.",
+                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                                modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                        } else {
+                            MenuEntry("‹  Back", null, first) { menuPage = "" }
+                            XboxCloudSettingsPanel(current, regions, live = true, section = menuPage) { changed ->
+                                current = changed
+                                settings = changed
+                                XboxCloudSettings.save(this@XboxCloudPlayerActivity, changed)
+                                web?.evaluateJavascript("window.__blApply && window.__blApply(${JSONObject.quote(pageSettings(changed))})", null)
+                            }
                         }
                     }
                 }
@@ -338,6 +368,25 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         menu = view
         root.addView(view, FrameLayout.LayoutParams(-1, -1))
         view.requestFocus()
+    }
+
+    /** The settings as the page reads them, plus the stream server's name for the full overlay. */
+    private fun pageSettings(s: XboxCloudSettings): String = JSONObject(s.toJson())
+        .put("server", session?.let { active -> active.regionList.firstOrNull { it.baseUri == active.baseUri }?.name } ?: "").toString()
+
+    @androidx.compose.runtime.Composable
+    private fun MenuEntry(title: String, note: String?, focus: androidx.compose.ui.focus.FocusRequester? = null, onClick: () -> Unit) {
+        val cs = androidx.compose.material3.MaterialTheme.colorScheme
+        androidx.compose.material3.Surface(
+            onClick = onClick, color = cs.surfaceContainerHigh, shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+            modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp)
+                .let { if (focus != null) it.focusRequester(focus) else it },
+        ) {
+            androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                androidx.compose.material3.Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                if (note != null) androidx.compose.material3.Text(note, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+        }
     }
 
     private fun closeMenu() {
@@ -361,6 +410,8 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     }
 
     companion object {
+        private const val DOUBLE_PRESS_MS = 350L
+
         fun intent(context: Context, game: XboxGame): Intent = Intent(context, XboxCloudPlayerActivity::class.java)
             .putExtra("product", game.id).putExtra("title", game.title).putExtra("webUrl", game.cloudUrl)
 

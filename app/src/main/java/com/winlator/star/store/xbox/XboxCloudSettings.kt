@@ -19,7 +19,8 @@ data class XboxCloudSettings(
     val codec: String = "default",          // default | high | normal | low
     val bitrateMbps: Int = 0,               // 0 = no cap
     val preventDrops: Boolean = false,
-    val stats: Boolean = false,
+    val statsLevel: Int = 0,                // performance overlay: 0 off, 1 fps, 2 basic, 3 detailed, 4 full
+    val statsLayout: String = "horizontal", // horizontal | vertical
     val volume: Int = 100,                  // 100..300 %
     val rumble: Int = 100,                  // 0..100 %
     val maxFps: Int = 0,                    // 0 = every frame
@@ -41,7 +42,7 @@ data class XboxCloudSettings(
 
     fun toJson(): String = JSONObject()
         .put("resolution", resolution).put("region", region).put("language", language).put("codec", codec)
-        .put("bitrateMbps", bitrateMbps).put("preventDrops", preventDrops).put("stats", stats).put("volume", volume)
+        .put("bitrateMbps", bitrateMbps).put("preventDrops", preventDrops).put("statsLevel", statsLevel).put("statsLayout", statsLayout).put("volume", volume)
         .put("rumble", rumble).put("maxFps", maxFps).put("brightness", brightness).put("contrast", contrast)
         .put("gamma", gamma.toDouble()).put("saturation", saturation).put("sharpen", sharpen).put("sharpenMode", sharpenMode)
         .put("deband", deband).put("fxaa", fxaa).put("toon", toon).put("crt", crt).put("ntsc", ntsc).put("profile", profile)
@@ -80,7 +81,8 @@ data class XboxCloudSettings(
                 region = json.optString("region", d.region), language = json.optString("language", d.language),
                 codec = json.optString("codec", d.codec).takeIf { it in setOf("default", "high", "normal", "low") } ?: d.codec,
                 bitrateMbps = json.optInt("bitrateMbps", d.bitrateMbps).coerceIn(0, 100),
-                preventDrops = json.optBoolean("preventDrops", d.preventDrops), stats = json.optBoolean("stats", d.stats),
+                preventDrops = json.optBoolean("preventDrops", d.preventDrops), statsLevel = json.optInt("statsLevel", if (json.optBoolean("stats")) 3 else 0).coerceIn(0, 4),
+                statsLayout = json.optString("statsLayout", d.statsLayout).takeIf { it == "vertical" } ?: "horizontal",
                 volume = json.optInt("volume", d.volume).coerceIn(100, 300), rumble = json.optInt("rumble", d.rumble).coerceIn(0, 100),
                 maxFps = json.optInt("maxFps", d.maxFps).coerceIn(0, 120),
                 brightness = json.optInt("brightness", d.brightness).coerceIn(-50, 50), contrast = json.optInt("contrast", d.contrast).coerceIn(-100, 100),
