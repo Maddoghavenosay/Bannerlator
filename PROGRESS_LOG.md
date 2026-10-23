@@ -3,7 +3,8 @@
 ## 2026-10-23 — ☁️ Xbox Cloud Gaming WebView test (feat/xbox-cloud, CI)
 > - **Why:** user asked about streaming. The store lists only games with a PC version (XboxCatalog.kt:123); xCloud could add the console-only Game Pass titles. First step, on the user's go: does Microsoft's own web player (xbox.com/play) work in an in-app WebView?
 > - **Built b604bd5a:** `XboxCloudActivity` — full-screen WebView in its own process (`:xboxcloud`, own data directory, cookies kept), Chrome-for-Android user agent (no "; wv"), no X-Requested-With header, screen kept on, a controller's B never closes it. Test entry: cloud icon in the Xbox store header / rail menu. CI run 39990722107.
-> - **Next:** device test — page load, Microsoft sign-in, stream a game, controller + touch + sound, logcat. Not device-tested.
+> - **Device test (Pocket FIT, installed hash == build):** xbox.com/play loads (~10 s), sees the controller, Microsoft sign-in on the page works, *GRID Legends* streams. No crash or ANR for the app (the repeating `com.qti.diagservices` ANR is a system service, present since 10-20). The page needs its own sign-in: the store's tokens can't be given to the website.
+> - **Next:** controller / sound / lag / touch report; check the sign-in survives reopening; user decides on option 2 (cloud titles in the library) and a shared sign-in profile.
 
 ## 2026-10-23 — 🔎 Layer diagnostics: 60 Hz cap + missing FEX unixlib on DroidDeck 11-9.1 (fix/refresh-unlock-modeset, CI)
 > - **Why:** user reported, on the DroidDeck-Proton 11-9.1 layer, DiRT's refresh rate stuck at 60 and the drawer never showing FEX "unixlib". Part of the v15 layer plan (proton-wine).
