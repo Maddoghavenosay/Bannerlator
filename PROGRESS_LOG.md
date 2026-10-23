@@ -5,7 +5,8 @@
 > - **Built b604bd5a:** `XboxCloudActivity` — full-screen WebView in its own process (`:xboxcloud`, own data directory, cookies kept), Chrome-for-Android user agent (no "; wv"), no X-Requested-With header, screen kept on, a controller's B never closes it. Test entry: cloud icon in the Xbox store header / rail menu. CI run 39990722107.
 > - **Device test (Pocket FIT, installed hash == build):** xbox.com/play loads (~10 s), sees the controller, Microsoft sign-in on the page works, *GRID Legends* streams. No crash or ANR for the app (the repeating `com.qti.diagservices` ANR is a system service, present since 10-20). The page needs its own sign-in: the store's tokens can't be given to the website.
 > - **Play test:** controller and sound work in *GRID Legends* and *BALL x PIT*; lag fine on the user's work connection. The sign-in survives a restart of the player's process (killed it; Android reopened it and the page was still signed in).
-> - **Next:** touch controls not tried; user decides on option 2 (cloud titles in the library) and a shared sign-in profile.
+> - **Step 1 (user: option 2 + shared sign-in), 8e12e9e8:** cloud games in the library from Microsoft's public cloud lists (562 Game Pass / 3870 incl. owned copies; ids from redphx's Better xCloud), console-only games listed as *Cloud only*, Cloud filter + badge, **Stream** beside **Install** on the game page, player in the sign-in process sharing its Microsoft session, sign-out clears it. Main merged in first (67f6161b). CI 39998014173. Not device-tested.
+> - **Then:** touch controls not tried; user decides on option 2 (cloud titles in the library) and a shared sign-in profile.
 
 ## 2026-10-23 — 🔎 Layer diagnostics: 60 Hz cap + missing FEX unixlib on DroidDeck 11-9.1 (fix/refresh-unlock-modeset, CI)
 > - **Why:** user reported, on the DroidDeck-Proton 11-9.1 layer, DiRT's refresh rate stuck at 60 and the drawer never showing FEX "unixlib". Part of the v15 layer plan (proton-wine).
