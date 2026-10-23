@@ -32,26 +32,58 @@ internal object XboxCloudSession {
             json.optString("userToken").takeIf { !json.isNull("userToken") && it.isNotEmpty() }, System.currentTimeMillis() + seconds * 1000).also { cached = it }
     }
 
-    fun clear() { cached = null }
+    fun clear() { cached = null; titleIds = null }
 
-    /** Product ids of the cloud titles this account may stream, from the streaming service itself. */
-    fun titles(session: Session): Set<String> {
-        val body = JSONObject(request(session, "/v2/titles"))
-        val results = body.optJSONArray("results") ?: JSONArray()
-        return (0 until results.length()).mapNotNull { results.optJSONObject(it)?.optJSONObject("details")?.optString("productId")?.uppercase() }
-            .filter { it.matches(Regex("[A-Z0-9]{12}")) }.toSet()
+    @Volatile private var titleIds: Pair<String, Map<String, String>>? = null
+
+    /** Store product id -> cloud title id for the titles this account may stream, from the streaming service itself. */
+    fun titles(session: Session): Map<String, String> {
+        titleIds?.takeIf { it.first == session.account }?.let { return it.second }
+        val reply = request(session, "GET", "/v2/titles")
+        check(reply.status == 200) { "Xbox Cloud Gaming answered ${reply.status}" }
+        val results = JSONObject(reply.body).optJSONArray("results") ?: JSONArray()
+        val map = (0 until results.length()).mapNotNull { index ->
+            val row = results.optJSONObject(index) ?: return@mapNotNull null
+            val product = row.optJSONObject("details")?.optString("productId")?.uppercase().orEmpty()
+            val title = row.optString("titleId")
+            if (product.matches(Regex("[A-Z0-9]{12}")) && title.isNotBlank() && title.length <= 64) product to title else null
+        }.toMap()
+        titleIds = session.account to map
+        return map
     }
 
-    private fun request(session: Session, path: String): String {
+    class Reply(val status: Int, val body: String)
+
+    /** One request to the streaming service as Microsoft's web player makes it (Greenlight's shapes). */
+    fun request(session: Session, method: String, path: String, body: String? = null): Reply {
         val connection = URL(session.baseUri + path).openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = 15_000; connection.readTimeout = 30_000
+            connection.requestMethod = method
             connection.setRequestProperty("Authorization", "Bearer ${session.token}")
             connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("x-gssv-client", "XboxComBrowser")
-            check(connection.responseCode == 200) { "Xbox Cloud Gaming answered ${connection.responseCode}" }
-            val text = connection.inputStream.use { it.readBytes() }.also { require(it.size <= 16_000_000) }
-            return String(text, Charsets.UTF_8)
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("X-Gssv-Client", "XboxComBrowser")
+            connection.setRequestProperty("X-MS-Device-Info", DEVICE_INFO)
+            if (body != null) {
+                connection.doOutput = true
+                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            }
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val text = stream?.use { it.readBytes() }?.also { require(it.size <= 16_000_000) } ?: ByteArray(0)
+            return Reply(status, String(text, Charsets.UTF_8))
         } finally { connection.disconnect() }
     }
+
+    private val DEVICE_INFO = JSONObject()
+        .put("appInfo", JSONObject().put("env", JSONObject().put("clientAppId", "www.xbox.com").put("clientAppType", "browser")
+            .put("clientAppVersion", "21.1.98").put("clientSdkVersion", "8.5.3").put("httpEnvironment", "prod").put("sdkInstallId", "")))
+        .put("dev", JSONObject()
+            .put("hw", JSONObject().put("make", "Microsoft").put("model", "unknown").put("sdktype", "web"))
+            .put("os", JSONObject().put("name", "windows").put("ver", "22631.2715").put("platform", "desktop"))
+            .put("displayInfo", JSONObject().put("dimensions", JSONObject().put("widthInPixels", 1920).put("heightInPixels", 1080))
+                .put("pixelDensity", JSONObject().put("dpiX", 2).put("dpiY", 2)))
+            .put("browser", JSONObject().put("browserName", "chrome").put("browserVersion", "119.0")))
+        .toString()
 }

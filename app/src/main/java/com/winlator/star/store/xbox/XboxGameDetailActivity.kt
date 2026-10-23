@@ -223,7 +223,7 @@ class XboxGameDetailActivity : ComponentActivity() {
 
     private fun stream() {
         XboxDiag.log(applicationContext, "cloud stream ${game.id}")
-        startActivity(XboxCloudActivity.intent(this, game.cloudUrl))
+        startActivity(XboxCloudPlayerActivity.intent(this, game))
     }
 
     private fun update(inst: XboxInstallState.Installed) {

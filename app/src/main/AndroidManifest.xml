@@ -410,6 +410,14 @@
             android:screenOrientation="fullSensor"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation"
             android:theme="@style/AppTheme"/>
+        <!-- Bannerlator's own Xbox Cloud Gaming player (store sign-in, local WebRTC page). -->
+        <activity
+            android:exported="false"
+            android:name="com.winlator.star.store.xbox.XboxCloudPlayerActivity"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation|uiMode"
+            android:hardwareAccelerated="true"
+            android:theme="@style/AppTheme"/>
         <!-- Xbox Cloud Gaming web player: in the Xbox sign-in process, sharing its WebView sign-in. -->
         <activity
             android:exported="false"

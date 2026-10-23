@@ -1,0 +1,252 @@
+package com.winlator.star.store.xbox
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.graphics.Color
+import android.os.Bundle
+import android.view.Gravity
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.WindowManager
+import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.activity.ComponentActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.webkit.WebViewAssetLoader
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.concurrent.Executors
+
+/**
+ * Bannerlator's own Xbox Cloud Gaming player: signs in with the store account (XboxCloudSession, no web
+ * sign-in), starts the cloud session and does the signalling here, and runs the WebRTC client (Greenlight's
+ * player, tools/xcloud-player) in a local page. The page never sees a token. Falls back to Microsoft's web
+ * player when this account cannot stream the game this way.
+ */
+class XboxCloudPlayerActivity : ComponentActivity() {
+    private lateinit var root: FrameLayout
+    private var web: WebView? = null
+    private var notice: LinearLayout? = null
+    private val worker = Executors.newSingleThreadExecutor()
+    private val signalling = Executors.newCachedThreadPool()
+    @Volatile private var session: XboxCloudSession.Session? = null
+    @Volatile private var sessionPath: String? = null
+    @Volatile private var titleId: String? = null
+    @Volatile private var closed = false
+    private var leaving: android.app.AlertDialog? = null
+
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        hideBars()
+        root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        setContentView(root)
+        val product = intent.getStringExtra("product").orEmpty()
+        showNotice("Signing in to Xbox Cloud Gaming…", withButtons = false)
+        worker.execute {
+            val result = runCatching {
+                val account = XboxAccountStore.signedInAs(applicationContext) ?: error("Sign in to the Xbox store first.")
+                val active = XboxCloudSession.get(applicationContext, account)
+                val title = XboxCloudSession.titles(active)[product] ?: error("This game can't be streamed with this account here.")
+                session = active; titleId = title
+                XboxDiag.log(applicationContext, "cloud player: $product -> title $title, region ${java.net.URI(active.baseUri).host}, transfer=${active.userToken != null}")
+            }
+            runOnUiThread {
+                if (closed) return@runOnUiThread
+                result.onSuccess { openPlayer() }.onFailure {
+                    XboxDiag.log(applicationContext, "cloud player not started: ${it.javaClass.simpleName}: ${it.message?.take(160)}")
+                    showNotice(it.message ?: "Xbox Cloud Gaming could not start.", withButtons = true)
+                }
+            }
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun openPlayer() {
+        val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
+        val view = WebView(this)
+        web = view
+        view.settings.apply {
+            javaScriptEnabled = true
+            mediaPlaybackRequiresUserGesture = false
+            allowFileAccess = false
+            allowContentAccess = false
+        }
+        view.setBackgroundColor(Color.BLACK)
+        view.addJavascriptInterface(Bridge(), "BLCloud")
+        view.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                loader.shouldInterceptRequest(request.url)
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = true
+        }
+        view.webChromeClient = object : android.webkit.WebChromeClient() {
+            override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
+                android.util.Log.d("XboxCloudPlayer", "console ${message.messageLevel()}: ${message.message().take(300)}")
+                return true
+            }
+        }
+        root.addView(view, 0, FrameLayout.LayoutParams(-1, -1))
+        notice?.let { root.removeView(it) }
+        notice = null
+        view.loadUrl("https://appassets.androidplatform.net/assets/xcloud/player.html")
+    }
+
+    private inner class Bridge {
+        @JavascriptInterface
+        fun call(id: Int, op: String, arg: String) {
+            signalling.execute {
+                val reply = runCatching { handle(op, arg) }.getOrElse { XboxCloudSession.Reply(0, it.javaClass.simpleName) }
+                if (reply.status !in 200..299) XboxDiag.log(applicationContext, "cloud player $op: ${reply.status} ${reply.body.take(300)}")
+                else if (op != "state" && op != "keepalive") XboxDiag.log(applicationContext, "cloud player $op: ${reply.status}")
+                runOnUiThread { web?.evaluateJavascript("window.__blResolve($id, ${reply.status}, ${JSONObject.quote(reply.body)})", null) }
+            }
+        }
+
+        @JavascriptInterface
+        fun status(text: String) { android.util.Log.i("XboxCloudPlayer", "status: ${text.take(120)}") }
+
+        @JavascriptInterface
+        fun playing() { XboxDiag.log(applicationContext, "cloud player streaming") }
+
+        @JavascriptInterface
+        fun failed(stage: String, detail: String) {
+            XboxDiag.log(applicationContext, "cloud player failed at ${stage.take(40)}: ${detail.take(300)}")
+            runOnUiThread { if (!closed) showNotice("The stream could not start ($stage).", withButtons = true) }
+        }
+    }
+
+    private fun handle(op: String, arg: String): XboxCloudSession.Reply {
+        val active = session ?: error("no session")
+        val path = sessionPath
+        return when (op) {
+            "start" -> {
+                val body = JSONObject().put("clientSessionId", "").put("titleId", titleId).put("systemUpdateGroup", "")
+                    .put("settings", JSONObject().put("nanoVersion", "V3;WebrtcTransport.dll").put("enableOptionalDataCollection", false)
+                        .put("enableTextToSpeech", false).put("highContrast", 0).put("locale", java.util.Locale.getDefault().toLanguageTag())
+                        .put("useIceConnection", false).put("timezoneOffsetMinutes", java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)
+                        .put("sdkType", "web").put("osName", "windows"))
+                    .put("serverId", "").put("fallbackRegionNames", JSONArray())
+                XboxCloudSession.request(active, "POST", "/v5/sessions/cloud/play", body.toString()).also { reply ->
+                    if (reply.status in 200..299) sessionPath = JSONObject(reply.body).getString("sessionPath").trim('/')
+                }
+            }
+            "state" -> XboxCloudSession.request(active, "GET", "/$path/state")
+            "connect" -> {
+                val token = active.userToken ?: return XboxCloudSession.Reply(0, "no cloud transfer token for this account")
+                XboxCloudSession.request(active, "POST", "/$path/connect", JSONObject().put("userToken", token).toString())
+            }
+            "sdp" -> {
+                val body = JSONObject().put("messageType", "offer").put("sdp", arg).put("requestId", "1").put("configuration", JSONObject()
+                    .put("chatConfiguration", JSONObject().put("bytesPerSample", 2).put("expectedClipDurationMs", 20)
+                        .put("format", JSONObject().put("codec", "opus").put("container", "webm")).put("numChannels", 1).put("sampleFrequencyHz", 24000))
+                    .put("chat", version(1, 1)).put("control", version(1, 3)).put("input", version(1, 9)).put("message", version(1, 1))
+                    .put("reliableinput", version(9, 9)).put("unreliableinput", version(9, 9)))
+                val posted = XboxCloudSession.request(active, "POST", "/$path/sdp", body.toString())
+                if (posted.status !in 200..299) posted else poll(active, "/$path/sdp")
+            }
+            "ice" -> {
+                val posted = XboxCloudSession.request(active, "POST", "/$path/ice", JSONObject().put("candidates", JSONArray(arg)).toString())
+                if (posted.status !in 200..299) posted else poll(active, "/$path/ice")
+            }
+            "keepalive" -> XboxCloudSession.request(active, "POST", "/$path/keepalive", "{}")
+            else -> XboxCloudSession.Reply(0, "unknown request")
+        }
+    }
+
+    private fun version(min: Int, max: Int) = JSONObject().put("minVersion", min).put("maxVersion", max)
+
+    /** The exchange answers 204 until the console has replied. */
+    private fun poll(active: XboxCloudSession.Session, path: String): XboxCloudSession.Reply {
+        repeat(60) {
+            val reply = XboxCloudSession.request(active, "GET", path)
+            if (reply.status != 204) return reply
+            Thread.sleep(500)
+        }
+        return XboxCloudSession.Reply(0, "no answer from the cloud console")
+    }
+
+    private fun showNotice(text: String, withButtons: Boolean) {
+        notice?.let { root.removeView(it) }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(if (withButtons) Color.argb(230, 0, 0, 0) else Color.TRANSPARENT)
+        }
+        box.addView(TextView(this).apply { setTextColor(Color.WHITE); textSize = 18f; gravity = Gravity.CENTER; this.text = text; setPadding(32, 16, 32, 16) })
+        if (withButtons) {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+            intent.getStringExtra("webUrl")?.let { url ->
+                row.addView(Button(this).apply { this.text = "Open in Microsoft's player"; setOnClickListener { startActivity(XboxCloudActivity.intent(this@XboxCloudPlayerActivity, url)); finish() } })
+            }
+            row.addView(Button(this).apply { this.text = "Close"; setOnClickListener { finish() } })
+            box.addView(row)
+        }
+        notice = box
+        root.addView(box, FrameLayout.LayoutParams(-1, -1))
+    }
+
+    private fun hideBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideBars()
+    }
+
+    // Controller back (the Pocket FIT's back button, or B the stream did not take) asks first; touch back leaves.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (event.action == KeyEvent.ACTION_UP) {
+                val fromController = event.source and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD ||
+                    event.source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK
+                if (fromController && notice == null) confirmLeave() else finish()
+            }
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun confirmLeave() {
+        if (leaving?.isShowing == true) return
+        leaving = android.app.AlertDialog.Builder(this, com.winlator.star.R.style.StoreAlertDialogDark)
+            .setTitle("Leave Xbox Cloud Gaming?")
+            .setMessage("The stream ends when you leave.")
+            .setPositiveButton("Leave") { _, _ -> finish() }
+            .setNegativeButton("Stay", null)
+            .show()
+    }
+
+    override fun onDestroy() {
+        closed = true
+        web?.let { it.evaluateJavascript("window.__blStop && window.__blStop()", null); root.removeView(it); it.destroy() }
+        web = null
+        val active = session; val path = sessionPath
+        if (active != null && path != null) Thread({
+            runCatching { XboxCloudSession.request(active, "DELETE", "/$path") }
+                .onSuccess { XboxDiag.log(applicationContext, "cloud player session closed: ${it.status}") }
+        }, "xcloud-stop").start()
+        worker.shutdownNow(); signalling.shutdownNow()
+        super.onDestroy()
+    }
+
+    companion object {
+        fun intent(context: Context, game: XboxGame): Intent = Intent(context, XboxCloudPlayerActivity::class.java)
+            .putExtra("product", game.cloudId ?: game.id).putExtra("title", game.title).putExtra("webUrl", game.cloudUrl)
+    }
+}
