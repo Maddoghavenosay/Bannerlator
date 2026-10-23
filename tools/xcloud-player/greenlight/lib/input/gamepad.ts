@@ -296,12 +296,13 @@ export default class Gamepad {
         // Set buttons
         if(gamepad !== undefined){
             for(const button in this._options.gamepad_mapping){
-                frame[button] = gamepad.buttons[this._options.gamepad_mapping[button]].value
+                // Bannerlator: Android often reports no guide button (index 16); a missing button is "not pressed".
+                frame[button] = gamepad.buttons[this._options.gamepad_mapping[button]]?.value ?? 0
             }
 
             // Set axis
             for(const axis in this._options.gamepad_axes_mapping){
-                frame[axis] = this.normaliseAxis(gamepad.axes[this._options.gamepad_axes_mapping[axis]])
+                frame[axis] = this.normaliseAxis(gamepad.axes[this._options.gamepad_axes_mapping[axis]] ?? 0)
             }
         }
 

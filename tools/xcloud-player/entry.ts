@@ -4,7 +4,12 @@ import xCloudPlayer from './greenlight/lib/player'
 import Gamepad from './greenlight/lib/input/gamepad'
 
 interface Reply { status: number, body: string }
-declare const BLCloud: { call(id: number, op: string, arg: string): void, status(text: string): void, failed(stage: string, detail: string): void, playing(): void }
+declare const BLCloud: { call(id: number, op: string, arg: string): void, status(text: string): void, failed(stage: string, detail: string): void, playing(): void, log(text: string): void }
+
+// Page errors go to the app's Xbox log (no tokens ever reach this page).
+window.addEventListener('error', event => BLCloud.log(`error: ${event.message} @${event.lineno}`))
+window.addEventListener('unhandledrejection', event => BLCloud.log(`rejection: ${String(event.reason).slice(0, 200)}`))
+window.addEventListener('gamepadconnected', event => BLCloud.log(`controller: ${event.gamepad.id.slice(0, 60)} mapping=${event.gamepad.mapping || 'none'} buttons=${event.gamepad.buttons.length} axes=${event.gamepad.axes.length}`))
 
 const pending = new Map<number, (reply: Reply) => void>()
 let nextId = 1
@@ -99,6 +104,9 @@ async function run() {
 
     const pad = new Gamepad(0, { enable_keyboard: false })
     pad.attach(player)
+    BLCloud.log(`controllers at start: ${Array.from(navigator.getGamepads()).filter(Boolean).length}`)
+    // The app's "Xbox button" (in the leave dialog) presses Nexus for a moment.
+    ;(window as any).__blNexus = () => { pad.sendButtonState('Nexus', 1); setTimeout(() => pad.sendButtonState('Nexus', 0), 200) }
 
     setInterval(() => { call('keepalive') }, 30_000)
     ;(window as any).__blStop = () => { try { pad.detach(); player.destroy() } catch (e) { /* closing anyway */ } }

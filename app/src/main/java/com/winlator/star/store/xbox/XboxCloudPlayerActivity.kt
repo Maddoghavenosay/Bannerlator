@@ -84,6 +84,9 @@ class XboxCloudPlayerActivity : ComponentActivity() {
             allowContentAccess = false
         }
         view.setBackgroundColor(Color.BLACK)
+        // The Gamepad API only sees controllers while the WebView has input focus.
+        view.isFocusable = true
+        view.isFocusableInTouchMode = true
         view.addJavascriptInterface(Bridge(), "BLCloud")
         view.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
@@ -99,6 +102,7 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         root.addView(view, 0, FrameLayout.LayoutParams(-1, -1))
         notice?.let { root.removeView(it) }
         notice = null
+        view.requestFocus()
         view.loadUrl("https://appassets.androidplatform.net/assets/xcloud/player.html")
     }
 
@@ -117,7 +121,13 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         fun status(text: String) { android.util.Log.i("XboxCloudPlayer", "status: ${text.take(120)}") }
 
         @JavascriptInterface
-        fun playing() { XboxDiag.log(applicationContext, "cloud player streaming") }
+        fun playing() {
+            XboxDiag.log(applicationContext, "cloud player streaming")
+            runOnUiThread { web?.requestFocus() }
+        }
+
+        @JavascriptInterface
+        fun log(text: String) { XboxDiag.log(applicationContext, "cloud player page: ${text.take(240)}") }
 
         @JavascriptInterface
         fun failed(stage: String, detail: String) {
@@ -226,9 +236,11 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         if (leaving?.isShowing == true) return
         leaving = android.app.AlertDialog.Builder(this, com.winlator.star.R.style.StoreAlertDialogDark)
             .setTitle("Leave Xbox Cloud Gaming?")
-            .setMessage("The stream ends when you leave.")
+            .setMessage("The stream ends when you leave. \"Xbox button\" opens the game's Xbox menu (so does View + Menu together).")
             .setPositiveButton("Leave") { _, _ -> finish() }
+            .setNeutralButton("Xbox button") { _, _ -> web?.evaluateJavascript("window.__blNexus && window.__blNexus()", null) }
             .setNegativeButton("Stay", null)
+            .setOnDismissListener { web?.requestFocus() }
             .show()
     }
 
