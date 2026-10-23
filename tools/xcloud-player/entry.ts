@@ -91,7 +91,7 @@ async function run() {
     await player.setRemoteSDP(answer.sdp)
 
     await waitForCandidates(pc, 3000)
-    const local = player.getICECandidates().map(c => JSON.stringify({
+    const local = (await player.getICECandidates()).map(c => JSON.stringify({
         candidate: c.candidate, sdpMid: c.sdpMid, sdpMLineIndex: c.sdpMLineIndex, usernameFragment: c.usernameFragment,
     }))
     const ice = expect('ice', await call('ice', local))

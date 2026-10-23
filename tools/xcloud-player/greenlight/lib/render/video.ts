@@ -23,6 +23,8 @@ export default class VideoComponent {
         videoElement.style.objectFit = 'contain'
         videoElement.style.backgroundColor = 'black'
         videoElement.style.touchAction = 'none'
+        // Bannerlator: a transparent poster hides Android WebView's grey play icon before the first frame.
+        videoElement.poster = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 
         const element = document.getElementById(this._player.getElementId())
         if(element === null) {return}

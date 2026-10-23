@@ -3,7 +3,7 @@
 `greenlight/lib` is the WebRTC client of **Greenlight** by **UnknownSKL (Jim Kroon)**
 (https://github.com/unknownskl/greenlight, `packages/player/src/client/lib`, commit ef852c3, MIT —
 see `greenlight/LICENSE`). Bannerlator changes: `player.ts` renders video with the `<video>`
-component instead of WebGPU; `uuid` is replaced by `uuid.ts` (crypto.randomUUID).
+component instead of WebGPU, and `render/video.ts` sets a transparent poster; `uuid` is replaced by `uuid.ts` (crypto.randomUUID).
 
 `entry.ts` is Bannerlator's: it drives a cloud session through the app (`BLCloud` bridge; the
 streaming and Microsoft account tokens never reach the page) and attaches the first controller.
