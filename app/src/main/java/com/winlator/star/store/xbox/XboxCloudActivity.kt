@@ -127,13 +127,17 @@ class XboxCloudActivity : ComponentActivity() {
         if (hasFocus) hideBars()
     }
 
-    // A controller's B button can arrive as BACK when the page does not use it; only a real back press
-    // (not from a gamepad) leaves fullscreen, goes back a page, or closes the player.
+    // A controller's B button can arrive as BACK when the page does not use it, and handhelds such as the
+    // Pocket FIT send their own back button through the built-in controller; a back press from a controller
+    // therefore asks before leaving, so a stray B never ends a stream. A touch or system back goes back a
+    // page, or closes the player.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.source and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD) return true
         if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+            val fromController = event.source and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD ||
+                event.source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK
             when {
                 custom != null -> customCallback?.onCustomViewHidden()
+                fromController -> confirmLeave()
                 web?.canGoBack() == true -> web?.goBack()
                 else -> finish()
             }
@@ -141,6 +145,18 @@ class XboxCloudActivity : ComponentActivity() {
         }
         if (event.keyCode == KeyEvent.KEYCODE_BACK) return true
         return super.dispatchKeyEvent(event)
+    }
+
+    private var leaving: android.app.AlertDialog? = null
+
+    private fun confirmLeave() {
+        if (leaving?.isShowing == true) return
+        leaving = android.app.AlertDialog.Builder(this, com.winlator.star.R.style.StoreAlertDialogDark)
+            .setTitle("Leave Xbox Cloud Gaming?")
+            .setMessage("The stream ends when you leave.")
+            .setPositiveButton("Leave") { _, _ -> finish() }
+            .setNegativeButton("Stay", null)
+            .show()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

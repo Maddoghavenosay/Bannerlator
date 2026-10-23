@@ -12,10 +12,10 @@ index 5a66715..5b310e4 100644
  pub mod subscription;
 diff --git a/crates/xodus-cli/src/commands/cloud_token.rs b/crates/xodus-cli/src/commands/cloud_token.rs
 new file mode 100644
-index 0000000..f040900
+index 0000000..d1a07ee
 --- /dev/null
 +++ b/crates/xodus-cli/src/commands/cloud_token.rs
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,110 @@
 +//! Xbox Cloud Gaming streaming token for the stored account (Bannerlator). Same bearer
 +//! RPS -> Xbox user -> XSTS exchange as the profile read, for the cloud gaming relying party,
 +//! then the streaming service's user login (as xbox.com and Greenlight's xal-node do).
@@ -36,12 +36,21 @@ index 0000000..f040900
 +        None, Some("Silent".into()), "{d6d5a677-0872-4ab0-9442-bb792fce85c5}".into(),
 +        &[(target.into(), Some(policy.clone()))])
 +        .await.map_err(|error| super::session::classify(&error)) }).await?;
-+    let token: Token = match outcome {
-+        ExchangeUserTokenOutcome::Issued(soap::BodyContent::RequestSecurityTokenResponseCollection(mut collection)) if !collection.security_tokens.is_empty() => collection.security_tokens.remove(0).into(),
-+        ExchangeUserTokenOutcome::Issued(soap::BodyContent::RequestSecurityTokenResponse(response)) => (*response).into(),
++    let response = match outcome {
++        ExchangeUserTokenOutcome::Issued(soap::BodyContent::RequestSecurityTokenResponseCollection(mut collection)) if !collection.security_tokens.is_empty() => collection.security_tokens.remove(0),
++        ExchangeUserTokenOutcome::Issued(soap::BodyContent::RequestSecurityTokenResponse(response)) => *response,
 +        _ => return Err("msa-response"),
 +    };
-+    let Token::Compact(ticket) = token else { return Err("msa-ticket"); };
++    // Token::from panics on token types it does not know; only take the compact forms here.
++    let kind = response.token_type.clone();
++    let compact = matches!(kind.as_str(), "urn:passport:compact" | "urn:passport:delegationcompact")
++        && response.requested_security_token.binary_security_token.is_some();
++    if !compact {
++        let slug: String = kind.chars().map(|c| if c.is_ascii_alphabetic() { c.to_ascii_lowercase() } else { '-' }).take(40).collect();
++        eprintln!("NEXUS_SESSION_DIAGNOSTIC_V1 ticket-type-{slug}");
++        return Err("msa-ticket");
++    }
++    let Token::Compact(ticket) = Token::from(response) else { return Err("msa-ticket"); };
 +    Ok((account, ticket))
 +}
 +
@@ -83,8 +92,10 @@ index 0000000..f040900
 +        let Ok(body) = body else { failures.push(format!("{offering}:{status}")); continue; };
 +        let value: Value = serde_json::from_slice(&body).map_err(|_| "gssv-json")?;
 +        let token = value["gsToken"].as_str().filter(|token| !token.is_empty() && token.len() <= 16384).ok_or("gs-token")?;
++        // Diagnostic lines are letters and dashes only (the app's allow-list).
++        eprintln!("NEXUS_SESSION_DIAGNOSTIC_V1 gssv-login-ok-{}", if offering == "xgpuweb" { "gamepass" } else { "free" });
 +        let transfer = transfer_token(tokens, &client).await;
-+        if let Err(stage) = &transfer { eprintln!("Xbox Cloud Gaming transfer token unavailable ({stage})."); }
++        eprintln!("NEXUS_SESSION_DIAGNOSTIC_V1 transfer-token-{}", if transfer.is_ok() { "ok" } else { "missing" });
 +        if tokens.get_user().map_err(|_| "account-changed")?.username != account { return Err("account-changed".into()); }
 +        return Ok(json!({ "schema": 1, "account": account, "offering": offering, "gsToken": token, "userToken": transfer.ok(),
 +            "durationInSeconds": value["durationInSeconds"].as_u64().unwrap_or(0), "market": value["market"].as_str().unwrap_or_default(),
