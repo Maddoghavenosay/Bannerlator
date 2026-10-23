@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -271,6 +272,9 @@ private fun XboxStorefrontHost(
                 Icon(Icons.Filled.Refresh, contentDescription = "Sync library", tint = MaterialTheme.colorScheme.primary)
             }
             DownloadsButton()
+            IconButton(onClick = { ctx.startActivity(XboxCloudActivity.intent(ctx)) }, modifier = Modifier.steamFocusRing()) {
+                Icon(Icons.Filled.Cloud, contentDescription = "Cloud gaming (test)", tint = MaterialTheme.colorScheme.primary)
+            }
             IconButton(onClick = onSignOut, modifier = Modifier.steamFocusRing()) {
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Sign out", tint = MaterialTheme.colorScheme.primary)
             }
@@ -280,7 +284,7 @@ private fun XboxStorefrontHost(
                 Icon(Icons.Filled.Refresh, contentDescription = "Sync library", tint = MaterialTheme.colorScheme.primary)
             }
             DownloadsButton()
-            StoreRailOverflow(items = emptyList(), onSignOut = onSignOut)
+            StoreRailOverflow(items = listOf(Triple("Cloud gaming (test)", Icons.Filled.Cloud) { ctx.startActivity(XboxCloudActivity.intent(ctx)) }), onSignOut = onSignOut)
         },
         message = message,
         onMessageTimeout = { message = null },
