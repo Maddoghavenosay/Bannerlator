@@ -43,6 +43,7 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     @Volatile private var sessionPath: String? = null
     @Volatile private var titleId: String? = null
     @Volatile private var closed = false
+    @Volatile private var webUrl: String? = null
     private var leaving: android.app.AlertDialog? = null
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -52,11 +53,15 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         hideBars()
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         setContentView(root)
-        val product = intent.getStringExtra("product").orEmpty()
+        val requested = intent.getStringExtra("product").orEmpty()
         showNotice("Signing in to Xbox Cloud Gaming…", withButtons = false)
         worker.execute {
             val result = runCatching {
                 val account = XboxAccountStore.signedInAs(applicationContext) ?: error("Sign in to the Xbox store first.")
+                // A PC game whose console edition streams (one card in the library) streams that edition.
+                val cached = XboxLibraryCache.read(applicationContext, account, Xodus.market())?.games?.firstOrNull { it.id == requested }
+                val product = cached?.cloudId ?: requested
+                webUrl = (cached ?: XboxGame(requested, intent.getStringExtra("title").orEmpty())).cloudUrl
                 val active = XboxCloudSession.get(applicationContext, account)
                 val title = XboxCloudSession.titles(active)[product] ?: error("This game can't be streamed with this account here.")
                 session = active; titleId = title
@@ -196,7 +201,7 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         box.addView(TextView(this).apply { setTextColor(Color.WHITE); textSize = 18f; gravity = Gravity.CENTER; this.text = text; setPadding(32, 16, 32, 16) })
         if (withButtons) {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
-            intent.getStringExtra("webUrl")?.let { url ->
+            (webUrl ?: intent.getStringExtra("webUrl"))?.let { url ->
                 row.addView(Button(this).apply { this.text = "Open in Microsoft's player"; setOnClickListener { startActivity(XboxCloudActivity.intent(this@XboxCloudPlayerActivity, url)); finish() } })
             }
             row.addView(Button(this).apply { this.text = "Close"; setOnClickListener { finish() } })
@@ -291,6 +296,17 @@ class XboxCloudPlayerActivity : ComponentActivity() {
 
     companion object {
         fun intent(context: Context, game: XboxGame): Intent = Intent(context, XboxCloudPlayerActivity::class.java)
-            .putExtra("product", game.cloudId ?: game.id).putExtra("title", game.title).putExtra("webUrl", game.cloudUrl)
+            .putExtra("product", game.id).putExtra("title", game.title).putExtra("webUrl", game.cloudUrl)
+
+        /** Stream an Xbox shortcut's game (launch method "Stream"); the player resolves the cloud edition. */
+        fun intent(context: Context, productId: String, title: String): Intent = Intent(context, XboxCloudPlayerActivity::class.java)
+            .putExtra("product", productId.uppercase()).putExtra("title", title)
+
+        /** Whether the cached Xbox library says this product streams (off the main thread: it reads the cache). */
+        fun streams(context: Context, productId: String): Boolean = runCatching {
+            val app = context.applicationContext
+            val account = XboxAccountStore.signedInAs(app) ?: return false
+            XboxLibraryCache.read(app, account, Xodus.market())?.games?.firstOrNull { it.id == productId.uppercase() }?.cloud == true
+        }.getOrDefault(false)
     }
 }
