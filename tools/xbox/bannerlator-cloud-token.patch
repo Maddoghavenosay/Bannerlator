@@ -12,10 +12,10 @@ index 5a66715..5b310e4 100644
  pub mod subscription;
 diff --git a/crates/xodus-cli/src/commands/cloud_token.rs b/crates/xodus-cli/src/commands/cloud_token.rs
 new file mode 100644
-index 0000000..d1a07ee
+index 0000000..fbd0ed0
 --- /dev/null
 +++ b/crates/xodus-cli/src/commands/cloud_token.rs
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,124 @@
 +//! Xbox Cloud Gaming streaming token for the stored account (Bannerlator). Same bearer
 +//! RPS -> Xbox user -> XSTS exchange as the profile read, for the cloud gaming relying party,
 +//! then the streaming service's user login (as xbox.com and Greenlight's xal-node do).
@@ -41,8 +41,22 @@ index 0000000..d1a07ee
 +        ExchangeUserTokenOutcome::Issued(soap::BodyContent::RequestSecurityTokenResponse(response)) => *response,
 +        _ => return Err("msa-response"),
 +    };
-+    // Token::from panics on token types it does not know; only take the compact forms here.
++    // Token::from panics on token types it does not know; only take the compact forms here. The cloud
++    // transfer purpose answers with a login proof token, which is what /connect takes (Greenlight
++    // sends the MSAL response's "lpt").
 +    let kind = response.token_type.clone();
++    if kind == "urn:passport:loginprooftoken" {
++        let shape = match (&response.requested_security_token.binary_security_token, &response.requested_security_token.encrypted_data) {
++            (Some(token), _) if !token.value.is_empty() => "binary",
++            (_, Some(_)) => "encrypted",
++            _ => "empty",
++        };
++        eprintln!("NEXUS_SESSION_DIAGNOSTIC_V1 login-proof-{shape}");
++        return match response.requested_security_token.binary_security_token {
++            Some(token) if !token.value.is_empty() => Ok((account, token.value)),
++            _ => Err("msa-ticket"),
++        };
++    }
 +    let compact = matches!(kind.as_str(), "urn:passport:compact" | "urn:passport:delegationcompact")
 +        && response.requested_security_token.binary_security_token.is_some();
 +    if !compact {
