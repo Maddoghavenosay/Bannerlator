@@ -12,10 +12,10 @@ index 5a66715..5b310e4 100644
  pub mod subscription;
 diff --git a/crates/xodus-cli/src/commands/cloud_token.rs b/crates/xodus-cli/src/commands/cloud_token.rs
 new file mode 100644
-index 0000000..814b808
+index 0000000..f040900
 --- /dev/null
 +++ b/crates/xodus-cli/src/commands/cloud_token.rs
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,99 @@
 +//! Xbox Cloud Gaming streaming token for the stored account (Bannerlator). Same bearer
 +//! RPS -> Xbox user -> XSTS exchange as the profile read, for the cloud gaming relying party,
 +//! then the streaming service's user login (as xbox.com and Greenlight's xal-node do).
@@ -27,13 +27,14 @@ index 0000000..814b808
 +const GSSV_RELYING_PARTY: &str = "http://gssv.xboxlive.com/";
 +const OFFERINGS: [&str; 2] = ["xgpuweb", "xgpuwebf2p"];
 +
-+async fn xsts(tokens: &TokenManager, client: &reqwest::Client) -> Result<(String, String), &'static str> {
++/// The stored account's compact Microsoft account ticket for one service target and policy.
++async fn ticket(tokens: &TokenManager, client: &reqwest::Client, target: &str, policy: soap::PolicyReference) -> Result<(String, String), &'static str> {
 +    let (account, device, user) = super::session::prepare(tokens, client).await.map_err(|stage| {
 +        super::session::diagnostic(stage); stage
 +    })?;
 +    let outcome = super::session::exchange(|| async { xodus::api::live::exchange_user_token(client, user.clone(), account.clone(), device.clone(),
 +        None, Some("Silent".into()), "{d6d5a677-0872-4ab0-9442-bb792fce85c5}".into(),
-+        &[("user.auth.xboxlive.com".into(), Some(soap::PolicyReference::mbi_ssl()))])
++        &[(target.into(), Some(policy.clone()))])
 +        .await.map_err(|error| super::session::classify(&error)) }).await?;
 +    let token: Token = match outcome {
 +        ExchangeUserTokenOutcome::Issued(soap::BodyContent::RequestSecurityTokenResponseCollection(mut collection)) if !collection.security_tokens.is_empty() => collection.security_tokens.remove(0).into(),
@@ -41,9 +42,21 @@ index 0000000..814b808
 +        _ => return Err("msa-response"),
 +    };
 +    let Token::Compact(ticket) = token else { return Err("msa-ticket"); };
++    Ok((account, ticket))
++}
++
++async fn xsts(tokens: &TokenManager, client: &reqwest::Client) -> Result<(String, String), &'static str> {
++    let (account, ticket) = ticket(tokens, client, "user.auth.xboxlive.com", soap::PolicyReference::mbi_ssl()).await?;
 +    let user = xodus::api::xbox::authenticate_xbox_user(client, ticket).await.map_err(|_| "xbox-user")?;
 +    let xsts = xodus::api::xbox::request_xsts_token(client, user.token, GSSV_RELYING_PARTY).await.map_err(|_| "xsts")?;
 +    Ok((account, xsts.token))
++}
++
++/// The Microsoft account token a cloud session's /connect step takes (xbox.com asks MSAL for
++/// "service::http://Passport.NET/purpose::PURPOSE_XBOX_CLOUD_CONSOLE_TRANSFER_TOKEN").
++async fn transfer_token(tokens: &TokenManager, client: &reqwest::Client) -> Result<String, &'static str> {
++    let policy = soap::PolicyReference { uri: "PURPOSE_XBOX_CLOUD_CONSOLE_TRANSFER_TOKEN".into(), val: String::default() };
++    Ok(ticket(tokens, client, "http://Passport.NET/purpose", policy).await?.1)
 +}
 +
 +fn regions(value: &Value) -> Vec<Value> {
@@ -70,8 +83,10 @@ index 0000000..814b808
 +        let Ok(body) = body else { failures.push(format!("{offering}:{status}")); continue; };
 +        let value: Value = serde_json::from_slice(&body).map_err(|_| "gssv-json")?;
 +        let token = value["gsToken"].as_str().filter(|token| !token.is_empty() && token.len() <= 16384).ok_or("gs-token")?;
++        let transfer = transfer_token(tokens, &client).await;
++        if let Err(stage) = &transfer { eprintln!("Xbox Cloud Gaming transfer token unavailable ({stage})."); }
 +        if tokens.get_user().map_err(|_| "account-changed")?.username != account { return Err("account-changed".into()); }
-+        return Ok(json!({ "schema": 1, "account": account, "offering": offering, "gsToken": token,
++        return Ok(json!({ "schema": 1, "account": account, "offering": offering, "gsToken": token, "userToken": transfer.ok(),
 +            "durationInSeconds": value["durationInSeconds"].as_u64().unwrap_or(0), "market": value["market"].as_str().unwrap_or_default(),
 +            "regions": regions(&value) }));
 +    }

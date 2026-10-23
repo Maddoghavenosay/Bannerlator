@@ -237,7 +237,7 @@ fun rememberXboxLibrary(account: String, onMessage: (String) -> Unit): XboxLibra
                     runCatching {
                         val session = XboxCloudSession.get(app, account)
                         val titles = XboxCloudSession.titles(session)
-                        XboxDiag.log(app, "cloud session ok offering=${session.offering} regions=${session.regions} " +
+                        XboxDiag.log(app, "cloud session ok offering=${session.offering} regions=${session.regions} transfer=${session.userToken != null} " +
                             "titles=${titles.size} in-library=${list.count { (it.cloudId ?: it.id) in titles }}")
                     }.onFailure { XboxDiag.log(app, "cloud session failed: ${it.javaClass.simpleName}: ${it.message?.take(160)}") }
                 }

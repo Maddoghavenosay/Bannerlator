@@ -12,7 +12,9 @@ import java.net.URL
  * expires. The request shapes follow Greenlight / xal-node by unknownskl (MIT).
  */
 internal object XboxCloudSession {
-    class Session(val account: String, val token: String, val offering: String, val baseUri: String, val regions: Int, private val expiresAt: Long) {
+    class Session(val account: String, val token: String, val offering: String, val baseUri: String, val regions: Int,
+                  /** Microsoft account token for a session's /connect step; null when the account could not get one. */
+                  val userToken: String?, private val expiresAt: Long) {
         val fresh get() = System.currentTimeMillis() < expiresAt - 5 * 60_000L
     }
 
@@ -27,7 +29,7 @@ internal object XboxCloudSession {
             ?: error("No Xbox Cloud Gaming region")
         val seconds = json.optLong("durationInSeconds").coerceIn(0, 24 * 3600)
         return Session(account, json.getString("gsToken"), json.getString("offering"), default.getString("baseUri"), regions.length(),
-            System.currentTimeMillis() + seconds * 1000).also { cached = it }
+            json.optString("userToken").takeIf { !json.isNull("userToken") && it.isNotEmpty() }, System.currentTimeMillis() + seconds * 1000).also { cached = it }
     }
 
     fun clear() { cached = null }
