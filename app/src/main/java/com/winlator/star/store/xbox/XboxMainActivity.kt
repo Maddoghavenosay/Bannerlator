@@ -170,6 +170,7 @@ class XboxMainActivity : ComponentActivity() {
                 XboxLibraryCache.clear(app)
                 XboxRuntime.stop()
                 XboxCloudActivity.clearWebSignIn(app)
+                XboxCloudSession.clear()
             }
             XboxDiag.log(app, "signed out")
             runOnUiThread { account = null; message = "Signed out of Xbox. Installed games stay installed." }
@@ -228,6 +229,17 @@ fun rememberXboxLibrary(account: String, onMessage: (String) -> Unit): XboxLibra
                         "cloud-lists=${cloud?.gamePass?.size ?: -1}/${cloud?.all?.size ?: -1}")
                     runCatching { XboxLibraryCache.write(app, account, market, list) }
                     list
+                }
+            }
+            result.onSuccess { list ->
+                // Probe: can the store account sign in to Xbox Cloud Gaming by itself? Logs counts only.
+                launch(Dispatchers.IO) {
+                    runCatching {
+                        val session = XboxCloudSession.get(app, account)
+                        val titles = XboxCloudSession.titles(session)
+                        XboxDiag.log(app, "cloud session ok offering=${session.offering} regions=${session.regions} " +
+                            "titles=${titles.size} in-library=${list.count { (it.cloudId ?: it.id) in titles }}")
+                    }.onFailure { XboxDiag.log(app, "cloud session failed: ${it.javaClass.simpleName}: ${it.message?.take(160)}") }
                 }
             }
             result.onSuccess { games = it; status = "" }
