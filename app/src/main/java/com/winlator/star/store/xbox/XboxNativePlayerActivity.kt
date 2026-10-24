@@ -111,6 +111,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideBars()
+        watchBars()
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         surfaceView = SurfaceView(this)
         root.addView(surfaceView, FrameLayout.LayoutParams(-1, -1))
@@ -753,6 +754,27 @@ class XboxNativePlayerActivity : ComponentActivity() {
             ?: modes.maxByOrNull { it.refreshRate } ?: return
         window.attributes = window.attributes.apply { preferredDisplayModeId = pick.modeId }
         log("display mode ${pick.refreshRate.toInt()} Hz for target ${if (target > 0) target else "screen"}")
+    }
+
+    private val rehideBars = Runnable { if (window.decorView.hasWindowFocus()) hideBars() }
+
+    /**
+     * Bars that come back while the player has focus (return from recents or another app, a swipe) are hidden
+     * again after a moment; focus alone missed the return from the background (10-24).
+     */
+    private fun watchBars() {
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { v, insets ->
+            if (insets.isVisible(WindowInsetsCompat.Type.navigationBars()) || insets.isVisible(WindowInsetsCompat.Type.statusBars())) {
+                v.removeCallbacks(rehideBars)
+                v.postDelayed(rehideBars, 1500)
+            }
+            androidx.core.view.ViewCompat.onApplyWindowInsets(v, insets)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hideBars()
     }
 
     private fun hideBars() {
