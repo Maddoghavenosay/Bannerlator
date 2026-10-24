@@ -103,6 +103,8 @@ class XboxNativePlayerActivity : ComponentActivity() {
         setContentView(root)
         settings = XboxCloudSettings.load(this)
         applyDisplayRate(settings.fpsTarget)
+        overlayOn = settings.statsLevel > 0
+        overlay.visibility = if (overlayOn) android.view.View.VISIBLE else android.view.View.GONE
 
         val egl = EglBase.create().also { eglBase = it }
         val nativeVideo = XboxNativeVideo(this, egl) { log(it) }.also { video = it }
@@ -379,6 +381,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
         runCatching { vibrator.vibrate(VibrationEffect.createOneShot(durationMs.coerceAtMost(1000).toLong(), amplitude)) }
     }
 
+    /** The overlay is remembered with the other cloud settings (on = overlay level above 0). */
     @Volatile private var overlayOn = false
 
     private var lastJitterDelay = 0.0
@@ -483,7 +486,13 @@ class XboxNativePlayerActivity : ComponentActivity() {
                             XboxMenuEntry("Frame rate", "Target: ${fpsName(current)}", entries[3], { lastMainEntry = 3 }) { menuPage = "framerate" }
                             XboxMenuEntry("Stream quality", "Engine, resolution, region, codec, bitrate (next stream)", entries[4], { lastMainEntry = 4 }) { menuPage = "stream" }
                             XboxMenuEntry(if (overlayOn) "Hide performance overlay" else "Show performance overlay", "Resolution, fps, frame generation base → shown",
-                                entries[5], { lastMainEntry = 5 }) { overlayOn = !overlayOn; overlay.visibility = if (overlayOn) android.view.View.VISIBLE else android.view.View.GONE; closeMenu() }
+                                entries[5], { lastMainEntry = 5 }) {
+                                overlayOn = !overlayOn
+                                overlay.visibility = if (overlayOn) android.view.View.VISIBLE else android.view.View.GONE
+                                settings = settings.copy(statsLevel = if (overlayOn) maxOf(settings.statsLevel, 3) else 0)
+                                XboxCloudSettings.save(this@XboxNativePlayerActivity, settings)
+                                closeMenu()
+                            }
                             XboxMenuEntry("Leave", "End the stream", entries[6], { lastMainEntry = 6 }) { finish() }
                             androidx.compose.material3.Text("Guide twice opens this menu; Back or Guide closes it.",
                                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
@@ -503,6 +512,11 @@ class XboxNativePlayerActivity : ComponentActivity() {
                             if (!lsfg) androidx.compose.material3.Text("LSFG appears here once Lossless.dll is imported in Settings.",
                                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                                 modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                            if (startedWith.zeroCopy && !zeroCopy) androidx.compose.material3.Text(
+                                "Zero-copy is on, but this stream started with frame generation, so it isn't used. " +
+                                    "Pick Off above, then Restart the stream with these settings (below).",
+                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.tertiary,
+                                modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                             if (zeroCopy) androidx.compose.material3.Text("This stream uses zero-copy, so frame generation is off until the stream is restarted with zero-copy off.",
                                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.tertiary,
                                 modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
@@ -510,9 +524,13 @@ class XboxNativePlayerActivity : ComponentActivity() {
                                 startedWith = startedWith) { changed ->
                                 current = changed; settings = changed; XboxCloudSettings.save(this@XboxNativePlayerActivity, changed)
                             }
+                            XboxMenuEntry("Restart the stream with these settings",
+                                "Ends this cloud session and starts a new one; the game restarts, unsaved progress is lost.") { restartStream() }
                         }
                         else -> {
                             XboxMenuEntry("‹  Back", null) { menuPage = "" }
+                            if (menuPage == "stream") XboxMenuEntry("Restart the stream with these settings",
+                                "Ends this cloud session and starts a new one; the game restarts, unsaved progress is lost.") { restartStream() }
                             val page = menuPage
                             XboxCloudSettingsPanel(current, regions, live = true, section = page, restoreRow = lastRow[page] ?: 0,
                                 onRowFocused = { lastRow[page] = it }, startedWith = startedWith) { changed ->
@@ -531,6 +549,18 @@ class XboxNativePlayerActivity : ComponentActivity() {
         menu = view
         root.addView(view, FrameLayout.LayoutParams(-1, -1))
         view.requestFocus()
+    }
+
+    /** Stream-start settings need a new cloud session: end this one, then open the player again. */
+    private fun restartStream() {
+        val signals = signalling
+        closed = true
+        closeMenu()
+        show("Restarting the stream…")
+        Thread({
+            signals?.stop()?.let { log("restart: session closed ${it.status}") }
+            runOnUiThread { if (!isFinishing) { startActivity(Intent(this, XboxCloudPlayerActivity::class.java).putExtras(intent)); finish() } }
+        }, "xcloud-native-restart").start()
     }
 
     private fun closeMenu() {
