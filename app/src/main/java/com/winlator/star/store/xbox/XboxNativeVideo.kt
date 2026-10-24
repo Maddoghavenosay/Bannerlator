@@ -27,6 +27,10 @@ internal class XboxNativeVideo(private val context: Context, eglBase: EglBase, p
         const val FG_OFF = "off"
         const val FG_WINFG = "winfg"
         const val FG_LSFG = "lsfg"
+        const val FG_LSFG3 = "lsfg3"
+        const val FG_LSFG4 = "lsfg4"
+        fun isLsfg(mode: String) = mode == FG_LSFG || mode == FG_LSFG3 || mode == FG_LSFG4
+        fun multiplier(mode: String) = when (mode) { FG_LSFG3 -> 3; FG_LSFG4 -> 4; FG_OFF -> 0; else -> 2 }
         private const val ENGINE_LSFG = 0
         private const val ENGINE_WINFG = 1
     }
@@ -60,6 +64,9 @@ internal class XboxNativeVideo(private val context: Context, eglBase: EglBase, p
     private var videoH = 0
     @Volatile private var frameGen = FG_OFF
     @Volatile private var refreshHz = 60f
+    /** The frame-rate target (0 = the screen's rate): the frame-gen pacer's cap, or a limit on stream frames without it. */
+    @Volatile private var fpsTarget = 0
+    private var lastSubmitNs = 0L
     @Volatile var frames = 0L
         private set
 
@@ -72,7 +79,13 @@ internal class XboxNativeVideo(private val context: Context, eglBase: EglBase, p
         if (handle != 0L) { nativeResize(handle, width, height); applyTransform() }
     }
 
-    /** off, winfg (2x) or lsfg (2x; needs the imported Lossless.dll). Live. */
+    /** Frame-rate target, 0 = the screen's rate. Live. */
+    fun setFpsTarget(fps: Int) {
+        fpsTarget = fps
+        synchronized(lock) { if (handle != 0L) applyFrameGen() }
+    }
+
+    /** off, winfg (2x) or lsfg / lsfg3 / lsfg4 (needs the imported Lossless.dll). Live. */
     fun setFrameGeneration(mode: String) {
         frameGen = mode
         synchronized(lock) { if (handle != 0L) applyFrameGen() }
@@ -104,7 +117,10 @@ internal class XboxNativeVideo(private val context: Context, eglBase: EglBase, p
             if (r !== reader) { image.close(); return }
             if (image.width != videoW || image.height != videoH || handle == 0L) startRenderer(image.width, image.height)
             val buffer = image.hardwareBuffer
-            if (handle != 0L && buffer != null) { nativeFrame(handle, buffer, image.width, image.height); frames++ }
+            // Without frame generation a target below the stream's rate drops stream frames evenly.
+            val now = System.nanoTime()
+            val skip = frameGen == FG_OFF && fpsTarget in 1 until 60 && now - lastSubmitNs < 1_000_000_000L / fpsTarget - 2_000_000L
+            if (handle != 0L && buffer != null && !skip) { nativeFrame(handle, buffer, image.width, image.height); frames++; lastSubmitNs = now }
             buffer?.close()
             held.addLast(image)
             while (held.size > 2) held.removeFirst().close()
@@ -134,18 +150,20 @@ internal class XboxNativeVideo(private val context: Context, eglBase: EglBase, p
     }
 
     private fun applyFrameGen() {
-        when (frameGen) {
-            FG_WINFG -> nativeFrameGen(handle, ENGINE_WINFG, 2, com.winlator.star.container.Container.FRAMEGEN_DEFAULT_FLOW_SCALE,
-                refreshHz, com.winlator.star.container.Container.FRAMEGEN_DEFAULT_MODEL, 2, null)
-            FG_LSFG -> {
+        // The pacer caps generated output at this rate: the user's target, else the screen's.
+        val cap = if (fpsTarget > 0) fpsTarget.toFloat() else refreshHz
+        when {
+            frameGen == FG_WINFG -> nativeFrameGen(handle, ENGINE_WINFG, 2, com.winlator.star.container.Container.FRAMEGEN_DEFAULT_FLOW_SCALE,
+                cap, com.winlator.star.container.Container.FRAMEGEN_DEFAULT_MODEL, 2, null)
+            isLsfg(frameGen) -> {
                 val cache = com.winlator.star.core.LsfgNative.cacheFile(context)
-                nativeFrameGen(handle, ENGINE_LSFG, 2, com.winlator.star.container.Container.LSFG_DEFAULT_FLOW_SCALE, refreshHz, 0, 0, cache.absolutePath)
+                nativeFrameGen(handle, ENGINE_LSFG, multiplier(frameGen), com.winlator.star.container.Container.LSFG_DEFAULT_FLOW_SCALE, cap, 0, 0, cache.absolutePath)
             }
-            else -> nativeFrameGen(handle, ENGINE_WINFG, 0, com.winlator.star.container.Container.FRAMEGEN_DEFAULT_FLOW_SCALE, refreshHz, 0, 2, null)
+            else -> nativeFrameGen(handle, ENGINE_WINFG, 0, com.winlator.star.container.Container.FRAMEGEN_DEFAULT_FLOW_SCALE, cap, 0, 2, null)
         }
         // FIFO while multiplying (the X11 rule); the compositor's own choice otherwise.
         if (frameGen != FG_OFF) nativeSetPresentMode(handle, 2)
-        log("native frame generation: $frameGen")
+        log("native frame generation: $frameGen, target ${if (fpsTarget > 0) fpsTarget else "screen"} fps")
     }
 
     /** {accepted, planned, sourceFps, presentedFps, thermal, chainMsPerGen}, or null without a renderer. */

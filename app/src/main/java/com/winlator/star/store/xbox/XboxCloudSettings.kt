@@ -37,8 +37,14 @@ data class XboxCloudSettings(
     val ntsc: Boolean = false,
     val profile: String = "",               // the screen-effect profile last applied ("" = none)
     val playerEngine: String = "web",       // web | native (WebRTC library + Vulkan compositor, frame generation)
-    val frameGen: String = "winfg",         // native engine: off | winfg (2x) | lsfg (2x, needs the imported Lossless.dll)
+    val frameGen: String = "winfg",         // native engine: off | winfg (2x) | lsfg | lsfg3 | lsfg4 (needs the imported Lossless.dll)
+    val fpsLimit: Int = 0,                  // native engine target: 0 = the screen's rate, else 30/45/60/120/144/165
+    val fpsCustomOn: Boolean = false,       // use fpsCustom instead of the presets
+    val fpsCustom: Int = 60,                // 10..165
 ) {
+    /** The native engine's frame-rate target (0 = the screen's own rate). */
+    val fpsTarget get() = if (fpsCustomOn) fpsCustom else fpsLimit
+
     /** X-MS-Device-Info / play body os name that makes the service pick this resolution (Better xCloud's mapping). */
     val osName get() = when (resolution) { "720p" -> "android"; "1080p_hq" -> "tizen"; else -> "windows" }
 
@@ -49,6 +55,7 @@ data class XboxCloudSettings(
         .put("gamma", gamma.toDouble()).put("saturation", saturation).put("sharpen", sharpen).put("sharpenMode", sharpenMode)
         .put("deband", deband).put("fxaa", fxaa).put("toon", toon).put("crt", crt).put("ntsc", ntsc).put("profile", profile)
         .put("playerEngine", playerEngine).put("frameGen", frameGen)
+        .put("fpsLimit", fpsLimit).put("fpsCustomOn", fpsCustomOn).put("fpsCustom", fpsCustom)
         .toString()
 
     /** The picture-effect part, in the Wine profile format (KeyValueSet). */
@@ -96,7 +103,10 @@ data class XboxCloudSettings(
                 fxaa = json.optBoolean("fxaa"), toon = json.optBoolean("toon"), crt = json.optBoolean("crt"), ntsc = json.optBoolean("ntsc"),
                 profile = json.optString("profile", ""),
                 playerEngine = json.optString("playerEngine", d.playerEngine).takeIf { it == "native" } ?: "web",
-                frameGen = json.optString("frameGen", d.frameGen).takeIf { it in setOf("off", "winfg", "lsfg") } ?: d.frameGen,
+                frameGen = json.optString("frameGen", d.frameGen).takeIf { it in setOf("off", "winfg", "lsfg", "lsfg3", "lsfg4") } ?: d.frameGen,
+                fpsLimit = json.optInt("fpsLimit", d.fpsLimit).takeIf { it in setOf(0, 30, 45, 60, 120, 144, 165) } ?: 0,
+                fpsCustomOn = json.optBoolean("fpsCustomOn", d.fpsCustomOn),
+                fpsCustom = json.optInt("fpsCustom", d.fpsCustom).coerceIn(10, 165),
             )
         }.getOrDefault(XboxCloudSettings())
 

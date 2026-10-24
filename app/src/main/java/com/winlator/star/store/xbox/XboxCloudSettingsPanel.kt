@@ -115,7 +115,8 @@ private fun PanelContent(
             Choice("Player engine", listOf("web" to "Web", "native" to "Native (frame gen)"), settings.playerEngine,
                 pending { it.playerEngine != settings.playerEngine }) { onChange(settings.copy(playerEngine = it)) }
             val lsfg = remember { com.winlator.star.core.LsfgNative.isDllAvailable(ctx) }
-            Choice("Frame generation", listOf("off" to "Off", "winfg" to "Win-FG 2×") + (if (lsfg) listOf("lsfg" to "LSFG 2×") else emptyList()),
+            Choice("Frame generation", listOf("off" to "Off", "winfg" to "Win-FG 2×") +
+                (if (lsfg) listOf("lsfg" to "LSFG 2×", "lsfg3" to "LSFG 3×", "lsfg4" to "LSFG 4×") else emptyList()),
                 settings.frameGen) { onChange(settings.copy(frameGen = it)) }
             Text("Native engine (experimental): Google's WebRTC and Bannerlator's Vulkan compositor, so Win-FG or LSFG " +
                 "can add frames. LSFG uses the Lossless.dll imported in Settings. Screen effects and the overlay levels " +
@@ -135,6 +136,14 @@ private fun PanelContent(
         Choice("Bitrate limit", listOf(0 to "No limit") + listOf(5, 8, 10, 12, 15, 20, 25, 30, 40, 50).map { it to "$it Mb/s" }, settings.bitrateMbps,
             pending { it.bitrateMbps != settings.bitrateMbps }) { onChange(settings.copy(bitrateMbps = it)) }
         Toggle("Stop quality drops", "Keeps the resolution up when this device decodes slowly.", settings.preventDrops) { onChange(settings.copy(preventDrops = it)) }
+    }
+
+    if ((section == null && XboxNativePlayerActivity.supported()) || section == "framerate") Section("Frame rate (native engine)",
+        "With frame generation this is the rate shown; without it, only targets below the stream's 60 fps change anything.") {
+        Choice("Target", listOf(0 to "Screen's rate", 30 to "30 fps", 45 to "45 fps", 60 to "60 fps", 120 to "120 fps", 144 to "144 fps", 165 to "165 fps"),
+            settings.fpsLimit) { onChange(settings.copy(fpsLimit = it, fpsCustomOn = false)) }
+        Toggle("Custom frame rate", "Set any rate from 10 to 165 fps with the slider.", settings.fpsCustomOn) { onChange(settings.copy(fpsCustomOn = it)) }
+        if (settings.fpsCustomOn) SliderRow("Custom", settings.fpsCustom, 10, 165) { onChange(settings.copy(fpsCustom = it)) }
     }
 
     if (section == null || section == "picture") Section("Picture", "Shader effects on the stream; the profiles are shared with the Wine games' screen effects.") {
@@ -260,6 +269,18 @@ private fun Step(label: String, value: String, onMinus: () -> Unit, onPlus: () -
         Text(value, Modifier.width(112.dp).padding(horizontal = 4.dp), textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
         OutlinedButton(onClick = onPlus, modifier = noFocus.size(40.dp), contentPadding = PaddingValues(0.dp)) { Text("+") }
+    }
+}
+
+/** A value slider (touch) that a controller moves with Left / Right in steps of 1 (hold to repeat). */
+@Composable
+private fun SliderRow(label: String, value: Int, min: Int, max: Int, onValue: (Int) -> Unit) {
+    SettingRow(onLeft = { onValue((value - 1).coerceAtLeast(min)) }, onRight = { onValue((value + 1).coerceAtMost(max)) }, onSelect = null) {
+        Text(label, Modifier.width(72.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+        androidx.compose.material3.Slider(value = value.toFloat(), onValueChange = { onValue(it.toInt().coerceIn(min, max)) },
+            valueRange = min.toFloat()..max.toFloat(), modifier = noFocus.weight(1f))
+        Text("$value fps", Modifier.width(72.dp), textAlign = TextAlign.End, style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
