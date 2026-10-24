@@ -415,6 +415,14 @@
             android:name="com.winlator.star.store.xbox.XboxCloudSettingsActivity"
             android:screenOrientation="fullSensor"
             android:theme="@style/AppTheme"/>
+        <!-- Native Xbox Cloud Gaming player (opt-in): WebRTC library + Vulkan compositor frame generation. -->
+        <activity
+            android:exported="false"
+            android:name="com.winlator.star.store.xbox.XboxNativePlayerActivity"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation|uiMode"
+            android:hardwareAccelerated="true"
+            android:theme="@style/AppTheme"/>
         <!-- Bannerlator's own Xbox Cloud Gaming player (store sign-in, local WebRTC page). -->
         <activity
             android:exported="false"

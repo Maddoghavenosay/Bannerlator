@@ -111,6 +111,17 @@ private fun PanelContent(
     var naming by remember { mutableStateOf(false) }
 
     if (section == null || section == "stream") Section("Stream", if (live) "Applies to the next stream." else "Applies when a stream starts.") {
+        if (XboxNativePlayerActivity.supported()) {
+            Choice("Player engine", listOf("web" to "Web", "native" to "Native (frame gen)"), settings.playerEngine,
+                pending { it.playerEngine != settings.playerEngine }) { onChange(settings.copy(playerEngine = it)) }
+            val lsfg = remember { com.winlator.star.core.LsfgNative.isDllAvailable(ctx) }
+            Choice("Frame generation", listOf("off" to "Off", "winfg" to "Win-FG 2×") + (if (lsfg) listOf("lsfg" to "LSFG 2×") else emptyList()),
+                settings.frameGen) { onChange(settings.copy(frameGen = it)) }
+            Text("Native engine (experimental): Google's WebRTC and Bannerlator's Vulkan compositor, so Win-FG or LSFG " +
+                "can add frames. LSFG uses the Lossless.dll imported in Settings. Screen effects and the overlay levels " +
+                "apply to the web engine.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 8.dp, bottom = 6.dp))
+        }
         // What Microsoft sends depends on the device profile we report: the PC profile gave 2560x1440 on the
         // Pocket FIT (10-23), so it is labelled by profile, not by a fixed size.
         Choice("Resolution", listOf("720p" to "720p (phone profile)", "1080p" to "Best (PC profile)", "1080p_hq" to "1080p HQ (TV profile)"),

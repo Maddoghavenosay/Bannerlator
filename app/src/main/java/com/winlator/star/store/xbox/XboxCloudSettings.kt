@@ -36,6 +36,8 @@ data class XboxCloudSettings(
     val crt: Boolean = false,
     val ntsc: Boolean = false,
     val profile: String = "",               // the screen-effect profile last applied ("" = none)
+    val playerEngine: String = "web",       // web | native (WebRTC library + Vulkan compositor, frame generation)
+    val frameGen: String = "winfg",         // native engine: off | winfg (2x) | lsfg (2x, needs the imported Lossless.dll)
 ) {
     /** X-MS-Device-Info / play body os name that makes the service pick this resolution (Better xCloud's mapping). */
     val osName get() = when (resolution) { "720p" -> "android"; "1080p_hq" -> "tizen"; else -> "windows" }
@@ -46,6 +48,7 @@ data class XboxCloudSettings(
         .put("rumble", rumble).put("maxFps", maxFps).put("brightness", brightness).put("contrast", contrast)
         .put("gamma", gamma.toDouble()).put("saturation", saturation).put("sharpen", sharpen).put("sharpenMode", sharpenMode)
         .put("deband", deband).put("fxaa", fxaa).put("toon", toon).put("crt", crt).put("ntsc", ntsc).put("profile", profile)
+        .put("playerEngine", playerEngine).put("frameGen", frameGen)
         .toString()
 
     /** The picture-effect part, in the Wine profile format (KeyValueSet). */
@@ -92,6 +95,8 @@ data class XboxCloudSettings(
                 deband = json.optInt("deband", d.deband).coerceIn(0, 8),
                 fxaa = json.optBoolean("fxaa"), toon = json.optBoolean("toon"), crt = json.optBoolean("crt"), ntsc = json.optBoolean("ntsc"),
                 profile = json.optString("profile", ""),
+                playerEngine = json.optString("playerEngine", d.playerEngine).takeIf { it == "native" } ?: "web",
+                frameGen = json.optString("frameGen", d.frameGen).takeIf { it in setOf("off", "winfg", "lsfg") } ?: d.frameGen,
             )
         }.getOrDefault(XboxCloudSettings())
 
