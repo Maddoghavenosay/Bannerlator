@@ -23,6 +23,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -70,6 +76,12 @@ class XboxNativePlayerActivity : ComponentActivity() {
     @Volatile private var signalling: XboxCloudSignalling? = null
     @Volatile private var settings = XboxCloudSettings()
     @Volatile private var closed = false
+    /** The stream reached the screen at least once (a later failure is a lost connection, not a failed start). */
+    @Volatile private var connectedOnce = false
+    /** The session was ended because the player stayed in the background (Android freezes the app soon after). */
+    @Volatile private var endedInBackground = false
+    private var backgroundEnd: Runnable? = null
+    private var notice: androidx.compose.ui.platform.ComposeView? = null
     @Volatile private var regionNames = emptyList<String>()
     @Volatile private var serverName: String? = null
     private val candidates = mutableListOf<IceCandidate>()
@@ -127,17 +139,86 @@ class XboxNativePlayerActivity : ComponentActivity() {
 
     private fun fail(stage: String, detail: String) {
         log("failed at $stage: $detail")
-        runOnUiThread {
-            if (closed) return@runOnUiThread
-            android.app.AlertDialog.Builder(this, com.winlator.star.R.style.StoreAlertDialogDark)
-                .setTitle("The native stream could not start ($stage)")
-                .setMessage("You can use the web player instead (Xbox › Profile › Cloud gaming settings › Player engine).")
-                .setPositiveButton("Open the web player") { _, _ ->
-                    startActivity(Intent(this, XboxCloudPlayerActivity::class.java).putExtras(intent)); finish()
-                }
-                .setNegativeButton("Close") { _, _ -> finish() }
-                .setCancelable(false).show()
+        if (closed) return
+        if (connectedOnce) showNotice("The connection to the cloud console was lost",
+            "The stream stopped reaching this device ($detail). Restart the stream to play again: the game starts over, " +
+                "unsaved progress is lost.", webPlayer = false)
+        else showNotice("The native stream could not start ($stage)",
+            "$detail\n\nYou can try again, or use the web player instead (Xbox › Profile › Cloud gaming settings › Player engine).",
+            webPlayer = true)
+    }
+
+    /** One popup at a time, in the app's dialog style; A or Enter picks the selected button, Back closes the player. */
+    private fun showNotice(title: String, text: String, webPlayer: Boolean) = runOnUiThread {
+        if (notice != null || isFinishing || isDestroyed) return@runOnUiThread
+        closeMenu()
+        show("")
+        val view = androidx.compose.ui.platform.ComposeView(this)
+        view.setContent {
+            com.winlator.star.ui.theme.WinlatorTheme {
+                val first = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+                androidx.compose.runtime.LaunchedEffect(Unit) { androidx.compose.runtime.withFrameNanos { }; runCatching { first.requestFocus() } }
+                @androidx.compose.runtime.Composable
+                fun NoticeButton(label: String, focus: androidx.compose.ui.focus.FocusRequester?, onClick: () -> Unit) =
+                    androidx.compose.material3.TextButton(onClick = onClick,
+                        modifier = androidx.compose.ui.Modifier.let { if (focus != null) it.focusRequester(focus) else it }
+                            .onKeyEvent { e -> if (e.type == KeyEventType.KeyDown && e.key == Key.ButtonA) { onClick(); true } else false }) {
+                        androidx.compose.material3.Text(label)
+                    }
+                com.winlator.star.ui.screens.OutlinedAlertDialog(
+                    onDismissRequest = { finish() },
+                    properties = androidx.compose.ui.window.DialogProperties(dismissOnClickOutside = false),
+                    title = { androidx.compose.material3.Text(title) },
+                    text = { androidx.compose.material3.Text(text) },
+                    confirmButton = {
+                        androidx.compose.foundation.layout.Row {
+                            NoticeButton(if (connectedOnce) "Restart the stream" else "Try again", first) { restartStream() }
+                            if (webPlayer) NoticeButton("Open the web player", null) {
+                                startActivity(Intent(this@XboxNativePlayerActivity, XboxCloudPlayerActivity::class.java).putExtras(intent)); finish()
+                            }
+                        }
+                    },
+                    dismissButton = { NoticeButton("Close", null) { finish() } },
+                )
+            }
         }
+        notice = view
+        root.addView(view, FrameLayout.LayoutParams(-1, -1))
+    }
+
+    // ---- background ----
+
+    override fun onStop() {
+        super.onStop()
+        if (closed || isChangingConfigurations || signalling == null || endedInBackground) return
+        // Android freezes a background app about a minute after it leaves the screen; the connection then dies
+        // without a goodbye. End the session cleanly before that and offer a restart on return.
+        log("in the background")
+        val end = Runnable { backgroundEnd = null; endInBackground() }
+        backgroundEnd = end
+        root.postDelayed(end, BACKGROUND_GRACE_MS)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        backgroundEnd?.let { root.removeCallbacks(it); log("back before the stream was ended") }
+        backgroundEnd = null
+        if (endedInBackground && notice == null) showNotice("The stream ended while Bannerlator was in the background",
+            "Cloud sessions are closed after ${BACKGROUND_GRACE_MS / 1000} s away, before Android pauses the app. Restart the " +
+                "stream to play again: the game starts over, unsaved progress is lost.", webPlayer = false)
+    }
+
+    private fun endInBackground() {
+        if (closed || endedInBackground) return
+        endedInBackground = true
+        closed = true
+        log("ending the session: ${BACKGROUND_GRACE_MS / 1000} s in the background")
+        val signals = signalling
+        signalling = null
+        ticker.shutdownNow()
+        Thread({ signals?.stop()?.let { log("session closed: ${it.status}") } }, "xcloud-native-stop").start()
+        runCatching { protocol?.close() }
+        runCatching { pc?.close() }
     }
 
     // ---- session ----
@@ -279,6 +360,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
             log("connection $state")
             when (state) {
                 PeerConnection.PeerConnectionState.CONNECTED -> {
+                    connectedOnce = true
                     show("")
                     video?.setFpsTarget(settings.fpsTarget)
                     video?.setFrameGeneration(effectiveFrameGen())
@@ -533,7 +615,9 @@ class XboxNativePlayerActivity : ComponentActivity() {
                                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                                 modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                             if (startedWith.zeroCopy && !zeroCopy) androidx.compose.material3.Text(
-                                "Zero-copy is on, but this stream started with frame generation, so it isn't used. " +
+                                if (current.frameGen == XboxNativeVideo.FG_OFF) "Zero-copy is on, but this stream started with frame generation, " +
+                                    "so it isn't used. Restart the stream with these settings (below) to use it."
+                                else "Zero-copy is on, but this stream started with frame generation, so it isn't used. " +
                                     "Pick Off above, then Restart the stream with these settings (below).",
                                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.tertiary,
                                 modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
@@ -583,6 +667,8 @@ class XboxNativePlayerActivity : ComponentActivity() {
         val signals = signalling
         closed = true
         closeMenu()
+        notice?.let { root.removeView(it) }
+        notice = null
         show("Restarting the stream…")
         Thread({
             signals?.stop()?.let { log("restart: session closed ${it.status}") }
@@ -641,6 +727,8 @@ class XboxNativePlayerActivity : ComponentActivity() {
     }
 
     companion object {
+        /** How long a stream may stay in the background (Android froze the app ~70 s after it left the screen, 10-24). */
+        private const val BACKGROUND_GRACE_MS = 45_000L
         private val FG_MODES = listOf(XboxNativeVideo.FG_OFF, XboxNativeVideo.FG_WINFG, XboxNativeVideo.FG_LSFG, XboxNativeVideo.FG_LSFG3, XboxNativeVideo.FG_LSFG4)
 
         /** True when the native engine can run here (ImageReader GPU buffers need Android 10). */
