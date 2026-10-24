@@ -365,19 +365,56 @@ class XboxNativePlayerActivity : ComponentActivity() {
 
     @Volatile private var overlayOn = false
 
+    private var lastJitterDelay = 0.0
+    private var lastJitterCount = 0.0
+    private var lastDecodeTime = 0.0
+    private var lastDecoded = 0.0
+
+    /**
+     * The overlay: picture size and fps, frame generation base -> shown, and the delay of the picture: network
+     * round trip, WebRTC's jitter buffer and decode time per frame (deltas over the last second), frame generation's
+     * wait for the next real frame plus its GPU time, and an estimate of the total (one-way network + buffer +
+     * decode + frame generation + one screen refresh).
+     */
     private fun updateOverlay() {
         if (!overlayOn) return
         val peer = pc ?: return
         peer.getStats { report ->
-            var line = ""
+            var size = ""; var fps = 0
+            var rttMs = -1.0; var bufferMs = 0.0; var decodeMs = 0.0
             report.statsMap.values.forEach { s ->
-                if (s.type == "inbound-rtp" && s.members["kind"] == "video") {
-                    line = "${s.members["frameWidth"]}x${s.members["frameHeight"]}  ${(s.members["framesPerSecond"] as? Number)?.toInt() ?: 0} fps"
+                val m = s.members
+                if (s.type == "inbound-rtp" && m["kind"] == "video") {
+                    size = "${m["frameWidth"]}x${m["frameHeight"]}"
+                    fps = (m["framesPerSecond"] as? Number)?.toInt() ?: 0
+                    val jd = (m["jitterBufferDelay"] as? Number)?.toDouble() ?: 0.0
+                    val jc = (m["jitterBufferEmittedCount"] as? Number)?.toDouble() ?: 0.0
+                    if (jc > lastJitterCount) bufferMs = (jd - lastJitterDelay) * 1000 / (jc - lastJitterCount)
+                    lastJitterDelay = jd; lastJitterCount = jc
+                    val dt = (m["totalDecodeTime"] as? Number)?.toDouble() ?: 0.0
+                    val df = (m["framesDecoded"] as? Number)?.toDouble() ?: 0.0
+                    if (df > lastDecoded) decodeMs = (dt - lastDecodeTime) * 1000 / (df - lastDecoded)
+                    lastDecodeTime = dt; lastDecoded = df
+                } else if (s.type == "candidate-pair" && m["state"] == "succeeded" && m["nominated"] == true) {
+                    (m["currentRoundTripTime"] as? Number)?.toDouble()?.let { rttMs = it * 1000 }
                 }
             }
             val fg = video?.stats()
-            val fgLine = if (fg != null && settings.frameGen != XboxNativeVideo.FG_OFF) "\n${settings.frameGen}: ${fg[2].toInt()} → ${fg[3].toInt()} fps" else ""
-            runOnUiThread { overlay.text = line + fgLine }
+            val fgOn = fg != null && settings.frameGen != XboxNativeVideo.FG_OFF && fg[2] > 1f
+            // Frame generation holds the picture until the next real frame arrives, then adds its GPU work.
+            val fgWaitMs = if (fgOn) 1000.0 / fg!![2] else 0.0
+            val fgGpuMs = if (fgOn && fg!![5] > 0f) fg[5].toDouble() else 0.0
+            @Suppress("DEPRECATION") val refreshMs = 1000.0 / windowManager.defaultDisplay.refreshRate
+            val total = (if (rttMs >= 0) rttMs / 2 else 0.0) + bufferMs + decodeMs + fgWaitMs + fgGpuMs + refreshMs
+            val lines = buildList {
+                add("$size  $fps fps")
+                if (fgOn) add("${settings.frameGen}: ${fg!![2].toInt()} → ${fg[3].toInt()} fps")
+                add(if (rttMs >= 0) "ping ${rttMs.toInt()} ms" else "ping –")
+                add("buffer ${"%.1f".format(bufferMs)} ms  decode ${"%.1f".format(decodeMs)} ms")
+                if (fgOn) add("frame gen +${"%.1f".format(fgWaitMs + fgGpuMs)} ms (gpu ${"%.1f".format(fgGpuMs)})")
+                add("picture delay ≈ ${total.toInt()} ms (est.)")
+            }
+            runOnUiThread { overlay.text = lines.joinToString("\n") }
         }
     }
 
