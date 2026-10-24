@@ -59,7 +59,7 @@ object XboxCloudShortcuts {
             val game = cachedGame(activity, id)
             activity.runOnUiThread {
                 if (game == null) {
-                    android.widget.Toast.makeText(activity, "Open the Xbox store once to sync your library, then try again.", android.widget.Toast.LENGTH_LONG).show()
+                    com.winlator.star.core.AppUtils.showToast(activity, "Open the Xbox store once to sync your library, then try again.")
                     return@runOnUiThread
                 }
                 activity.startActivity(XboxMainActivity.detailIntent(activity, game)

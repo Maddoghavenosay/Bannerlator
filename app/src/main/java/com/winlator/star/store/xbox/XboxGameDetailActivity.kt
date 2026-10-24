@@ -100,8 +100,9 @@ class XboxGameDetailActivity : ComponentActivity() {
                 val gear = buildList {
                     if (inst == null && !downloading && game.cloud && game.access.isNotEmpty() && intent.getStringExtra(XboxCloudShortcuts.EXTRA_SHORTCUT) == null)
                         add(StoreGearItem("➕", "Add to Games (stream now, download later)") {
-                            XboxCloudShortcuts.addNotInstalled(this@XboxGameDetailActivity, game) { _, message ->
-                                android.widget.Toast.makeText(this@XboxGameDetailActivity, message, android.widget.Toast.LENGTH_LONG).show()
+                            XboxCloudShortcuts.addNotInstalled(this@XboxGameDetailActivity, game) { ok, message ->
+                                addResult = com.winlator.star.store.compose.AddShortcutResult(game.title, ok, message,
+                                    note = if (ok) "Not installed yet: Stream it now, or Download it from its launch options." else null)
                             }
                         })
                     if (downloading) add(StoreGearItem("🗑", "Cancel download", danger = true) { XboxDownloads.cancel(game.id) })
