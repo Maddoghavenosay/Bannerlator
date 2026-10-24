@@ -357,28 +357,8 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     private val lastRow = mutableMapOf<String, Int>()
 
     @androidx.compose.runtime.Composable
-    private fun MenuEntry(title: String, note: String?, focus: androidx.compose.ui.focus.FocusRequester? = null, index: Int = -1, onClick: () -> Unit) {
-        val cs = androidx.compose.material3.MaterialTheme.colorScheme
-        var focused by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-        val shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
-        androidx.compose.material3.Surface(
-            onClick = onClick, color = if (focused) cs.primary.copy(alpha = 0.2f) else cs.surfaceContainerHigh, shape = shape,
-            border = if (focused) androidx.compose.foundation.BorderStroke(2.dp, cs.primary) else null,
-            modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp)
-                .let { if (focus != null) it.focusRequester(focus) else it }
-                .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused && index >= 0) lastMainEntry = index }
-                .onKeyEvent { event ->
-                    if (event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && event.key == androidx.compose.ui.input.key.Key.ButtonA) {
-                        onClick(); true
-                    } else false
-                },
-        ) {
-            androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                androidx.compose.material3.Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = cs.onSurface)
-                if (note != null) androidx.compose.material3.Text(note, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            }
-        }
-    }
+    private fun MenuEntry(title: String, note: String?, focus: androidx.compose.ui.focus.FocusRequester? = null, index: Int = -1, onClick: () -> Unit) =
+        XboxMenuEntry(title, note, focus, { if (index >= 0) lastMainEntry = index }, onClick)
 
     /** Stream-quality changes need a new cloud session: end this one, then open the player again. */
     private fun restartStream() {

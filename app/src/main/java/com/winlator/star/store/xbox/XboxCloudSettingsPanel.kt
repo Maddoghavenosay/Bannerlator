@@ -284,3 +284,24 @@ private fun Toggle(label: String, note: String, checked: Boolean, onToggle: (Boo
         Switch(checked = checked, onCheckedChange = onToggle, modifier = noFocus)
     }
 }
+
+/** One entry of the cloud players' menu list (highlighted when selected; A or a tap opens it). */
+@Composable
+internal fun XboxMenuEntry(title: String, note: String?, focus: FocusRequester? = null, onFocused: () -> Unit = {}, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(10.dp)
+    androidx.compose.material3.Surface(
+        onClick = onClick, color = if (focused) cs.primary.copy(alpha = 0.2f) else cs.surfaceContainerHigh, shape = shape,
+        border = if (focused) androidx.compose.foundation.BorderStroke(2.dp, cs.primary) else null,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp)
+            .let { if (focus != null) it.focusRequester(focus) else it }
+            .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onFocused() }
+            .onKeyEvent { event -> if (event.type == KeyEventType.KeyDown && event.key == Key.ButtonA) { onClick(); true } else false },
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+            if (note != null) Text(note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        }
+    }
+}

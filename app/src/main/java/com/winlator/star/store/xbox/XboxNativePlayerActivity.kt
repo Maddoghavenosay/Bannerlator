@@ -15,6 +15,14 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -62,9 +70,17 @@ class XboxNativePlayerActivity : ComponentActivity() {
     @Volatile private var signalling: XboxCloudSignalling? = null
     @Volatile private var settings = XboxCloudSettings()
     @Volatile private var closed = false
+    @Volatile private var regionNames = emptyList<String>()
     private val candidates = mutableListOf<IceCandidate>()
     private val gathered = CountDownLatch(1)
-    private var menu: android.app.AlertDialog? = null
+    private var menu: androidx.compose.ui.platform.ComposeView? = null
+    private var menuPage by androidx.compose.runtime.mutableStateOf("")
+    private var lastMainEntry = 0
+    private val lastRow = mutableMapOf<String, Int>()
+    /** The settings this stream started with (stream-start settings changed since then need a restart). */
+    private val startedWith by lazy { XboxCloudSettings.load(this) }
+    /** The release of the Guide press that opened the menu must not close it again. */
+    private var swallowGuideUp = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -123,6 +139,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
         val cached = XboxLibraryCache.read(applicationContext, account, Xodus.market())?.games?.firstOrNull { it.id == requested }
         val product = cached?.cloudId ?: requested
         val active = XboxCloudSession.get(applicationContext, account).forStream(settings.region, settings.osName)
+        regionNames = active.regionList.map { it.name }
         val title = XboxCloudSession.titles(active)[product] ?: error("This game can't be streamed with this account here.")
         val signals = XboxCloudSignalling(active, title, settings).also { signalling = it }
         log("$product -> $title, region ${java.net.URI(active.baseUri).host}, frame gen ${settings.frameGen}")
@@ -298,15 +315,23 @@ class XboxNativePlayerActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (menu?.isShowing == true) return super.dispatchKeyEvent(event)
+        if (menu != null) {
+            // Guide closes the menu; Back goes up one page, then closes it.
+            if (isGuide(event)) { if (event.action == KeyEvent.ACTION_UP) { if (swallowGuideUp) swallowGuideUp = false else closeMenu() }; return true }
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                if (event.action == KeyEvent.ACTION_UP) { if (menuPage.isNotEmpty()) menuPage = "" else closeMenu() }
+                return true
+            }
+            return super.dispatchKeyEvent(event)
+        }
         // Guide / the Input Controls menu button: once = the Xbox button, twice or held = the player menu.
         if (isGuide(event)) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                 val pending = pendingNexus
-                if (pending != null && event.eventTime - lastGuideUp <= 350) { root.removeCallbacks(pending); pendingNexus = null; openMenu() }
+                if (pending != null && event.eventTime - lastGuideUp <= 350) { root.removeCallbacks(pending); pendingNexus = null; swallowGuideUp = true; openMenu() }
                 else { guideDown = true; guideDownAt = event.eventTime }
             } else if (event.action == KeyEvent.ACTION_DOWN && guideDown && event.eventTime - guideDownAt >= 600) {
-                guideDown = false; openMenu()
+                guideDown = false; swallowGuideUp = true; openMenu()
             } else if (event.action == KeyEvent.ACTION_UP && guideDown) {
                 guideDown = false; lastGuideUp = event.eventTime
                 val tap = Runnable { pendingNexus = null; pressNexus() }
@@ -350,28 +375,85 @@ class XboxNativePlayerActivity : ComponentActivity() {
 
     // ---- menu ----
 
+    /** The player menu (as the web player's): Resume, Xbox menu, Frame generation, Stream quality, overlay, Leave. */
     private fun openMenu() {
-        if (menu?.isShowing == true) return
+        if (menu != null) return
         pad.reset()
+        menuPage = ""
+        val regions = regionNames
         val lsfg = com.winlator.star.core.LsfgNative.isDllAvailable(this)
-        val choices = mutableListOf("Resume", "Xbox menu",
-            "Frame generation: Off", "Frame generation: Win-FG 2×") + (if (lsfg) listOf("Frame generation: LSFG 2×") else emptyList()) +
-            listOf(if (overlayOn) "Hide performance overlay" else "Show performance overlay", "Leave")
-        menu = android.app.AlertDialog.Builder(this, com.winlator.star.R.style.StoreAlertDialogDark)
-            .setTitle("${intent.getStringExtra("title").orEmpty()} · frame generation: ${settings.frameGen}")
-            .setItems(choices.toTypedArray()) { _, which ->
-                when (choices[which]) {
-                    "Xbox menu" -> pressNexus()
-                    "Frame generation: Off" -> setFrameGen(XboxNativeVideo.FG_OFF)
-                    "Frame generation: Win-FG 2×" -> setFrameGen(XboxNativeVideo.FG_WINFG)
-                    "Frame generation: LSFG 2×" -> setFrameGen(XboxNativeVideo.FG_LSFG)
-                    "Show performance overlay", "Hide performance overlay" -> {
-                        overlayOn = !overlayOn; overlay.visibility = if (overlayOn) android.view.View.VISIBLE else android.view.View.GONE
+        val view = androidx.compose.ui.platform.ComposeView(this)
+        view.setContent {
+            com.winlator.star.ui.theme.WinlatorTheme {
+                var current by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(settings) }
+                val entries = androidx.compose.runtime.remember { List(6) { androidx.compose.ui.focus.FocusRequester() } }
+                val choices = androidx.compose.runtime.remember { List(3) { androidx.compose.ui.focus.FocusRequester() } }
+                androidx.compose.runtime.LaunchedEffect(menuPage) {
+                    runCatching {
+                        if (menuPage.isEmpty()) entries[lastMainEntry.coerceIn(0, 5)].requestFocus()
+                        else if (menuPage == "framegen") choices[listOf(XboxNativeVideo.FG_OFF, XboxNativeVideo.FG_WINFG, XboxNativeVideo.FG_LSFG)
+                            .indexOf(current.frameGen).coerceIn(0, if (lsfg) 2 else 1)].requestFocus()
                     }
-                    "Leave" -> finish()
+                }
+                val cs = androidx.compose.material3.MaterialTheme.colorScheme
+                androidx.compose.foundation.layout.Column(
+                    androidx.compose.ui.Modifier.fillMaxHeight().width(400.dp).background(cs.surface.copy(alpha = 0.95f))
+                        .verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(vertical = 12.dp),
+                ) {
+                    androidx.compose.material3.Text("${intent.getStringExtra("title").orEmpty()} · native",
+                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = cs.onSurface,
+                        modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                    fun fgName(mode: String) = when (mode) { XboxNativeVideo.FG_WINFG -> "Win-FG 2×"; XboxNativeVideo.FG_LSFG -> "LSFG 2×"; else -> "Off" }
+                    when (menuPage) {
+                        "" -> {
+                            XboxMenuEntry("Resume", "Back to the game", entries[0], { lastMainEntry = 0 }) { closeMenu() }
+                            XboxMenuEntry("Xbox menu", "The game's Xbox menu (also: Guide once)", entries[1], { lastMainEntry = 1 }) { closeMenu(); pressNexus() }
+                            XboxMenuEntry("Frame generation", "Now: ${fgName(current.frameGen)}", entries[2], { lastMainEntry = 2 }) { menuPage = "framegen" }
+                            XboxMenuEntry("Stream quality", "Engine, resolution, region, codec, bitrate (next stream)", entries[3], { lastMainEntry = 3 }) { menuPage = "stream" }
+                            XboxMenuEntry(if (overlayOn) "Hide performance overlay" else "Show performance overlay", "Resolution, fps, frame generation base → shown",
+                                entries[4], { lastMainEntry = 4 }) { overlayOn = !overlayOn; overlay.visibility = if (overlayOn) android.view.View.VISIBLE else android.view.View.GONE; closeMenu() }
+                            XboxMenuEntry("Leave", "End the stream", entries[5], { lastMainEntry = 5 }) { finish() }
+                            androidx.compose.material3.Text("Guide twice opens this menu; Back or Guide closes it.",
+                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                                modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                        }
+                        "framegen" -> {
+                            XboxMenuEntry("‹  Back", null) { menuPage = "" }
+                            val modes = listOf(XboxNativeVideo.FG_OFF, XboxNativeVideo.FG_WINFG) + (if (lsfg) listOf(XboxNativeVideo.FG_LSFG) else emptyList())
+                            modes.forEachIndexed { i, mode ->
+                                XboxMenuEntry((if (current.frameGen == mode) "✓  " else "") + fgName(mode), when (mode) {
+                                    XboxNativeVideo.FG_WINFG -> "Bannerlator's own frame generation; doubles the shown frame rate"
+                                    XboxNativeVideo.FG_LSFG -> "Lossless Scaling frame generation, from the Lossless.dll imported in Settings"
+                                    else -> "Show the stream's own frames only"
+                                }, choices[i]) { current = current.copy(frameGen = mode); setFrameGen(mode) }
+                            }
+                            if (!lsfg) androidx.compose.material3.Text("LSFG appears here once Lossless.dll is imported in Settings.",
+                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                                modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                        }
+                        else -> {
+                            XboxMenuEntry("‹  Back", null) { menuPage = "" }
+                            val page = menuPage
+                            XboxCloudSettingsPanel(current, regions, live = true, section = "stream", restoreRow = lastRow[page] ?: 0,
+                                onRowFocused = { lastRow[page] = it }, startedWith = startedWith) { changed ->
+                                current = changed
+                                settings = changed
+                                XboxCloudSettings.save(this@XboxNativePlayerActivity, changed)
+                            }
+                        }
+                    }
                 }
             }
-            .show()
+        }
+        menu = view
+        root.addView(view, FrameLayout.LayoutParams(-1, -1))
+        view.requestFocus()
+    }
+
+    private fun closeMenu() {
+        menu?.let { root.removeView(it) }
+        menu = null
+        pad.reset()
     }
 
     private fun setFrameGen(mode: String) {
