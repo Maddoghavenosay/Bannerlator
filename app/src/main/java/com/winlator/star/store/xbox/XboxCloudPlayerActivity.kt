@@ -59,7 +59,7 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     @Volatile private var closed = false
     @Volatile private var webUrl: String? = null
     @Volatile private var settings = XboxCloudSettings()
-    @Volatile private var signalling: XboxCloudSignalling? = null
+    @Volatile private var sessionSignals: XboxCloudSignalling? = null
     /** The settings this stream started with (stream-start settings changed since then need a restart). */
     @Volatile private var startedWith: XboxCloudSettings? = null
     private var menu: androidx.compose.ui.platform.ComposeView? = null
@@ -167,7 +167,7 @@ class XboxCloudPlayerActivity : ComponentActivity() {
 
     private fun handle(op: String, arg: String): XboxCloudSession.Reply {
         val active = session ?: error("no session")
-        val signals = signalling ?: XboxCloudSignalling(active, titleId ?: error("no title"), settings).also { signalling = it }
+        val signals = sessionSignals ?: XboxCloudSignalling(active, titleId ?: error("no title"), settings).also { sessionSignals = it }
         return signals.op(op, arg).also { sessionPath = signals.path }
     }
 
