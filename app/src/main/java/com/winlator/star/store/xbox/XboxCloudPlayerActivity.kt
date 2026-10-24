@@ -59,6 +59,8 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     @Volatile private var closed = false
     @Volatile private var webUrl: String? = null
     @Volatile private var settings = XboxCloudSettings()
+    /** The settings this stream started with (stream-start settings changed since then need a restart). */
+    @Volatile private var startedWith: XboxCloudSettings? = null
     private var menu: androidx.compose.ui.platform.ComposeView? = null
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -80,6 +82,7 @@ class XboxCloudPlayerActivity : ComponentActivity() {
                 val active = XboxCloudSession.get(applicationContext, account)
                 val title = XboxCloudSession.titles(active)[product] ?: error("This game can't be streamed with this account here.")
                 settings = XboxCloudSettings.load(applicationContext)
+                startedWith = settings
                 session = active.forStream(settings.region, settings.osName); titleId = title
                 XboxDiag.log(applicationContext, "cloud player: $product -> title $title, region ${java.net.URI(session!!.baseUri).host}, " +
                     "transfer=${active.userToken != null}, settings ${settings.toJson()}")
@@ -372,7 +375,7 @@ class XboxCloudPlayerActivity : ComponentActivity() {
                                 "Ends this cloud session and starts a new one; the game restarts, unsaved progress is lost.") { restartStream() }
                             val page = menuPage
                             XboxCloudSettingsPanel(current, regions, live = true, section = page, restoreRow = lastRow[page] ?: 0,
-                                onRowFocused = { lastRow[page] = it }) { changed ->
+                                onRowFocused = { lastRow[page] = it }, startedWith = startedWith) { changed ->
                                 current = changed
                                 settings = changed
                                 XboxCloudSettings.save(this@XboxCloudPlayerActivity, changed)

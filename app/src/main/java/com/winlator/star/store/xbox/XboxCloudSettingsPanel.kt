@@ -68,13 +68,15 @@ fun XboxCloudSettingsPanel(
     /** The row to select when the panel opens (the last one used), or null for no initial selection. */
     restoreRow: Int? = null,
     onRowFocused: (Int) -> Unit = {},
+    /** The settings the running stream started with; rows that differ say they need a restart (null: no stream). */
+    startedWith: XboxCloudSettings? = null,
     onChange: (XboxCloudSettings) -> Unit,
 ) {
     val focus = remember(section) { PanelFocus() }
     focus.next = 0
     focus.onFocused = onRowFocused
     CompositionLocalProvider(LocalPanelFocus provides focus) {
-        PanelContent(settings, regions, live, section, onChange)
+        PanelContent(settings, regions, live, section, startedWith, onChange)
     }
     LaunchedEffect(section) {
         if (restoreRow != null) runCatching { focus.requester(restoreRow.coerceIn(0, (focus.count - 1).coerceAtLeast(0))).requestFocus() }
@@ -99,9 +101,12 @@ private fun PanelContent(
     regions: List<String>,
     live: Boolean,
     section: String?,
+    startedWith: XboxCloudSettings?,
     onChange: (XboxCloudSettings) -> Unit,
 ) {
     val ctx = LocalContext.current
+    // Stream-start settings changed during a stream wait for a restart; back at the starting value, no note.
+    fun pending(differs: (XboxCloudSettings) -> Boolean) = startedWith != null && differs(startedWith)
     var profiles by remember { mutableStateOf(XboxCloudSettings.wineProfiles(ctx)) }
     var naming by remember { mutableStateOf(false) }
 
@@ -109,11 +114,15 @@ private fun PanelContent(
         // What Microsoft sends depends on the device profile we report: the PC profile gave 2560x1440 on the
         // Pocket FIT (10-23), so it is labelled by profile, not by a fixed size.
         Choice("Resolution", listOf("720p" to "720p (phone profile)", "1080p" to "Best (PC profile)", "1080p_hq" to "1080p HQ (TV profile)"),
-            settings.resolution) { onChange(settings.copy(resolution = it)) }
-        Choice("Server region", listOf("" to "Automatic") + regions.map { it to it }, settings.region) { onChange(settings.copy(region = it)) }
-        Choice("Game language", XboxCloudSettings.LANGUAGES, settings.language) { onChange(settings.copy(language = it)) }
-        Choice("Video codec quality", listOf("default" to "Automatic", "high" to "High", "normal" to "Normal", "low" to "Low"), settings.codec) { onChange(settings.copy(codec = it)) }
-        Choice("Bitrate limit", listOf(0 to "No limit") + listOf(5, 8, 10, 12, 15, 20, 25, 30, 40, 50).map { it to "$it Mb/s" }, settings.bitrateMbps) { onChange(settings.copy(bitrateMbps = it)) }
+            settings.resolution, pending { it.resolution != settings.resolution }) { onChange(settings.copy(resolution = it)) }
+        Choice("Server region", listOf("" to "Automatic") + regions.map { it to it }, settings.region,
+            pending { it.region != settings.region }) { onChange(settings.copy(region = it)) }
+        Choice("Game language", XboxCloudSettings.LANGUAGES, settings.language,
+            pending { it.language != settings.language }) { onChange(settings.copy(language = it)) }
+        Choice("Video codec quality", listOf("default" to "Automatic", "high" to "High", "normal" to "Normal", "low" to "Low"), settings.codec,
+            pending { it.codec != settings.codec }) { onChange(settings.copy(codec = it)) }
+        Choice("Bitrate limit", listOf(0 to "No limit") + listOf(5, 8, 10, 12, 15, 20, 25, 30, 40, 50).map { it to "$it Mb/s" }, settings.bitrateMbps,
+            pending { it.bitrateMbps != settings.bitrateMbps }) { onChange(settings.copy(bitrateMbps = it)) }
         Toggle("Stop quality drops", "Keeps the resolution up when this device decodes slowly.", settings.preventDrops) { onChange(settings.copy(preventDrops = it)) }
     }
 
@@ -244,11 +253,13 @@ private fun Step(label: String, value: String, onMinus: () -> Unit, onPlus: () -
 }
 
 @Composable
-private fun <T> Choice(label: String, options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+private fun <T> Choice(label: String, options: List<Pair<T, String>>, selected: T, needsRestart: Boolean = false, onSelect: (T) -> Unit) {
     val index = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
     Step(label, options.getOrNull(index)?.second ?: "",
         { if (options.isNotEmpty()) onSelect(options[(index - 1 + options.size) % options.size].first) },
         { if (options.isNotEmpty()) onSelect(options[(index + 1) % options.size].first) })
+    if (needsRestart) Text("Takes effect when you restart the stream.", style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
 }
 
 @Composable
