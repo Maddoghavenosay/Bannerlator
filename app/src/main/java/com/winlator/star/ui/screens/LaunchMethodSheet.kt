@@ -244,15 +244,19 @@ fun LaunchMethodSheet(
 
     // Xbox: Raw and Stream only; Stream is enabled once the cached library says the game streams.
     var streams by remember(shortcut) { mutableStateOf(false) }
+    // A not-installed Xbox entry (added to Games before download): Raw .exe becomes Download, or "Not on PC"
+    // for a console-only game.
+    val notInstalled = remember(shortcut) { com.winlator.star.store.xbox.XboxCloudShortcuts.isNotInstalled(shortcut) }
+    var hasPc by remember(shortcut) { mutableStateOf(true) }
     LaunchedEffect(shortcut) {
-        if (source == GameSource.XBOX) streams = withContext(Dispatchers.IO) {
-            com.winlator.star.store.xbox.XboxCloudPlayerActivity.streams(context, shortcut.getExtra("xboxProductId", ""))
-        }
+        if (source == GameSource.XBOX) withContext(Dispatchers.IO) {
+            com.winlator.star.store.xbox.XboxCloudShortcuts.cachedGame(context, shortcut.getExtra("xboxProductId", ""))
+        }.let { game -> streams = game?.cloud == true; hasPc = game?.pc ?: true }
     }
-    val enabledMethods = remember(shortcut, streams) {
+    val enabledMethods = remember(shortcut, streams, hasPc) {
         when {
             isSteam -> listOf(LaunchMethod.STEAMLITE, LaunchMethod.APPSTEAM, LaunchMethod.GOLDBERG, LaunchMethod.RAW)
-            source == GameSource.XBOX && streams -> listOf(LaunchMethod.RAW, LaunchMethod.STREAM)
+            source == GameSource.XBOX -> listOfNotNull(LaunchMethod.RAW.takeIf { !notInstalled || hasPc }, LaunchMethod.STREAM.takeIf { streams })
             else -> listOf(LaunchMethod.RAW)
         }
     }
@@ -267,7 +271,7 @@ fun LaunchMethodSheet(
                 "AppSteam" -> LaunchMethod.APPSTEAM
                 "Stream" -> if (source == GameSource.XBOX) LaunchMethod.STREAM else LaunchMethod.RAW
                 // Default stays SteamLite (the proven VAC path); App Steam is offered, never preselected.
-                else -> if (isSteam) LaunchMethod.STEAMLITE else LaunchMethod.RAW
+                else -> if (isSteam) LaunchMethod.STEAMLITE else if (notInstalled) LaunchMethod.STREAM else LaunchMethod.RAW
             }.let { if (it in enabledMethods || it == LaunchMethod.STREAM) it else LaunchMethod.RAW },
         )
     }
@@ -405,7 +409,9 @@ fun LaunchMethodSheet(
 
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
+    val rawLabel = when { !notInstalled -> "Raw .exe"; hasPc -> "Download"; else -> "Not on PC" }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+      androidx.compose.runtime.CompositionLocalProvider(LocalRawLabel provides rawLabel) {
         DeckDialogBars()
         DeckDialogScaled {
             if (landscape) {
@@ -428,8 +434,12 @@ fun LaunchMethodSheet(
                 )
             }
         }
+      }
     }
 }
+
+/** Xbox: what the Raw chip is for this entry ("Raw .exe"; "Download" or "Not on PC" before it is installed). */
+private val LocalRawLabel = androidx.compose.runtime.compositionLocalOf { "Raw .exe" }
 
 // ── Portrait: compact vertical box ────────────────────────────────────────────────────────────────
 
@@ -507,7 +517,7 @@ private fun PortraitCard(
                 Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)) {
                     MicroLabel("Launch with")
                     Spacer(Modifier.height(7.dp))
-                    ChipsRow(method, enabledMethods, accent, compact = false, onMethod, toggleHelp, xbox = source == GameSource.XBOX)
+                    ChipsRow(method, enabledMethods, accent, compact = false, onMethod, toggleHelp, xbox = source == GameSource.XBOX, rawLabel = LocalRawLabel.current)
                     Spacer(Modifier.height(9.dp))
                     MethodDesc(method, source, detectedVac == true)
                     if (method == LaunchMethod.STEAMLITE && steamLiteClient != null) {
@@ -618,7 +628,7 @@ private fun LandscapeCard(
                             HelpDot(accent, highlighted = false, onClick = { toggleHelp(HELP_LAUNCH_WITH) })
                         }
                         Spacer(Modifier.height(6.dp))
-                        ChipsRow(method, enabledMethods, accent, compact = true, onMethod, toggleHelp, xbox = source == GameSource.XBOX)
+                        ChipsRow(method, enabledMethods, accent, compact = true, onMethod, toggleHelp, xbox = source == GameSource.XBOX, rawLabel = LocalRawLabel.current)
                         Spacer(Modifier.height(6.dp))
                         MethodDesc(method, source, detectedVac == true)
                         if (method == LaunchMethod.STEAMLITE && steamLiteClient != null) {
@@ -673,13 +683,15 @@ private fun ChipsRow(
     onMethod: (LaunchMethod) -> Unit,
     toggleHelp: (String) -> Unit,
     xbox: Boolean = false,
+    /** Xbox: the Raw chip's label ("Raw .exe", "Download" or "Not on PC"). */
+    rawLabel: String = "Raw .exe",
 ) {
     // Four chips share the row: the label steps down to labelSmall so "Headless Steam" fits without ellipsis.
     val dense = compact || enabledMethods.size >= 4
     // Xbox games have no Steam layer: only Raw .exe and Stream.
     if (xbox) {
         Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 5.dp)) {
-            SegChip("▶️", "Raw .exe", method == LaunchMethod.RAW, true,
+            SegChip(if (rawLabel == "Raw .exe") "▶️" else "⬇️", rawLabel, method == LaunchMethod.RAW, LaunchMethod.RAW in enabledMethods,
                 accent, dense, { onMethod(LaunchMethod.RAW) }, { toggleHelp(HELP_RAW) })
             SegChip("☁️", "Stream", method == LaunchMethod.STREAM, LaunchMethod.STREAM in enabledMethods,
                 accent, dense, { onMethod(LaunchMethod.STREAM) }, { toggleHelp(HELP_STREAM) })
@@ -751,8 +763,12 @@ private fun RowScope.SegChip(
 /** The one-line description that updates per selected method ([vacDetected] adds the App Steam caveat). */
 @Composable
 private fun MethodDesc(method: LaunchMethod, source: GameSource, vacDetected: Boolean = false) {
+    val rawLabel = LocalRawLabel.current
     Text(
-        methodDescription(method, source) +
+        (if (method == LaunchMethod.RAW && rawLabel == "Download")
+            "Downloads the PC version into a container you pick; this entry then launches it. Stream works meanwhile."
+        else if (method == LaunchMethod.RAW && rawLabel == "Not on PC") "This game has no PC version: it can only be streamed."
+        else methodDescription(method, source)) +
             (if (method == LaunchMethod.APPSTEAM && vacDetected) " This game is VAC-secured — SteamLite is the proven path for it." else ""),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

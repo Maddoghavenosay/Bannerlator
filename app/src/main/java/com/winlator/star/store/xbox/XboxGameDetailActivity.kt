@@ -62,6 +62,8 @@ class XboxGameDetailActivity : ComponentActivity() {
     private var status by mutableStateOf<String?>(null)
     private var addToShortcuts by mutableStateOf<com.winlator.star.store.compose.AddToShortcutsRequest?>(null)
     private var addResult by mutableStateOf<com.winlator.star.store.compose.AddShortcutResult?>(null)
+    /** Containers to pick from for a Games entry's download (opened from its launch options), or null. */
+    private var downloadPicker by mutableStateOf<List<com.winlator.star.container.Container>?>(null)
 
     @OptIn(ExperimentalLayoutApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,6 +78,12 @@ class XboxGameDetailActivity : ComponentActivity() {
             i.getStringExtra("cloudId"))
         refresh()
         observeRegistry()
+        // Opened by Download on a not-installed Games entry: pick the container, then install (the entry is
+        // moved there and completed when the install finishes).
+        if (intent.getStringExtra(XboxCloudShortcuts.EXTRA_SHORTCUT) != null && savedInstanceState == null &&
+            XboxInstallState.get(this, game.id) == null && game.pc && game.access.isNotEmpty()) {
+            StarLaunchBridge.loadContainers(this) { containers -> if (!containers.isNullOrEmpty()) downloadPicker = containers }
+        }
         setContent {
             WinlatorTheme {
                 var tab by androidx.compose.runtime.remember { mutableStateOf(0) }
@@ -90,11 +98,33 @@ class XboxGameDetailActivity : ComponentActivity() {
                 }
                 val secondary = if (game.cloud && game.pc && game.access.isNotEmpty()) StorePrimaryAction.Button("Stream", ::stream) else null
                 val gear = buildList {
+                    if (inst == null && !downloading && game.cloud && game.access.isNotEmpty() && intent.getStringExtra(XboxCloudShortcuts.EXTRA_SHORTCUT) == null)
+                        add(StoreGearItem("➕", "Add to Games (stream now, download later)") {
+                            XboxCloudShortcuts.addNotInstalled(this@XboxGameDetailActivity, game) { _, message ->
+                                android.widget.Toast.makeText(this@XboxGameDetailActivity, message, android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        })
                     if (downloading) add(StoreGearItem("🗑", "Cancel download", danger = true) { XboxDownloads.cancel(game.id) })
                     if (inst != null && !downloading) {
                         add(StoreGearItem("🔄", "Update / verify") { update(inst) })
                         add(StoreGearItem("🗑️", "Uninstall", danger = true, onClick = ::confirmUninstall))
                     }
+                }
+                downloadPicker?.let { containers ->
+                    com.winlator.star.store.compose.ContainerPickerDialog(
+                        gameName = game.title,
+                        containers = containers,
+                        onDismiss = { downloadPicker = null },
+                        note = { c -> Regex("""Proton-(\d+)""").find(c.wineVersion.orEmpty())?.groupValues?.get(1)?.toIntOrNull()
+                            ?.takeIf { it < 11 }?.let { "Older Proton: Xbox support uses compatibility modules here. Proton 11 recommended." } },
+                        onSelected = { container ->
+                            downloadPicker = null
+                            XboxCloudShortcuts.rememberDownload(this@XboxGameDetailActivity, game.id,
+                                intent.getStringExtra(XboxCloudShortcuts.EXTRA_SHORTCUT)!!,
+                                intent.getIntExtra(XboxCloudShortcuts.EXTRA_SHORTCUT_CONTAINER, container.id), container.id)
+                            install()
+                        },
+                    )
                 }
                 addToShortcuts?.let { req ->
                     com.winlator.star.store.compose.ContainerPickerDialog(

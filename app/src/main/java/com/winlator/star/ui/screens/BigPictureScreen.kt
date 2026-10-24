@@ -503,6 +503,7 @@ fun BigPictureScreen(navController: NavController) {
                 }
                 remembered && sc.getExtra("launchMode", "") == "Stream" && isXboxShortcut(sc) ->
                     activity.startActivity(com.winlator.star.store.xbox.XboxCloudPlayerActivity.intent(activity, sc.getExtra("xboxProductId", ""), sc.name ?: ""))
+                com.winlator.star.store.xbox.XboxCloudShortcuts.isNotInstalled(sc) -> launchChoiceFor = sc
                 remembered -> launchShortcut(activity, sc)
                 else -> launchChoiceFor = sc
             }
@@ -1059,7 +1060,7 @@ fun BigPictureScreen(navController: NavController) {
                     "Goldberg" -> launchWithGoldberg(s, goldbergMode ?: GoldbergMode.REGULAR)
                     "AppSteam" -> launchWithAppSteam(s)
                     "Stream" -> activity.startActivity(com.winlator.star.store.xbox.XboxCloudPlayerActivity.intent(activity, s.getExtra("xboxProductId", ""), s.name ?: ""))
-                    "Raw" -> {
+                    "Raw" -> if (com.winlator.star.store.xbox.XboxCloudShortcuts.isNotInstalled(s)) com.winlator.star.store.xbox.XboxCloudShortcuts.openDownload(activity, s) else {
                         // Raw: run the game's .exe directly, no Steam layer (Epic/GOG/Custom, or a Steam
                         // game the user chose to run raw). launchMode="Raw" is inert to the launch pipeline
                         // (only "RealSteam" stages the agent), so this is a plain launch.
