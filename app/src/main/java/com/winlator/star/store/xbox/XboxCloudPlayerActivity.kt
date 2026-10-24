@@ -69,6 +69,7 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideBars()
+        watchBars()
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         setContentView(root)
         val requested = intent.getStringExtra("product").orEmpty()
@@ -189,6 +190,27 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         }
         notice = box
         root.addView(box, FrameLayout.LayoutParams(-1, -1))
+    }
+
+    private val rehideBars = Runnable { if (window.decorView.hasWindowFocus()) hideBars() }
+
+    /**
+     * Bars that come back while the player has focus (return from recents or another app, a swipe) are hidden
+     * again after a moment; focus alone missed the return from the background (10-24).
+     */
+    private fun watchBars() {
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { v, insets ->
+            if (insets.isVisible(WindowInsetsCompat.Type.navigationBars()) || insets.isVisible(WindowInsetsCompat.Type.statusBars())) {
+                v.removeCallbacks(rehideBars)
+                v.postDelayed(rehideBars, 1500)
+            }
+            androidx.core.view.ViewCompat.onApplyWindowInsets(v, insets)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hideBars()
     }
 
     private fun hideBars() {
