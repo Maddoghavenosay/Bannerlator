@@ -27,9 +27,11 @@ import java.util.HashMap;
  *  - for zero-copy, decode straight onto the player's SurfaceView instead of WebRTC's texture, rendering every
  *    output buffer there (no GL copy, no compositor; WebRTC then gets no decoded frames to draw).
  * Without either option it behaves like WebRTC's HardwareVideoDecoderFactory.
- * In zero-copy mode the screen surface can go away (the app leaves the screen): {@link #setZeroCopySurface} moves
- * the running decoder to a stand-in surface and back, so decoding never stops. The factory also reports the
- * decoded size and the decode time (input queued to output ready), which WebRTC's stats lack in zero-copy.
+ * The route is switchable while the decoder runs (setOutputSurface): {@link #useScreen} sends frames straight to the
+ * screen (zero-copy) or, with null, back to WebRTC's texture (for the Vulkan compositor and frame generation);
+ * {@link #setZeroCopySurface} moves a zero-copy decoder to a stand-in surface while the screen surface is gone.
+ * The factory also reports the decoded size and the decode time (input queued to output ready), which WebRTC's
+ * stats lack in zero-copy.
  */
 public class BannerlatorLowLatencyDecoderFactory implements VideoDecoderFactory {
     /** Counts frames sent to the display in zero-copy mode (WebRTC's own stats see none). */
@@ -38,8 +40,11 @@ public class BannerlatorLowLatencyDecoderFactory implements VideoDecoderFactory 
     private final HardwareVideoDecoderFactory hardware;
     private final EglBase.Context sharedContext;
     private final boolean lowLatency;
-    private final boolean zeroCopy;
+    /** Frames go to {@link #zeroCopySurface} (the screen or the stand-in), not WebRTC's texture. */
+    private volatile boolean zeroCopy;
     private volatile Surface zeroCopySurface;
+    /** Back on WebRTC's texture: render the next buffer there, so WebRTC's pending texture frame completes. */
+    private volatile boolean renderNext;
     private final FrameCounter counter;
     private volatile Wrapper live;
     private ImageReader standIn;
@@ -65,15 +70,40 @@ public class BannerlatorLowLatencyDecoderFactory implements VideoDecoderFactory 
      */
     public synchronized void setZeroCopySurface(Surface surface) {
         if (!zeroCopy) return;
-        Surface target = surface != null ? surface : standInSurface();
-        zeroCopySurface = target;
+        moveTo(surface != null ? surface : standInSurface(), surface != null ? "the screen" : "a stand-in");
+    }
+
+    /**
+     * Switch the route live: a surface = zero-copy onto it; null = WebRTC's texture again. Returns false when the
+     * decoder refused the new surface (the route is then unchanged).
+     */
+    public synchronized boolean useScreen(Surface screen) {
+        if (screen != null) {
+            Wrapper w = live;
+            if (w != null && !moveTo(screen, "the screen")) return false;
+            zeroCopySurface = screen;
+            zeroCopy = true;
+            return true;
+        }
+        if (!zeroCopy) return true;
         Wrapper w = live;
-        if (w == null || target == null || Build.VERSION.SDK_INT < 23) return;
+        if (w != null && w.texture != null && !moveTo(w.texture, "WebRTC's texture")) return false;
+        zeroCopy = false;
+        renderNext = true;
+        return true;
+    }
+
+    private boolean moveTo(Surface target, String what) {
+        Wrapper w = live;
+        if (w == null || target == null) { if (zeroCopy) zeroCopySurface = target; return true; }
         try {
             w.raw.setOutputSurface(target);
-            Logging.d("BannerlatorDecoder", "zero-copy output moved to " + (surface != null ? "the screen" : "a stand-in"));
+            if (zeroCopy) zeroCopySurface = target;
+            Logging.d("BannerlatorDecoder", "decoder output moved to " + what);
+            return true;
         } catch (RuntimeException e) {
-            Logging.w("BannerlatorDecoder", "zero-copy output surface change failed: " + e);
+            Logging.w("BannerlatorDecoder", "decoder output change to " + what + " failed: " + e);
+            return false;
         }
     }
 
@@ -116,7 +146,6 @@ public class BannerlatorLowLatencyDecoderFactory implements VideoDecoderFactory 
 
     @Override
     public VideoDecoder createDecoder(VideoCodecInfo info) {
-        if (!lowLatency && !zeroCopy) return hardware.createDecoder(info);
         VideoCodecMimeType type;
         try { type = VideoCodecMimeType.valueOf(info.getName()); } catch (IllegalArgumentException e) { return hardware.createDecoder(info); }
         MediaCodecInfo codec = findHardwareDecoder(type);
@@ -144,12 +173,16 @@ public class BannerlatorLowLatencyDecoderFactory implements VideoDecoderFactory 
     /** MediaCodec itself (not WebRTC's wrapper) so the output surface can be changed while it runs. */
     private class Wrapper implements MediaCodecWrapper {
         final MediaCodec raw;
+        /** WebRTC's texture surface, the route back from zero-copy. */
+        Surface texture;
         Wrapper(MediaCodec raw) { this.raw = raw; }
 
         @Override
         public void configure(MediaFormat format, Surface surface, MediaCrypto crypto, int flags) {
             width = format.getInteger(MediaFormat.KEY_WIDTH);
             height = format.getInteger(MediaFormat.KEY_HEIGHT);
+            texture = surface;
+            live = this;
             Surface target = surface;
             if (zeroCopy) { synchronized (BannerlatorLowLatencyDecoderFactory.this) { target = zeroCopySurface != null ? zeroCopySurface : standInSurface(); } }
             if (lowLatency) {
@@ -162,14 +195,12 @@ public class BannerlatorLowLatencyDecoderFactory implements VideoDecoderFactory 
                 try {
                     raw.configure(fast, target, crypto, flags);
                     Logging.d("BannerlatorDecoder", "low-latency decoder configured" + (zeroCopy ? " (zero-copy)" : ""));
-                    if (zeroCopy) live = this;
                     return;
                 } catch (RuntimeException e) {
                     Logging.w("BannerlatorDecoder", "decoder refused low-latency keys: " + e);
                 }
             }
             raw.configure(format, target, crypto, flags);
-            if (zeroCopy) live = this;
         }
 
         private void copyInt(MediaFormat from, MediaFormat to, String key) {
@@ -180,6 +211,7 @@ public class BannerlatorLowLatencyDecoderFactory implements VideoDecoderFactory 
         // hands the frame back, which never happens with the display surface; show every buffer instead.
         @Override public void releaseOutputBuffer(int index, boolean render) {
             if (zeroCopy) { raw.releaseOutputBuffer(index, true); if (counter != null) counter.onFrameShown(); }
+            else if (renderNext) { renderNext = false; raw.releaseOutputBuffer(index, true); }
             else raw.releaseOutputBuffer(index, render);
         }
 

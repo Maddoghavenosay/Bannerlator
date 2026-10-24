@@ -92,8 +92,15 @@ class XboxNativePlayerActivity : ComponentActivity() {
     private val lastRow = mutableMapOf<String, Int>()
     /** The settings this stream started with (stream-start settings changed since then need a restart). */
     private val startedWith by lazy { XboxCloudSettings.load(this) }
-    /** Zero-copy for this stream: chosen, and frame generation off when it started. */
-    private val zeroCopy by lazy { startedWith.zeroCopy && startedWith.frameGen == XboxNativeVideo.FG_OFF }
+    /**
+     * The picture's route right now: true = zero-copy (decoder straight onto the screen), false = WebRTC's texture
+     * through the Vulkan compositor. Zero-copy whenever it is chosen and frame generation is off; switched live.
+     */
+    @Volatile private var zeroCopy = false
+    /** The SurfaceView's surface while it exists (UI thread). */
+    private var screen: android.view.Surface? = null
+    private var screenW = 0
+    private var screenH = 0
     @Volatile private var zeroCopyFrames = 0L
     @Volatile private var decoders: org.webrtc.BannerlatorLowLatencyDecoderFactory? = null
     private var lastZeroCopyFrames = 0L
@@ -124,12 +131,14 @@ class XboxNativePlayerActivity : ComponentActivity() {
         surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {}
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+                screen = holder.surface; screenW = width; screenH = height
                 // Zero-copy: the decoder owns this surface (back on it after a stand-in); the Vulkan compositor must not connect to it.
                 if (zeroCopy) { decoders?.setZeroCopySurface(holder.surface); return }
                 @Suppress("DEPRECATION")
                 nativeVideo.setSurface(holder.surface, width, height, windowManager.defaultDisplay.refreshRate)
             }
             override fun surfaceDestroyed(holder: SurfaceHolder) {
+                screen = null
                 if (zeroCopy) decoders?.setZeroCopySurface(null) else nativeVideo.setSurface(null, 0, 0, 60f)
             }
         })
@@ -265,10 +274,16 @@ class XboxNativePlayerActivity : ComponentActivity() {
         PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(applicationContext)
             .setFieldTrials(trials).createInitializationOptions())
         val egl = eglBase!!
-        val zeroSurface = if (zeroCopy) {
+        val zeroSurface = if (settings.zeroCopy && settings.frameGen == XboxNativeVideo.FG_OFF) {
             repeat(40) { if (!surfaceView.holder.surface.isValid) Thread.sleep(50) }
             surfaceView.holder.surface.takeIf { it.isValid }
         } else null
+        if (zeroSurface != null) {
+            // The compositor may already hold the screen; it must let go before the decoder takes it.
+            val ready = CountDownLatch(1)
+            runOnUiThread { zeroCopy = true; video?.setSurface(null, 0, 0, 60f); ready.countDown() }
+            ready.await(2, TimeUnit.SECONDS)
+        }
         log("latency: instant input ${settings.instantInput}, small buffer ${settings.smallBuffer}, fast decoder ${settings.fastDecoder}, " +
             "zero-copy ${zeroSurface != null}")
         val f = PeerConnectionFactory.builder()
@@ -384,8 +399,8 @@ class XboxNativePlayerActivity : ComponentActivity() {
 
     private fun attach(receiver: RtpReceiver) = synchronized(this) {
         val track = receiver.track()
-        // Zero-copy: the decoder draws on the screen itself; nothing reaches the compositor.
-        if (track is VideoTrack && !videoAttached) { videoAttached = true; if (!zeroCopy) video?.let { track.addSink(it) }; log("video track") }
+        // Always attached: in zero-copy WebRTC delivers no frames, and after a live switch back they flow again.
+        if (track is VideoTrack && !videoAttached) { videoAttached = true; video?.let { track.addSink(it) }; log("video track") }
     }
 
     /** LSFG needs the Lossless.dll imported in Settings and its shader cache built; otherwise Win-FG. */
@@ -628,19 +643,15 @@ class XboxNativePlayerActivity : ComponentActivity() {
                             if (!lsfg) androidx.compose.material3.Text("LSFG appears here once Lossless.dll is imported in Settings.",
                                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                                 modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-                            if (startedWith.zeroCopy && !zeroCopy) androidx.compose.material3.Text(
-                                if (current.frameGen == XboxNativeVideo.FG_OFF) "Zero-copy is on, but this stream started with frame generation, " +
-                                    "so it isn't used. Restart the stream with these settings (below) to use it."
-                                else "Zero-copy is on, but this stream started with frame generation, so it isn't used. " +
-                                    "Pick Off above, then Restart the stream with these settings (below).",
-                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.tertiary,
-                                modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-                            if (zeroCopy) androidx.compose.material3.Text("This stream uses zero-copy, so frame generation is off until the stream is restarted with zero-copy off.",
-                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.tertiary,
+                            if (current.zeroCopy) androidx.compose.material3.Text(
+                                "Zero-copy is used while frame generation is Off; picking a frame generation mode switches to the compositor live.",
+                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                                 modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                             XboxCloudSettingsPanel(current, regionNames, live = true, section = "latency", restoreRow = null,
                                 startedWith = startedWith) { changed ->
+                                val routeChanged = changed.zeroCopy != current.zeroCopy
                                 current = changed; settings = changed; XboxCloudSettings.save(this@XboxNativePlayerActivity, changed)
+                                if (routeChanged) applyRoute()
                             }
                             XboxMenuEntry("Restart the stream with these settings",
                                 "Ends this cloud session and starts a new one; the game restarts, unsaved progress is lost.") { restartStream() }
@@ -699,7 +710,35 @@ class XboxNativePlayerActivity : ComponentActivity() {
     private fun setFrameGen(mode: String) {
         settings = settings.copy(frameGen = mode)
         XboxCloudSettings.save(this, settings)
+        applyRoute()
         worker.execute { video?.setFrameGeneration(effectiveFrameGen()) }
+    }
+
+    /**
+     * Live route switch (UI thread): zero-copy when chosen and frame generation is off, else the compositor.
+     * The screen surface takes one producer at a time, so the old one lets go before the new one connects.
+     */
+    private fun applyRoute() {
+        val d = decoders ?: return
+        val want = settings.zeroCopy && settings.frameGen == XboxNativeVideo.FG_OFF
+        if (want == zeroCopy) return
+        val target = screen
+        if (want) {
+            if (target == null) return
+            video?.setSurface(null, 0, 0, 60f)
+            if (d.useScreen(target)) { lastZeroCopyFrames = zeroCopyFrames; zeroCopy = true; log("route: zero-copy") }
+            else { attachCompositor(target); log("route: zero-copy refused by the decoder, compositor kept") }
+        } else {
+            if (!d.useScreen(null)) { log("route: decoder could not leave the screen, zero-copy kept"); return }
+            zeroCopy = false
+            target?.let { attachCompositor(it) }
+            log("route: compositor")
+        }
+    }
+
+    private fun attachCompositor(target: android.view.Surface) {
+        @Suppress("DEPRECATION")
+        video?.setSurface(target, screenW, screenH, windowManager.defaultDisplay.refreshRate)
     }
 
     /**

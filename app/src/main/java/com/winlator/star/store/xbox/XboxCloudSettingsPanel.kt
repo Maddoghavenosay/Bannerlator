@@ -154,8 +154,8 @@ private fun PanelContent(
             settings.smallBuffer, pending { it.smallBuffer != settings.smallBuffer }) { onChange(settings.copy(smallBuffer = it)) }
         Toggle("Fast decoder", "The video chip's low-latency mode.", settings.fastDecoder,
             pending { it.fastDecoder != settings.fastDecoder }) { onChange(settings.copy(fastDecoder = it)) }
-        Toggle("Zero-copy picture", "Frames go straight from the video chip to the screen: the lowest delay. Only with frame generation off.",
-            settings.zeroCopy, pending { it.zeroCopy != settings.zeroCopy }) { onChange(settings.copy(zeroCopy = it)) }
+        Toggle("Zero-copy picture", "Frames go straight from the video chip to the screen: the lowest delay. Used while frame generation is off; switches live.",
+            settings.zeroCopy) { onChange(settings.copy(zeroCopy = it)) }
     }
 
     if (section == null || section == "picture") Section("Picture", "Shader effects on the stream; the profiles are shared with the Wine games' screen effects.") {
