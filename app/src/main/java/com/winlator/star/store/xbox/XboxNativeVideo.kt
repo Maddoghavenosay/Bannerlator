@@ -44,7 +44,7 @@ internal class XboxNativeVideo(private val context: Context, eglBase: EglBase, p
     private external fun nativeDestroy(handle: Long)
 
     private val lock = Any()
-    private val egl = EglRenderer("xcloud-native").apply { init(eglBase.eglBaseContext, EglBase.CONFIG_PLAIN, GlRectDrawer()) }
+    private val egl = EglRenderer("xcloud-native").apply { init(eglBase.eglBaseContext, EglBase.CONFIG_RGBA, GlRectDrawer()) }
     private val readerThread = HandlerThread("xcloud-frames").apply { start() }
     private val readerHandler = Handler(readerThread.looper)
     private var reader: ImageReader? = null
