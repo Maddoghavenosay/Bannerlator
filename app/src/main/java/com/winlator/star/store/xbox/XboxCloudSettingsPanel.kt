@@ -19,7 +19,29 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +65,40 @@ fun XboxCloudSettingsPanel(
     live: Boolean,
     /** "stream", "picture" or "overlay" shows that section only; null shows all. */
     section: String? = null,
+    /** The row to select when the panel opens (the last one used), or null for no initial selection. */
+    restoreRow: Int? = null,
+    onRowFocused: (Int) -> Unit = {},
+    onChange: (XboxCloudSettings) -> Unit,
+) {
+    val focus = remember(section) { PanelFocus() }
+    focus.next = 0
+    focus.onFocused = onRowFocused
+    CompositionLocalProvider(LocalPanelFocus provides focus) {
+        PanelContent(settings, regions, live, section, onChange)
+    }
+    LaunchedEffect(section) {
+        if (restoreRow != null) runCatching { focus.requester(restoreRow.coerceIn(0, (focus.count - 1).coerceAtLeast(0))).requestFocus() }
+    }
+}
+
+/** Gives each settings row its place in the page, so the last-used row can be selected again. */
+private class PanelFocus {
+    var next = 0
+    var count = 0
+    var onFocused: (Int) -> Unit = {}
+    private val requesters = mutableMapOf<Int, FocusRequester>()
+    fun requester(index: Int) = requesters.getOrPut(index) { FocusRequester() }
+    fun take(): Int = next++.also { count = maxOf(count, next) }
+}
+
+private val LocalPanelFocus = compositionLocalOf<PanelFocus?> { null }
+
+@Composable
+private fun PanelContent(
+    settings: XboxCloudSettings,
+    regions: List<String>,
+    live: Boolean,
+    section: String?,
     onChange: (XboxCloudSettings) -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -132,14 +188,58 @@ private fun Section(title: String, note: String?, content: @Composable ColumnSco
     }
 }
 
+/**
+ * One settings row, driven by a controller: it takes focus as a whole (highlighted), Left / Right change its
+ * value, A / Enter selects; the − / + buttons and switches inside stay for touch only.
+ */
+@Composable
+private fun SettingRow(
+    onLeft: (() -> Unit)?,
+    onRight: (() -> Unit)?,
+    onSelect: (() -> Unit)?,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val panel = LocalPanelFocus.current
+    val index = panel?.take() ?: -1
+    var focused by remember { mutableStateOf(false) }
+    val currentSelect by rememberUpdatedState(onSelect)
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 1.dp).clip(shape)
+            .background(if (focused) cs.primary.copy(alpha = 0.16f) else Color.Transparent)
+            .border(2.dp, if (focused) cs.primary else Color.Transparent, shape)
+            .let { if (panel != null && index >= 0) it.focusRequester(panel.requester(index)) else it }
+            .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused && index >= 0) panel?.onFocused?.invoke(index) }
+            .onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                val action = when (event.key) {
+                    Key.DirectionLeft -> onLeft
+                    Key.DirectionRight -> onRight
+                    Key.Enter, Key.NumPadEnter, Key.DirectionCenter, Key.ButtonA -> onSelect
+                    else -> null
+                }
+                if (action != null) { action(); true } else false
+            }
+            .focusable()
+            // A tap selects too, without a second focus stop (a clickable would be one).
+            .pointerInput(Unit) { detectTapGestures { currentSelect?.invoke() } }
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+private val noFocus = Modifier.focusProperties { canFocus = false }
+
 @Composable
 private fun Step(label: String, value: String, onMinus: () -> Unit, onPlus: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    SettingRow(onLeft = onMinus, onRight = onPlus, onSelect = onPlus) {
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-        OutlinedButton(onClick = onMinus, modifier = Modifier.size(40.dp), contentPadding = PaddingValues(0.dp)) { Text("−") }
+        OutlinedButton(onClick = onMinus, modifier = noFocus.size(40.dp), contentPadding = PaddingValues(0.dp)) { Text("−") }
         Text(value, Modifier.width(112.dp).padding(horizontal = 4.dp), textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-        OutlinedButton(onClick = onPlus, modifier = Modifier.size(40.dp), contentPadding = PaddingValues(0.dp)) { Text("+") }
+        OutlinedButton(onClick = onPlus, modifier = noFocus.size(40.dp), contentPadding = PaddingValues(0.dp)) { Text("+") }
     }
 }
 
@@ -153,12 +253,12 @@ private fun <T> Choice(label: String, options: List<Pair<T, String>>, selected: 
 
 @Composable
 private fun Toggle(label: String, note: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+    SettingRow(onLeft = { onToggle(false) }, onRight = { onToggle(true) }, onSelect = { onToggle(!checked) }) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
             Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.width(8.dp))
-        Switch(checked = checked, onCheckedChange = onToggle)
+        Switch(checked = checked, onCheckedChange = onToggle, modifier = noFocus)
     }
 }

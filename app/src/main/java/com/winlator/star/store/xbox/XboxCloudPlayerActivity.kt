@@ -32,6 +32,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import org.json.JSONObject
@@ -336,8 +340,11 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         view.setContent {
             com.winlator.star.ui.theme.WinlatorTheme {
                 var current by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(settings) }
-                val first = androidx.compose.runtime.remember(menuPage) { androidx.compose.ui.focus.FocusRequester() }
-                androidx.compose.runtime.LaunchedEffect(menuPage) { runCatching { first.requestFocus() } }
+                // The main list returns to the entry used last; each settings page to its last row (the panel restores it).
+                val entries = androidx.compose.runtime.remember { List(6) { androidx.compose.ui.focus.FocusRequester() } }
+                androidx.compose.runtime.LaunchedEffect(menuPage) {
+                    if (menuPage.isEmpty()) runCatching { entries[lastMainEntry.coerceIn(0, 5)].requestFocus() }
+                }
                 val cs = androidx.compose.material3.MaterialTheme.colorScheme
                 androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
                     androidx.compose.foundation.layout.Column(
@@ -348,22 +355,24 @@ class XboxCloudPlayerActivity : ComponentActivity() {
                             style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = cs.onSurface,
                             modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                         if (menuPage.isEmpty()) {
-                            MenuEntry("Resume", "Back to the game", first) { closeMenu() }
-                            MenuEntry("Xbox menu", "The game's Xbox menu (also: Guide once, or View + Menu)") {
+                            MenuEntry("Resume", "Back to the game", entries[0], 0) { closeMenu() }
+                            MenuEntry("Xbox menu", "The game's Xbox menu (also: Guide once, or View + Menu)", entries[1], 1) {
                                 closeMenu(); web?.evaluateJavascript("window.__blNexus && window.__blNexus()", null)
                             }
-                            MenuEntry("Screen effects", "Sharpen, colour, deband, FXAA, CRT, NTSC, Toon, fps cap") { menuPage = "picture" }
-                            MenuEntry("Stream quality", "Resolution, region, language, codec, bitrate (next stream)") { menuPage = "stream" }
-                            MenuEntry("Performance overlay and sound", "Overlay level and layout, volume, controller rumble") { menuPage = "overlay" }
-                            MenuEntry("Leave", "End the stream") { finish() }
+                            MenuEntry("Screen effects", "Sharpen, colour, deband, FXAA, CRT, NTSC, Toon, fps cap", entries[2], 2) { menuPage = "picture" }
+                            MenuEntry("Stream quality", "Resolution, region, language, codec, bitrate (next stream)", entries[3], 3) { menuPage = "stream" }
+                            MenuEntry("Performance overlay and sound", "Overlay level and layout, volume, controller rumble", entries[4], 4) { menuPage = "overlay" }
+                            MenuEntry("Leave", "End the stream", entries[5], 5) { finish() }
                             androidx.compose.material3.Text("Guide twice opens this menu; Back or Guide closes it.",
                                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                                 modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                         } else {
-                            MenuEntry("‹  Back", null, first) { menuPage = "" }
+                            MenuEntry("‹  Back", null) { menuPage = "" }
                             if (menuPage == "stream") MenuEntry("Restart the stream with these settings",
                                 "Ends this cloud session and starts a new one; the game restarts, unsaved progress is lost.") { restartStream() }
-                            XboxCloudSettingsPanel(current, regions, live = true, section = menuPage) { changed ->
+                            val page = menuPage
+                            XboxCloudSettingsPanel(current, regions, live = true, section = page, restoreRow = lastRow[page] ?: 0,
+                                onRowFocused = { lastRow[page] = it }) { changed ->
                                 current = changed
                                 settings = changed
                                 XboxCloudSettings.save(this@XboxCloudPlayerActivity, changed)
@@ -383,32 +392,32 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     private fun pageSettings(s: XboxCloudSettings): String = JSONObject(s.toJson())
         .put("server", session?.let { active -> active.regionList.firstOrNull { it.baseUri == active.baseUri }?.name } ?: "").toString()
 
+    /** The entry the main menu list returns to, and each settings page's last row. */
+    private var lastMainEntry = 0
+    private val lastRow = mutableMapOf<String, Int>()
+
     @androidx.compose.runtime.Composable
-    private fun MenuEntry(title: String, note: String?, focus: androidx.compose.ui.focus.FocusRequester? = null, onClick: () -> Unit) {
+    private fun MenuEntry(title: String, note: String?, focus: androidx.compose.ui.focus.FocusRequester? = null, index: Int = -1, onClick: () -> Unit) {
         val cs = androidx.compose.material3.MaterialTheme.colorScheme
+        var focused by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        val shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
         androidx.compose.material3.Surface(
-            onClick = onClick, color = cs.surfaceContainerHigh, shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+            onClick = onClick, color = if (focused) cs.primary.copy(alpha = 0.2f) else cs.surfaceContainerHigh, shape = shape,
+            border = if (focused) androidx.compose.foundation.BorderStroke(2.dp, cs.primary) else null,
             modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp)
-                .let { if (focus != null) it.focusRequester(focus) else it },
+                .let { if (focus != null) it.focusRequester(focus) else it }
+                .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused && index >= 0) lastMainEntry = index }
+                .onKeyEvent { event ->
+                    if (event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && event.key == androidx.compose.ui.input.key.Key.ButtonA) {
+                        onClick(); true
+                    } else false
+                },
         ) {
             androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                 androidx.compose.material3.Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = cs.onSurface)
                 if (note != null) androidx.compose.material3.Text(note, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         }
-    }
-
-    /** Stream-quality changes need a new cloud session: end this one, then open the player again. */
-    private fun restartStream() {
-        val active = session; val path = sessionPath
-        sessionPath = null
-        closeMenu()
-        showNotice("Restarting the stream…", withButtons = false)
-        Thread({
-            if (active != null && path != null) runCatching { XboxCloudSession.request(active, "DELETE", "/$path") }
-                .onSuccess { XboxDiag.log(applicationContext, "cloud player restart: session closed ${it.status}") }
-            runOnUiThread { if (!isFinishing) { startActivity(Intent(intent)); finish() } }
-        }, "xcloud-restart").start()
     }
 
     private fun closeMenu() {
