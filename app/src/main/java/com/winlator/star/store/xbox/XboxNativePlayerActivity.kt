@@ -17,6 +17,7 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
@@ -349,7 +350,9 @@ class XboxNativePlayerActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
-    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean = pad.onMotion(event) || super.dispatchGenericMotionEvent(event)
+    // With the menu open, sticks and the hat go to Android unhandled, which turns them into D-pad keys for the menu.
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+        (menu == null && pad.onMotion(event)) || super.dispatchGenericMotionEvent(event)
 
     private fun rumble(strong: Float, weak: Float, durationMs: Int) {
         val scale = settings.rumble / 100f
@@ -394,12 +397,17 @@ class XboxNativePlayerActivity : ComponentActivity() {
                 val entries = androidx.compose.runtime.remember { List(7) { androidx.compose.ui.focus.FocusRequester() } }
                 val choices = androidx.compose.runtime.remember { List(5) { androidx.compose.ui.focus.FocusRequester() } }
                 androidx.compose.runtime.LaunchedEffect(menuPage) {
+                    // Wait a frame so the entries are attached before one of them takes the selection.
+                    androidx.compose.runtime.withFrameNanos { }
                     runCatching {
                         if (menuPage.isEmpty()) entries[lastMainEntry.coerceIn(0, 6)].requestFocus()
                         else if (menuPage == "framegen") choices[FG_MODES.indexOf(current.frameGen).coerceIn(0, if (lsfg) 4 else 1)].requestFocus()
                     }
                 }
                 val cs = androidx.compose.material3.MaterialTheme.colorScheme
+                // A full-size box first: the root of a ComposeView gets fixed full-screen constraints, so the panel's
+                // width only holds inside it (as the web player's menu does).
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
                 androidx.compose.foundation.layout.Column(
                     androidx.compose.ui.Modifier.fillMaxHeight().width(400.dp).background(cs.surface.copy(alpha = 0.95f))
                         .verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(vertical = 12.dp),
@@ -454,6 +462,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
                             }
                         }
                     }
+                }
                 }
             }
         }
