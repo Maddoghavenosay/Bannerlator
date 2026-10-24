@@ -59,6 +59,7 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     @Volatile private var closed = false
     @Volatile private var webUrl: String? = null
     @Volatile private var settings = XboxCloudSettings()
+    @Volatile private var sessionSignals: XboxCloudSignalling? = null
     /** The settings this stream started with (stream-start settings changed since then need a restart). */
     @Volatile private var startedWith: XboxCloudSettings? = null
     private var menu: androidx.compose.ui.platform.ComposeView? = null
@@ -166,52 +167,8 @@ class XboxCloudPlayerActivity : ComponentActivity() {
 
     private fun handle(op: String, arg: String): XboxCloudSession.Reply {
         val active = session ?: error("no session")
-        val path = sessionPath
-        return when (op) {
-            "start" -> {
-                val body = JSONObject().put("clientSessionId", "").put("titleId", titleId).put("systemUpdateGroup", "")
-                    .put("settings", JSONObject().put("nanoVersion", "V3;WebrtcTransport.dll").put("enableOptionalDataCollection", false)
-                        .put("enableTextToSpeech", false).put("highContrast", 0).put("locale", settings.language.ifEmpty { java.util.Locale.getDefault().toLanguageTag() })
-                        .put("useIceConnection", false).put("timezoneOffsetMinutes", java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000)
-                        .put("sdkType", "web").put("osName", settings.osName))
-                    .put("serverId", "").put("fallbackRegionNames", JSONArray())
-                XboxCloudSession.request(active, "POST", "/v5/sessions/cloud/play", body.toString()).also { reply ->
-                    if (reply.status in 200..299) sessionPath = JSONObject(reply.body).getString("sessionPath").trim('/')
-                }
-            }
-            "state" -> XboxCloudSession.request(active, "GET", "/$path/state")
-            "connect" -> {
-                val token = active.userToken ?: return XboxCloudSession.Reply(0, "no cloud transfer token for this account")
-                XboxCloudSession.request(active, "POST", "/$path/connect", JSONObject().put("userToken", token).toString())
-            }
-            "sdp" -> {
-                val body = JSONObject().put("messageType", "offer").put("sdp", arg).put("requestId", "1").put("configuration", JSONObject()
-                    .put("chatConfiguration", JSONObject().put("bytesPerSample", 2).put("expectedClipDurationMs", 20)
-                        .put("format", JSONObject().put("codec", "opus").put("container", "webm")).put("numChannels", 1).put("sampleFrequencyHz", 24000))
-                    .put("chat", version(1, 1)).put("control", version(1, 3)).put("input", version(1, 9)).put("message", version(1, 1))
-                    .put("reliableinput", version(9, 9)).put("unreliableinput", version(9, 9)))
-                val posted = XboxCloudSession.request(active, "POST", "/$path/sdp", body.toString())
-                if (posted.status !in 200..299) posted else poll(active, "/$path/sdp")
-            }
-            "ice" -> {
-                val posted = XboxCloudSession.request(active, "POST", "/$path/ice", JSONObject().put("candidates", JSONArray(arg)).toString())
-                if (posted.status !in 200..299) posted else poll(active, "/$path/ice")
-            }
-            "keepalive" -> XboxCloudSession.request(active, "POST", "/$path/keepalive", "{}")
-            else -> XboxCloudSession.Reply(0, "unknown request")
-        }
-    }
-
-    private fun version(min: Int, max: Int) = JSONObject().put("minVersion", min).put("maxVersion", max)
-
-    /** The exchange answers 204 until the console has replied. */
-    private fun poll(active: XboxCloudSession.Session, path: String): XboxCloudSession.Reply {
-        repeat(60) {
-            val reply = XboxCloudSession.request(active, "GET", path)
-            if (reply.status != 204) return reply
-            Thread.sleep(500)
-        }
-        return XboxCloudSession.Reply(0, "no answer from the cloud console")
+        val signals = sessionSignals ?: XboxCloudSignalling(active, titleId ?: error("no title"), settings).also { sessionSignals = it }
+        return signals.op(op, arg).also { sessionPath = signals.path }
     }
 
     private fun showNotice(text: String, withButtons: Boolean) {
@@ -400,28 +357,8 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     private val lastRow = mutableMapOf<String, Int>()
 
     @androidx.compose.runtime.Composable
-    private fun MenuEntry(title: String, note: String?, focus: androidx.compose.ui.focus.FocusRequester? = null, index: Int = -1, onClick: () -> Unit) {
-        val cs = androidx.compose.material3.MaterialTheme.colorScheme
-        var focused by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-        val shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
-        androidx.compose.material3.Surface(
-            onClick = onClick, color = if (focused) cs.primary.copy(alpha = 0.2f) else cs.surfaceContainerHigh, shape = shape,
-            border = if (focused) androidx.compose.foundation.BorderStroke(2.dp, cs.primary) else null,
-            modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp)
-                .let { if (focus != null) it.focusRequester(focus) else it }
-                .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused && index >= 0) lastMainEntry = index }
-                .onKeyEvent { event ->
-                    if (event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && event.key == androidx.compose.ui.input.key.Key.ButtonA) {
-                        onClick(); true
-                    } else false
-                },
-        ) {
-            androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                androidx.compose.material3.Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = cs.onSurface)
-                if (note != null) androidx.compose.material3.Text(note, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            }
-        }
-    }
+    private fun MenuEntry(title: String, note: String?, focus: androidx.compose.ui.focus.FocusRequester? = null, index: Int = -1, onClick: () -> Unit) =
+        XboxMenuEntry(title, note, focus, { if (index >= 0) lastMainEntry = index }, onClick)
 
     /** Stream-quality changes need a new cloud session: end this one, then open the player again. */
     private fun restartStream() {
@@ -459,11 +396,16 @@ class XboxCloudPlayerActivity : ComponentActivity() {
     companion object {
         private const val DOUBLE_PRESS_MS = 350L
 
-        fun intent(context: Context, game: XboxGame): Intent = Intent(context, XboxCloudPlayerActivity::class.java)
+        /** The opt-in native engine (frame generation) when chosen and supported, else this web-view player. */
+        private fun playerClass(context: Context): Class<*> =
+            if (XboxCloudSettings.load(context).playerEngine == "native" && XboxNativePlayerActivity.supported())
+                XboxNativePlayerActivity::class.java else XboxCloudPlayerActivity::class.java
+
+        fun intent(context: Context, game: XboxGame): Intent = Intent(context, playerClass(context))
             .putExtra("product", game.id).putExtra("title", game.title).putExtra("webUrl", game.cloudUrl)
 
         /** Stream an Xbox shortcut's game (launch method "Stream"); the player resolves the cloud edition. */
-        fun intent(context: Context, productId: String, title: String): Intent = Intent(context, XboxCloudPlayerActivity::class.java)
+        fun intent(context: Context, productId: String, title: String): Intent = Intent(context, playerClass(context))
             .putExtra("product", productId.uppercase()).putExtra("title", title)
 
         /** Whether the cached Xbox library says this product streams (off the main thread: it reads the cache). */

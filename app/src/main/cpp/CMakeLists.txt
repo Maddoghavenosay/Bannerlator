@@ -116,6 +116,7 @@ target_link_libraries(ssbs
 
 add_library(vulkan_renderer SHARED
         winlator/vulkan_jni.cpp
+        winlator/stream_jni.cpp
         winlator/VulkanRendererContext.cpp
         winlator/VulkanRendererScanout.cpp
         winlator/lsfg/lsfg_probe.cpp
@@ -185,6 +186,7 @@ target_compile_options(vulkan_renderer PRIVATE
 target_link_libraries(vulkan_renderer
         log
         android
+        nativewindow
         vulkan
         adrenotools
         dxbc
