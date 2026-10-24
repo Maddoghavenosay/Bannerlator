@@ -1,5 +1,13 @@
 # Star-Compose — Progress Log
 
+## 2026-10-23 — RESUME POINT (main 73e4ddae; Proton layers v15 released; no app release)
+> - **Layers v15 RELEASED** (proton-wine `build-bionic-layers-20261023-v15`, Latest; catalog winlator-contents `a727c40`, mirror `bionic-layers-20261023-v15`): Proton 10.0-4, GE 10.0-34, 11.0-1, 11.0-2 (+x86_64), GE 11.0-9 (+x86_64), **DroidDeck-Proton 11.0-11.1** (+x86_64, replaces 11.0-9.1 in the catalog). FEX unixlib fix (11-9 layers), WinRT classes in both prefix views, GameNative fixes. Details in proton-wine PROGRESS_LOG (`680d1183`).
+> - **App side, on main only (not in 3.1.7-pre4):** `ea07e522` EmulateModeset=N for the new win32u (144 Hz on GE 11-9 / DroidDeck) · `301facfe` DroidDeck layers update across versions (9.1 → 11.1). Both device-proven.
+> - **Device-proven:** DroidDeck 11.0-11.1 arm64ec (BALL x PIT, DiRT Showdown 143.7 fps, unixlib, in-place update kept saves). **Not tested:** GE 11.0-9 v15 (staged in /sdcard/Download), other v15 layers, all x86_64, the "Revert layer to 11.0-9.1 v14" menu row.
+> - **User decisions:** leave the catalog `proton-10.0-arm64ec` entry alone; CachyOS out of v15; P10 PropertySet backport skipped.
+> - **Branches kept (delete only on the user's word):** fix/refresh-unlock-modeset, feat/dd-layer-family; proton-wine staging/*/v15 + CachyOS staging branches.
+> - **Device leftovers:** /sdcard/Download/bannerlator/{w32u-probe/, c1-system.reg}; staged wcp + APK in /sdcard/Download (`*-v15-*.wcp`, `Bannerlator-dd-layer-family-96f13669.apk`).
+
 ## 2026-10-23 — Layer updater: DroidDeck-Proton layers are one line (feat/dd-layer-family, MERGED)
 > - **Why:** user installed the v15 DroidDeck-Proton 11-11.1 layer (proton-wine run 40001069532) but the "Update layer" button never appeared for the container on DroidDeck 11-9.1: `ContainerLayerUpdater` only matched an identical versionName (`11.0-9.1` ≠ `11.0-11.1`). User: "make the updater treat dd layers as one family".
 > - **Built `96f13669`:** `isDroidDeck(profile)` = installed profile description or catalog display name starts with "DroidDeck-Proton" (version names alone can't tell DD from GE: GE `11.0-7.1` vs DD `11.0-9.1`). Same line = identical name, or both DroidDeck + same arch. Newer = version order (`11.0-11.1` > `11.0-9.1`), then verCode. Used by findNewerInstalled, findNewerInCatalog and update(); `layerLabel` names the version in the update/revert button, menu, dialogs and busy text ("11.0-11.1 v15"). GE/plain lines unchanged. CI run 40021833990 green (4 variants).
