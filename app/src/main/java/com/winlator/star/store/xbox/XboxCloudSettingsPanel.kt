@@ -146,6 +146,18 @@ private fun PanelContent(
         if (settings.fpsCustomOn) SliderRow("Custom", settings.fpsCustom, 10, 165) { onChange(settings.copy(fpsCustom = it)) }
     }
 
+    if ((section == null && XboxNativePlayerActivity.supported()) || section == "latency") Section("Low latency (native engine)", null) {
+        Toggle("Instant controller input", "Sends each press the moment it happens instead of every 16 ms.", settings.instantInput) {
+            onChange(settings.copy(instantInput = it))
+        }
+        Toggle("Small network buffer", "Shows frames as soon as they are decoded. Less delay; may stutter on weak Wi-Fi.",
+            settings.smallBuffer, pending { it.smallBuffer != settings.smallBuffer }) { onChange(settings.copy(smallBuffer = it)) }
+        Toggle("Fast decoder", "The video chip's low-latency mode.", settings.fastDecoder,
+            pending { it.fastDecoder != settings.fastDecoder }) { onChange(settings.copy(fastDecoder = it)) }
+        Toggle("Zero-copy picture", "Frames go straight from the video chip to the screen: the lowest delay. Used while frame generation is off; switches live.",
+            settings.zeroCopy) { onChange(settings.copy(zeroCopy = it)) }
+    }
+
     if (section == null || section == "picture") Section("Picture", "Shader effects on the stream; the profiles are shared with the Wine games' screen effects.") {
         Choice("Profile", listOf("" to "None") + profiles.keys.map { it to it }, settings.profile) { name ->
             onChange(if (name.isEmpty()) settings.copy(profile = "") else settings.withEffects(profiles.getValue(name), name))
@@ -176,14 +188,15 @@ private fun PanelContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
     }
 
-    if (section == null || section == "overlay") Section("Overlay and sound", null) {
+    // "overlay-native": the native player's page (its sound has no volume boost).
+    if (section == null || section == "overlay" || section == "overlay-native") Section("Overlay and sound", null) {
         Choice("Performance overlay", listOf(0 to "Off", 1 to "FPS only", 2 to "Basic", 3 to "Detailed", 4 to "Full"), settings.statsLevel) {
             onChange(settings.copy(statsLevel = it))
         }
         Choice("Overlay layout", listOf("horizontal" to "Horizontal", "vertical" to "Vertical"), settings.statsLayout) { onChange(settings.copy(statsLayout = it)) }
         Text("Top right. Basic: fps, ping, resolution. Detailed: + bitrate, decode time, packet loss. Full: + codec, jitter, " +
             "dropped frames, server.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Step("Volume", "${settings.volume}%", { onChange(settings.copy(volume = (settings.volume - 25).coerceAtLeast(100))) },
+        if (section != "overlay-native") Step("Volume", "${settings.volume}%", { onChange(settings.copy(volume = (settings.volume - 25).coerceAtLeast(100))) },
             { onChange(settings.copy(volume = (settings.volume + 25).coerceAtMost(300))) })
         Step("Controller rumble", if (settings.rumble == 0) "Off" else "${settings.rumble}%", { onChange(settings.copy(rumble = (settings.rumble - 25).coerceAtLeast(0))) },
             { onChange(settings.copy(rumble = (settings.rumble + 25).coerceAtMost(100))) })
@@ -295,7 +308,7 @@ private fun <T> Choice(label: String, options: List<Pair<T, String>>, selected: 
 }
 
 @Composable
-private fun Toggle(label: String, note: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
+private fun Toggle(label: String, note: String, checked: Boolean, needsRestart: Boolean = false, onToggle: (Boolean) -> Unit) {
     SettingRow(onLeft = { onToggle(false) }, onRight = { onToggle(true) }, onSelect = { onToggle(!checked) }) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
@@ -304,6 +317,8 @@ private fun Toggle(label: String, note: String, checked: Boolean, onToggle: (Boo
         Spacer(Modifier.width(8.dp))
         Switch(checked = checked, onCheckedChange = onToggle, modifier = noFocus)
     }
+    if (needsRestart) Text("Takes effect when you restart the stream.", style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
 }
 
 /** One entry of the cloud players' menu list (highlighted when selected; A or a tap opens it). */

@@ -369,7 +369,7 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         Thread({
             if (active != null && path != null) runCatching { XboxCloudSession.request(active, "DELETE", "/$path") }
                 .onSuccess { XboxDiag.log(applicationContext, "cloud player restart: session closed ${it.status}") }
-            runOnUiThread { if (!isFinishing) { startActivity(Intent(intent)); finish() } }
+            runOnUiThread { if (!isFinishing) { startActivity(XboxCloudPlayerActivity.intent(this, intent.getStringExtra("product").orEmpty(), intent.getStringExtra("title").orEmpty())); finish() } }
         }, "xcloud-restart").start()
     }
 

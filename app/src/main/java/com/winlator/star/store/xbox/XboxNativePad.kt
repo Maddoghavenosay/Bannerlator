@@ -22,6 +22,9 @@ internal class XboxNativePad {
     @Volatile private var lx = 0f; @Volatile private var ly = 0f
     @Volatile private var rx = 0f; @Volatile private var ry = 0f
     @Volatile private var lt = 0f; @Volatile private var rt = 0f
+    /** Called after any change (instant controller input). */
+    @Volatile var onChanged: (() -> Unit)? = null
+
     /** Buttons pressed on behalf of the app (the menu's Xbox button), OR-ed in. */
     @Volatile var overrideButtons = 0
 
@@ -45,11 +48,12 @@ internal class XboxNativePad {
             KeyEvent.KEYCODE_BUTTON_START -> 4
             KeyEvent.KEYCODE_BUTTON_SELECT -> 8
             // Digital triggers on pads without analog axes.
-            KeyEvent.KEYCODE_BUTTON_L2 -> { lt = if (event.action == KeyEvent.ACTION_DOWN) 1f else 0f; return true }
-            KeyEvent.KEYCODE_BUTTON_R2 -> { rt = if (event.action == KeyEvent.ACTION_DOWN) 1f else 0f; return true }
+            KeyEvent.KEYCODE_BUTTON_L2 -> { lt = if (event.action == KeyEvent.ACTION_DOWN) 1f else 0f; onChanged?.invoke(); return true }
+            KeyEvent.KEYCODE_BUTTON_R2 -> { rt = if (event.action == KeyEvent.ACTION_DOWN) 1f else 0f; onChanged?.invoke(); return true }
             else -> return false
         }
         buttons = if (event.action == KeyEvent.ACTION_DOWN) buttons or bit else buttons and bit.inv()
+        onChanged?.invoke()
         return true
     }
 
@@ -68,6 +72,7 @@ internal class XboxNativePad {
         rt = maxOf(axis(MotionEvent.AXIS_RTRIGGER), axis(MotionEvent.AXIS_GAS))
         val hx = event.getAxisValue(MotionEvent.AXIS_HAT_X); val hy = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
         hatButtons = (if (hy < -0.5f) 256 else 0) or (if (hy > 0.5f) 512 else 0) or (if (hx < -0.5f) 1024 else 0) or (if (hx > 0.5f) 2048 else 0)
+        onChanged?.invoke()
         return true
     }
 

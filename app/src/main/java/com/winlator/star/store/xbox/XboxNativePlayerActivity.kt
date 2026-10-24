@@ -23,6 +23,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -30,7 +36,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import org.webrtc.DataChannel
-import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
 import org.webrtc.IceCandidate
@@ -71,7 +76,14 @@ class XboxNativePlayerActivity : ComponentActivity() {
     @Volatile private var signalling: XboxCloudSignalling? = null
     @Volatile private var settings = XboxCloudSettings()
     @Volatile private var closed = false
+    /** The stream reached the screen at least once (a later failure is a lost connection, not a failed start). */
+    @Volatile private var connectedOnce = false
+    /** The session was ended because the player stayed in the background (Android freezes the app soon after). */
+    @Volatile private var endedInBackground = false
+    private var backgroundEnd: Runnable? = null
+    private var notice: androidx.compose.ui.platform.ComposeView? = null
     @Volatile private var regionNames = emptyList<String>()
+    @Volatile private var serverName: String? = null
     private val candidates = mutableListOf<IceCandidate>()
     private val gathered = CountDownLatch(1)
     private var menu: androidx.compose.ui.platform.ComposeView? = null
@@ -80,6 +92,18 @@ class XboxNativePlayerActivity : ComponentActivity() {
     private val lastRow = mutableMapOf<String, Int>()
     /** The settings this stream started with (stream-start settings changed since then need a restart). */
     private val startedWith by lazy { XboxCloudSettings.load(this) }
+    /**
+     * The picture's route right now: true = zero-copy (decoder straight onto the screen), false = WebRTC's texture
+     * through the Vulkan compositor. Zero-copy whenever it is chosen and frame generation is off; switched live.
+     */
+    @Volatile private var zeroCopy = false
+    /** The SurfaceView's surface while it exists (UI thread). */
+    private var screen: android.view.Surface? = null
+    private var screenW = 0
+    private var screenH = 0
+    @Volatile private var zeroCopyFrames = 0L
+    @Volatile private var decoders: org.webrtc.BannerlatorLowLatencyDecoderFactory? = null
+    private var lastZeroCopyFrames = 0L
     /** The release of the Guide press that opened the menu must not close it again. */
     private var swallowGuideUp = false
 
@@ -100,16 +124,23 @@ class XboxNativePlayerActivity : ComponentActivity() {
         setContentView(root)
         settings = XboxCloudSettings.load(this)
         applyDisplayRate(settings.fpsTarget)
+        applyOverlay()
 
         val egl = EglBase.create().also { eglBase = it }
         val nativeVideo = XboxNativeVideo(this, egl) { log(it) }.also { video = it }
         surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {}
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+                screen = holder.surface; screenW = width; screenH = height
+                // Zero-copy: the decoder owns this surface (back on it after a stand-in); the Vulkan compositor must not connect to it.
+                if (zeroCopy) { decoders?.setZeroCopySurface(holder.surface); return }
                 @Suppress("DEPRECATION")
                 nativeVideo.setSurface(holder.surface, width, height, windowManager.defaultDisplay.refreshRate)
             }
-            override fun surfaceDestroyed(holder: SurfaceHolder) { nativeVideo.setSurface(null, 0, 0, 60f) }
+            override fun surfaceDestroyed(holder: SurfaceHolder) {
+                screen = null
+                if (zeroCopy) decoders?.setZeroCopySurface(null) else nativeVideo.setSurface(null, 0, 0, 60f)
+            }
         })
         show("Signing in to Xbox Cloud Gaming…")
         worker.execute { runCatching { run() }.onFailure { fail("start", it.message ?: it.javaClass.simpleName) } }
@@ -120,17 +151,90 @@ class XboxNativePlayerActivity : ComponentActivity() {
 
     private fun fail(stage: String, detail: String) {
         log("failed at $stage: $detail")
-        runOnUiThread {
-            if (closed) return@runOnUiThread
-            android.app.AlertDialog.Builder(this, com.winlator.star.R.style.StoreAlertDialogDark)
-                .setTitle("The native stream could not start ($stage)")
-                .setMessage("You can use the web player instead (Xbox › Profile › Cloud gaming settings › Player engine).")
-                .setPositiveButton("Open the web player") { _, _ ->
-                    startActivity(Intent(this, XboxCloudPlayerActivity::class.java).putExtras(intent)); finish()
-                }
-                .setNegativeButton("Close") { _, _ -> finish() }
-                .setCancelable(false).show()
+        if (closed) return
+        if (connectedOnce) showNotice("The connection to the cloud console was lost",
+            "The stream stopped reaching this device ($detail). Restart the stream to play again: the game starts over, " +
+                "unsaved progress is lost.", webPlayer = false)
+        else showNotice("The native stream could not start ($stage)",
+            "$detail\n\nYou can try again, or use the web player instead (Xbox › Profile › Cloud gaming settings › Player engine).",
+            webPlayer = true)
+    }
+
+    /** One popup at a time, in the app's dialog style; A or Enter picks the selected button, Back closes the player. */
+    private fun showNotice(title: String, text: String, webPlayer: Boolean) = runOnUiThread {
+        if (notice != null || isFinishing || isDestroyed) return@runOnUiThread
+        closeMenu()
+        show("")
+        // The stream is over: stale numbers must not stay on screen.
+        overlayOn = false
+        overlay.visibility = android.view.View.GONE
+        val view = androidx.compose.ui.platform.ComposeView(this)
+        view.setContent {
+            com.winlator.star.ui.theme.WinlatorTheme {
+                val first = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+                androidx.compose.runtime.LaunchedEffect(Unit) { androidx.compose.runtime.withFrameNanos { }; runCatching { first.requestFocus() } }
+                @androidx.compose.runtime.Composable
+                fun NoticeButton(label: String, focus: androidx.compose.ui.focus.FocusRequester?, onClick: () -> Unit) =
+                    androidx.compose.material3.TextButton(onClick = onClick,
+                        modifier = androidx.compose.ui.Modifier.let { if (focus != null) it.focusRequester(focus) else it }
+                            .onKeyEvent { e -> if (e.type == KeyEventType.KeyDown && e.key == Key.ButtonA) { onClick(); true } else false }) {
+                        androidx.compose.material3.Text(label)
+                    }
+                com.winlator.star.ui.screens.OutlinedAlertDialog(
+                    onDismissRequest = { finish() },
+                    properties = androidx.compose.ui.window.DialogProperties(dismissOnClickOutside = false),
+                    title = { androidx.compose.material3.Text(title) },
+                    text = { androidx.compose.material3.Text(text) },
+                    confirmButton = {
+                        androidx.compose.foundation.layout.Row {
+                            NoticeButton(if (connectedOnce) "Restart the stream" else "Try again", first) { restartStream() }
+                            if (webPlayer) NoticeButton("Open the web player", null) {
+                                startActivity(Intent(this@XboxNativePlayerActivity, XboxCloudPlayerActivity::class.java).putExtras(intent)); finish()
+                            }
+                        }
+                    },
+                    dismissButton = { NoticeButton("Close", null) { finish() } },
+                )
+            }
         }
+        notice = view
+        root.addView(view, FrameLayout.LayoutParams(-1, -1))
+    }
+
+    // ---- background ----
+
+    override fun onStop() {
+        super.onStop()
+        if (closed || isChangingConfigurations || signalling == null || endedInBackground) return
+        // Android freezes a background app about a minute after it leaves the screen; the connection then dies
+        // without a goodbye. End the session cleanly before that and offer a restart on return.
+        log("in the background")
+        val end = Runnable { backgroundEnd = null; endInBackground() }
+        backgroundEnd = end
+        root.postDelayed(end, BACKGROUND_GRACE_MS)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        backgroundEnd?.let { root.removeCallbacks(it); log("back before the stream was ended") }
+        backgroundEnd = null
+        if (endedInBackground && notice == null) showNotice("The stream ended while Bannerlator was in the background",
+            "Cloud sessions are closed after ${BACKGROUND_GRACE_MS / 1000} s away, before Android pauses the app. Restart the " +
+                "stream to play again: the game starts over, unsaved progress is lost.", webPlayer = false)
+    }
+
+    private fun endInBackground() {
+        if (closed || endedInBackground) return
+        endedInBackground = true
+        closed = true
+        log("ending the session: ${BACKGROUND_GRACE_MS / 1000} s in the background")
+        val signals = signalling
+        signalling = null
+        ticker.shutdownNow()
+        runOnUiThread { overlayOn = false; overlay.visibility = android.view.View.GONE }
+        Thread({ signals?.stop()?.let { log("session closed: ${it.status}") } }, "xcloud-native-stop").start()
+        runCatching { protocol?.close() }
+        runCatching { pc?.close() }
     }
 
     // ---- session ----
@@ -142,6 +246,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
         val product = cached?.cloudId ?: requested
         val active = XboxCloudSession.get(applicationContext, account).forStream(settings.region, settings.osName)
         regionNames = active.regionList.map { it.name }
+        serverName = active.regionList.firstOrNull { it.baseUri == active.baseUri }?.name
         val title = XboxCloudSession.titles(active)[product] ?: error("This game can't be streamed with this account here.")
         val signals = XboxCloudSignalling(active, title, settings).also { signalling = it }
         log("$product -> $title, region ${java.net.URI(active.baseUri).host}, frame gen ${settings.frameGen}")
@@ -164,11 +269,27 @@ class XboxNativePlayerActivity : ComponentActivity() {
         if (closed) return
 
         show("Connecting…")
-        PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(applicationContext).createInitializationOptions())
+        // Small network buffer: no playout delay, frames go to the decoder and screen as soon as they are complete.
+        val trials = if (settings.smallBuffer) "WebRTC-ForcePlayoutDelay/min_ms:0,max_ms:0/WebRTC-ZeroPlayoutDelay/min_pacing:0ms,max_decode_queue_size:8/" else ""
+        PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(applicationContext)
+            .setFieldTrials(trials).createInitializationOptions())
         val egl = eglBase!!
+        val zeroSurface = if (settings.zeroCopy && settings.frameGen == XboxNativeVideo.FG_OFF) {
+            repeat(40) { if (!surfaceView.holder.surface.isValid) Thread.sleep(50) }
+            surfaceView.holder.surface.takeIf { it.isValid }
+        } else null
+        if (zeroSurface != null) {
+            // The compositor may already hold the screen; it must let go before the decoder takes it.
+            val ready = CountDownLatch(1)
+            runOnUiThread { zeroCopy = true; video?.setSurface(null, 0, 0, 60f); ready.countDown() }
+            ready.await(2, TimeUnit.SECONDS)
+        }
+        log("latency: instant input ${settings.instantInput}, small buffer ${settings.smallBuffer}, fast decoder ${settings.fastDecoder}, " +
+            "zero-copy ${zeroSurface != null}")
         val f = PeerConnectionFactory.builder()
             .setAudioDeviceModule(JavaAudioDeviceModule.builder(applicationContext).createAudioDeviceModule())
-            .setVideoDecoderFactory(DefaultVideoDecoderFactory(egl.eglBaseContext))
+            .setVideoDecoderFactory(org.webrtc.BannerlatorLowLatencyDecoderFactory(egl.eglBaseContext, settings.fastDecoder, zeroSurface) { zeroCopyFrames++ }
+                .also { decoders = it })
             .setVideoEncoderFactory(DefaultVideoEncoderFactory(egl.eglBaseContext, true, true))
             .createPeerConnectionFactory().also { factory = it }
         val config = PeerConnection.RTCConfiguration(emptyList()).apply { sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN }
@@ -177,6 +298,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
         peer.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO, RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_RECV))
         peer.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO, RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.RECV_ONLY))
         protocol = XboxNativeProtocol(peer, pad, { log(it) }, ::rumble) { runOnUiThread { finish() } }
+        pad.onChanged = { if (settings.instantInput) protocol?.inputChanged() }
 
         val offer = await<SessionDescription> { done -> peer.createOffer(sdpObserver(done), MediaConstraints()) }
         val local = SessionDescription(offer.type, tweakOffer(offer.description))
@@ -261,6 +383,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
             log("connection $state")
             when (state) {
                 PeerConnection.PeerConnectionState.CONNECTED -> {
+                    connectedOnce = true
                     show("")
                     video?.setFpsTarget(settings.fpsTarget)
                     video?.setFrameGeneration(effectiveFrameGen())
@@ -276,6 +399,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
 
     private fun attach(receiver: RtpReceiver) = synchronized(this) {
         val track = receiver.track()
+        // Always attached: in zero-copy WebRTC delivers no frames, and after a live switch back they flow again.
         if (track is VideoTrack && !videoAttached) { videoAttached = true; video?.let { track.addSink(it) }; log("video track") }
     }
 
@@ -363,30 +487,39 @@ class XboxNativePlayerActivity : ComponentActivity() {
         runCatching { vibrator.vibrate(VibrationEffect.createOneShot(durationMs.coerceAtMost(1000).toLong(), amplitude)) }
     }
 
+    /** The overlay is remembered with the other cloud settings (on = overlay level above 0). */
     @Volatile private var overlayOn = false
 
     private var lastJitterDelay = 0.0
     private var lastJitterCount = 0.0
     private var lastDecodeTime = 0.0
     private var lastDecoded = 0.0
+    private var lastBytes = 0.0
+    private var lastStatsMs = 0.0
+    private var lastLost = 0.0
+    private var lastReceived = 0.0
 
     /**
-     * The overlay: picture size and fps, frame generation base -> shown, and the delay of the picture: network
-     * round trip, WebRTC's jitter buffer and decode time per frame (deltas over the last second), frame generation's
-     * wait for the next real frame plus its GPU time, and an estimate of the total (one-way network + buffer +
-     * decode + frame generation + one screen refresh).
+     * The overlay, at the web player's levels and layout (settings statsLevel / statsLayout): 1 fps and frame
+     * generation base -> shown; 2 + resolution, ping; 3 + bitrate, jitter buffer, decode time, packet loss; 4 + frame
+     * generation's added delay, the estimated picture delay (one-way network + buffer + decode + frame generation +
+     * one screen refresh), codec and server.
      */
     private fun updateOverlay() {
-        if (!overlayOn) return
+        val level = settings.statsLevel
+        if (!overlayOn || level <= 0) return
         val peer = pc ?: return
         peer.getStats { report ->
-            var size = ""; var fps = 0
-            var rttMs = -1.0; var bufferMs = 0.0; var decodeMs = 0.0
+            var size = ""; var fps = 0; var codec = ""
+            var rttMs = -1.0; var bufferMs = 0.0; var decodeMs = 0.0; var mbps = 0.0; var loss = 0.0
+            val codecs = HashMap<String, String>()
+            report.statsMap.values.forEach { s -> if (s.type == "codec") codecs[s.id] = (s.members["mimeType"] as? String).orEmpty().removePrefix("video/") }
             report.statsMap.values.forEach { s ->
                 val m = s.members
                 if (s.type == "inbound-rtp" && m["kind"] == "video") {
                     size = "${m["frameWidth"]}x${m["frameHeight"]}"
                     fps = (m["framesPerSecond"] as? Number)?.toInt() ?: 0
+                    codec = codecs[m["codecId"] as? String].orEmpty()
                     val jd = (m["jitterBufferDelay"] as? Number)?.toDouble() ?: 0.0
                     val jc = (m["jitterBufferEmittedCount"] as? Number)?.toDouble() ?: 0.0
                     if (jc > lastJitterCount) bufferMs = (jd - lastJitterDelay) * 1000 / (jc - lastJitterCount)
@@ -395,26 +528,49 @@ class XboxNativePlayerActivity : ComponentActivity() {
                     val df = (m["framesDecoded"] as? Number)?.toDouble() ?: 0.0
                     if (df > lastDecoded) decodeMs = (dt - lastDecodeTime) * 1000 / (df - lastDecoded)
                     lastDecodeTime = dt; lastDecoded = df
+                    val bytes = (m["bytesReceived"] as? Number)?.toDouble() ?: 0.0
+                    val now = s.timestampUs / 1000.0
+                    if (lastStatsMs > 0 && now > lastStatsMs) mbps = (bytes - lastBytes) * 8 / ((now - lastStatsMs) * 1000)
+                    lastBytes = bytes; lastStatsMs = now
+                    val lost = (m["packetsLost"] as? Number)?.toDouble() ?: 0.0
+                    val received = (m["packetsReceived"] as? Number)?.toDouble() ?: 0.0
+                    val dl = lost - lastLost; val dr = received - lastReceived
+                    if (dl + dr > 0) loss = dl * 100 / (dl + dr)
+                    lastLost = lost; lastReceived = received
                 } else if (s.type == "candidate-pair" && m["state"] == "succeeded" && m["nominated"] == true) {
                     (m["currentRoundTripTime"] as? Number)?.toDouble()?.let { rttMs = it * 1000 }
                 }
             }
+            // Zero-copy: WebRTC never sees a decoded frame, so size and decode time come from the decoder itself.
+            if (zeroCopy) decoders?.let { d ->
+                d.videoSize()?.let { size = it }
+                val ms = d.takeDecodeMs()
+                if (ms >= 0) decodeMs = ms
+            }
             val fg = video?.stats()
             val fgOn = fg != null && settings.frameGen != XboxNativeVideo.FG_OFF && fg[2] > 1f
-            // Frame generation holds the picture until the next real frame arrives, then adds its GPU work.
             val fgWaitMs = if (fgOn) 1000.0 / fg!![2] else 0.0
             val fgGpuMs = if (fgOn && fg!![5] > 0f) fg[5].toDouble() else 0.0
             @Suppress("DEPRECATION") val refreshMs = 1000.0 / windowManager.defaultDisplay.refreshRate
             val total = (if (rttMs >= 0) rttMs / 2 else 0.0) + bufferMs + decodeMs + fgWaitMs + fgGpuMs + refreshMs
-            val lines = buildList {
-                add("$size  $fps fps")
-                if (fgOn) add("${settings.frameGen}: ${fg!![2].toInt()} → ${fg[3].toInt()} fps")
-                add(if (rttMs >= 0) "ping ${rttMs.toInt()} ms" else "ping –")
-                add("buffer ${"%.1f".format(bufferMs)} ms  decode ${"%.1f".format(decodeMs)} ms")
-                if (fgOn) add("frame gen +${"%.1f".format(fgWaitMs + fgGpuMs)} ms (gpu ${"%.1f".format(fgGpuMs)})")
-                add("picture delay ≈ ${total.toInt()} ms (est.)")
+            val shownFps = if (zeroCopy) (zeroCopyFrames - lastZeroCopyFrames).toInt().also { lastZeroCopyFrames = zeroCopyFrames } else fps
+            val items = buildList {
+                add("$shownFps fps" + if (zeroCopy) " zero-copy" else "")
+                if (fgOn) add("${settings.frameGen} ${fg!![2].toInt()} → ${fg[3].toInt()}")
+                if (level >= 2) { add(size); add(if (rttMs >= 0) "ping ${rttMs.toInt()} ms" else "ping –") }
+                if (level >= 3) {
+                    add("${"%.1f".format(mbps)} Mb/s"); add("buffer ${"%.1f".format(bufferMs)} ms")
+                    add("decode ${"%.1f".format(decodeMs)} ms"); add("loss ${"%.1f".format(loss)}%")
+                }
+                if (level >= 4) {
+                    if (fgOn) add("frame gen +${"%.1f".format(fgWaitMs + fgGpuMs)} ms (gpu ${"%.1f".format(fgGpuMs)})")
+                    add("picture delay ≈ ${total.toInt()} ms (est.)")
+                    if (codec.isNotEmpty()) add(codec)
+                    serverName?.let { add(it) }
+                }
             }
-            runOnUiThread { overlay.text = lines.joinToString("\n") }
+            val text = items.joinToString(if (settings.statsLayout == "vertical") "\n" else "  ·  ")
+            runOnUiThread { overlay.text = text }
         }
     }
 
@@ -461,11 +617,13 @@ class XboxNativePlayerActivity : ComponentActivity() {
                         "" -> {
                             XboxMenuEntry("Resume", "Back to the game", entries[0], { lastMainEntry = 0 }) { closeMenu() }
                             XboxMenuEntry("Xbox menu", "The game's Xbox menu (also: Guide once)", entries[1], { lastMainEntry = 1 }) { closeMenu(); pressNexus() }
-                            XboxMenuEntry("Frame generation", "Now: ${fgName(current.frameGen)}", entries[2], { lastMainEntry = 2 }) { menuPage = "framegen" }
+                            XboxMenuEntry("Frame generation & low latency", "Now: ${fgName(current.frameGen)}" + if (zeroCopy) " · zero-copy" else "",
+                                entries[2], { lastMainEntry = 2 }) { menuPage = "framegen" }
                             XboxMenuEntry("Frame rate", "Target: ${fpsName(current)}", entries[3], { lastMainEntry = 3 }) { menuPage = "framerate" }
                             XboxMenuEntry("Stream quality", "Engine, resolution, region, codec, bitrate (next stream)", entries[4], { lastMainEntry = 4 }) { menuPage = "stream" }
-                            XboxMenuEntry(if (overlayOn) "Hide performance overlay" else "Show performance overlay", "Resolution, fps, frame generation base → shown",
-                                entries[5], { lastMainEntry = 5 }) { overlayOn = !overlayOn; overlay.visibility = if (overlayOn) android.view.View.VISIBLE else android.view.View.GONE; closeMenu() }
+                            XboxMenuEntry("Performance overlay and rumble", if (current.statsLevel == 0) "Overlay off"
+                                else "Overlay: " + listOf("", "FPS only", "Basic", "Detailed", "Full")[current.statsLevel] + ", " + current.statsLayout,
+                                entries[5], { lastMainEntry = 5 }) { menuPage = "overlay-native" }
                             XboxMenuEntry("Leave", "End the stream", entries[6], { lastMainEntry = 6 }) { finish() }
                             androidx.compose.material3.Text("Guide twice opens this menu; Back or Guide closes it.",
                                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
@@ -485,9 +643,23 @@ class XboxNativePlayerActivity : ComponentActivity() {
                             if (!lsfg) androidx.compose.material3.Text("LSFG appears here once Lossless.dll is imported in Settings.",
                                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                                 modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                            if (current.zeroCopy) androidx.compose.material3.Text(
+                                "Zero-copy is used while frame generation is Off; picking a frame generation mode switches to the compositor live.",
+                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                                modifier = androidx.compose.ui.Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                            XboxCloudSettingsPanel(current, regionNames, live = true, section = "latency", restoreRow = null,
+                                startedWith = startedWith) { changed ->
+                                val routeChanged = changed.zeroCopy != current.zeroCopy
+                                current = changed; settings = changed; XboxCloudSettings.save(this@XboxNativePlayerActivity, changed)
+                                if (routeChanged) applyRoute()
+                            }
+                            XboxMenuEntry("Restart the stream with these settings",
+                                "Ends this cloud session and starts a new one; the game restarts, unsaved progress is lost.") { restartStream() }
                         }
                         else -> {
                             XboxMenuEntry("‹  Back", null) { menuPage = "" }
+                            if (menuPage == "stream") XboxMenuEntry("Restart the stream with these settings",
+                                "Ends this cloud session and starts a new one; the game restarts, unsaved progress is lost.") { restartStream() }
                             val page = menuPage
                             XboxCloudSettingsPanel(current, regions, live = true, section = page, restoreRow = lastRow[page] ?: 0,
                                 onRowFocused = { lastRow[page] = it }, startedWith = startedWith) { changed ->
@@ -496,6 +668,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
                                 settings = changed
                                 XboxCloudSettings.save(this@XboxNativePlayerActivity, changed)
                                 if (rateChanged) { applyDisplayRate(changed.fpsTarget); video?.setFpsTarget(changed.fpsTarget) }
+                                applyOverlay()
                             }
                         }
                     }
@@ -508,6 +681,26 @@ class XboxNativePlayerActivity : ComponentActivity() {
         view.requestFocus()
     }
 
+    private fun applyOverlay() {
+        overlayOn = settings.statsLevel > 0
+        overlay.visibility = if (overlayOn) android.view.View.VISIBLE else android.view.View.GONE
+        overlay.textSize = 12f
+    }
+
+    /** Stream-start settings need a new cloud session: end this one, then open the player again. */
+    private fun restartStream() {
+        val signals = signalling
+        closed = true
+        closeMenu()
+        notice?.let { root.removeView(it) }
+        notice = null
+        show("Restarting the stream…")
+        Thread({
+            signals?.stop()?.let { log("restart: session closed ${it.status}") }
+            runOnUiThread { if (!isFinishing) { startActivity(XboxCloudPlayerActivity.intent(this, intent.getStringExtra("product").orEmpty(), intent.getStringExtra("title").orEmpty())); finish() } }
+        }, "xcloud-native-restart").start()
+    }
+
     private fun closeMenu() {
         menu?.let { root.removeView(it) }
         menu = null
@@ -517,7 +710,35 @@ class XboxNativePlayerActivity : ComponentActivity() {
     private fun setFrameGen(mode: String) {
         settings = settings.copy(frameGen = mode)
         XboxCloudSettings.save(this, settings)
+        applyRoute()
         worker.execute { video?.setFrameGeneration(effectiveFrameGen()) }
+    }
+
+    /**
+     * Live route switch (UI thread): zero-copy when chosen and frame generation is off, else the compositor.
+     * The screen surface takes one producer at a time, so the old one lets go before the new one connects.
+     */
+    private fun applyRoute() {
+        val d = decoders ?: return
+        val want = settings.zeroCopy && settings.frameGen == XboxNativeVideo.FG_OFF
+        if (want == zeroCopy) return
+        val target = screen
+        if (want) {
+            if (target == null) return
+            video?.setSurface(null, 0, 0, 60f)
+            if (d.useScreen(target)) { lastZeroCopyFrames = zeroCopyFrames; zeroCopy = true; log("route: zero-copy") }
+            else { attachCompositor(target); log("route: zero-copy refused by the decoder, compositor kept") }
+        } else {
+            if (!d.useScreen(null)) { log("route: decoder could not leave the screen, zero-copy kept"); return }
+            zeroCopy = false
+            target?.let { attachCompositor(it) }
+            log("route: compositor")
+        }
+    }
+
+    private fun attachCompositor(target: android.view.Surface) {
+        @Suppress("DEPRECATION")
+        video?.setSurface(target, screenW, screenH, windowManager.defaultDisplay.refreshRate)
     }
 
     /**
@@ -553,12 +774,15 @@ class XboxNativePlayerActivity : ComponentActivity() {
         runCatching { pc?.close(); pc?.dispose() }
         runCatching { video?.release() }
         runCatching { factory?.dispose() }
+        runCatching { decoders?.release() }
         runCatching { eglBase?.release() }
         worker.shutdownNow()
         super.onDestroy()
     }
 
     companion object {
+        /** How long a stream may stay in the background (Android froze the app ~70 s after it left the screen, 10-24). */
+        private const val BACKGROUND_GRACE_MS = 45_000L
         private val FG_MODES = listOf(XboxNativeVideo.FG_OFF, XboxNativeVideo.FG_WINFG, XboxNativeVideo.FG_LSFG, XboxNativeVideo.FG_LSFG3, XboxNativeVideo.FG_LSFG4)
 
         /** True when the native engine can run here (ImageReader GPU buffers need Android 10). */

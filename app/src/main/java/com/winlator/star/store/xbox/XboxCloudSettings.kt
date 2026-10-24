@@ -41,6 +41,10 @@ data class XboxCloudSettings(
     val fpsLimit: Int = 0,                  // native engine target: 0 = the screen's rate, else 30/45/60/120/144/165
     val fpsCustomOn: Boolean = false,       // use fpsCustom instead of the presets
     val fpsCustom: Int = 60,                // 10..165
+    val instantInput: Boolean = true,       // native: send controller changes at once (else every 16 ms)
+    val smallBuffer: Boolean = false,       // native: WebRTC shows frames as soon as decoded (no playout delay)
+    val fastDecoder: Boolean = true,        // native: the hardware decoder's low-latency mode
+    val zeroCopy: Boolean = false,          // native, frame generation off: decode straight onto the screen
 ) {
     /** The native engine's frame-rate target (0 = the screen's own rate). */
     val fpsTarget get() = if (fpsCustomOn) fpsCustom else fpsLimit
@@ -56,6 +60,7 @@ data class XboxCloudSettings(
         .put("deband", deband).put("fxaa", fxaa).put("toon", toon).put("crt", crt).put("ntsc", ntsc).put("profile", profile)
         .put("playerEngine", playerEngine).put("frameGen", frameGen)
         .put("fpsLimit", fpsLimit).put("fpsCustomOn", fpsCustomOn).put("fpsCustom", fpsCustom)
+        .put("instantInput", instantInput).put("smallBuffer", smallBuffer).put("fastDecoder", fastDecoder).put("zeroCopy", zeroCopy)
         .toString()
 
     /** The picture-effect part, in the Wine profile format (KeyValueSet). */
@@ -107,6 +112,8 @@ data class XboxCloudSettings(
                 fpsLimit = json.optInt("fpsLimit", d.fpsLimit).takeIf { it in setOf(0, 30, 45, 60, 120, 144, 165) } ?: 0,
                 fpsCustomOn = json.optBoolean("fpsCustomOn", d.fpsCustomOn),
                 fpsCustom = json.optInt("fpsCustom", d.fpsCustom).coerceIn(10, 165),
+                instantInput = json.optBoolean("instantInput", d.instantInput), smallBuffer = json.optBoolean("smallBuffer", d.smallBuffer),
+                fastDecoder = json.optBoolean("fastDecoder", d.fastDecoder), zeroCopy = json.optBoolean("zeroCopy", d.zeroCopy),
             )
         }.getOrDefault(XboxCloudSettings())
 

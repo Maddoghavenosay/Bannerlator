@@ -139,7 +139,14 @@ internal class XboxNativeProtocol(
         loop = timer.scheduleWithFixedDelay({ runCatching { tick() } }, 16, 16, TimeUnit.MILLISECONDS)
     }
 
+    /** Instant controller input: send a report now if the state changed (the 16 ms loop stays as the heartbeat). */
+    fun inputChanged() {
+        // At most one extra report every 4 ms (stick motion arrives far faster than that).
+        if (handshakeDone && loop != null && System.nanoTime() - lastSentAt > 4_000_000L) timer.execute { runCatching { tick() } }
+    }
+
     /** Greenlight's queue: a gamepad frame when the state changed (sticks past a small threshold) or every 33 ms. */
+    @Synchronized
     private fun tick() {
         val state = pad.snapshot()
         val now = System.nanoTime()
