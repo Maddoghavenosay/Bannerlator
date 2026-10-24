@@ -559,7 +559,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
         show("Restarting the stream…")
         Thread({
             signals?.stop()?.let { log("restart: session closed ${it.status}") }
-            runOnUiThread { if (!isFinishing) { startActivity(Intent(this, XboxCloudPlayerActivity::class.java).putExtras(intent)); finish() } }
+            runOnUiThread { if (!isFinishing) { startActivity(XboxCloudPlayerActivity.intent(this, intent.getStringExtra("product").orEmpty(), intent.getStringExtra("title").orEmpty())); finish() } }
         }, "xcloud-native-restart").start()
     }
 
