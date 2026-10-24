@@ -1,5 +1,12 @@
 # Star-Compose — Progress Log
 
+## 2026-10-24 — Xbox: ARM64 Visual C++ runtime for VC14 games in arm64ec containers (PR #627 + winlator-contents #28, MERGED)
+> - **Why:** *Valor Mortis* (Xbox store, 9P861V1542BL) stopped at "Microsoft Visual C++ 2015-2022 Redistributable (arm64)" required, then a black screen (screenshot 17:18). MGamer404's PR #627 (`XboxDependencies` installs `vcredist2022_arm64` for VC14 games in arm64ec containers) and catalog PR winlator-contents #28 (new component `vcredist2022_arm64`, catalog 123 → 124) fix exactly this.
+> - **Test build:** branch `fix/xbox-vc14-arm64-test` = main `94758b23` + cherry-pick `6f094f17` + test-only commit `07d8b823` (catalog URL → MGamer404/winlator-contents@`df63b233`; never merged). CI 40134206184 ✅ ×4. Installed 17:36, hash matched.
+> - **Device (Pocket FIT, container 1 arm64ec):** log "dependency VC14: installed vcredist2022_arm64 into container 1", VC++ error gone. The first runs showed a black screen with high CPU and no Unreal log for several minutes. Given more time, the game reached its **SHADER COMPILATION** screen (screenshot 18:00, D3D12/VKD3D). The user reports it works. The app ended at 18:00:15 when the user removed it from recents (no Fatal signal).
+> - **Merged on the user's go:** winlator-contents #28 → `b32ae4fe` (components.json blob identical to the tested `df63b233`; contents.json unchanged; backup `refs/backup/20261024/main-before-vcredist2022-arm64` = `a727c408`). Bannerlator #627 → `4857a48d` (tree `aaaba5d7` identical to the tested cherry-pick `6f094f17`; backup `refs/backup/20261024/main-before-xbox-vc14-arm64` = `94758b23`). Main CI 40136897973 started.
+> - **Open:** cloud-save mapping uses `ValorMortis/Saved`, but this build writes `AppData/Local/ValorMortisMSG/Saved`, so Xbox cloud saves would miss it. Gameplay past shader compilation not checked by me. Branch `fix/xbox-vc14-arm64-test` kept.
+
 ## 2026-10-24 — Cloud players: system bars hidden again after returning (feat/xbox-cloud, MERGED)
 > - **Why:** after coming back to the native player from another app the Android navigation bar stayed over the stream (screenshot 13:59); the players hid the bars only on window focus.
 > - **Built `e3232314`:** both players (native + web) hide the bars in `onResume` and re-hide them 1.5 s after Android reports navigation/status bars visible while the player has focus (a swipe still shows them briefly). CI 40123940474 ✅ ×4.
