@@ -420,6 +420,19 @@ class XboxCloudPlayerActivity : ComponentActivity() {
         }
     }
 
+    /** Stream-quality changes need a new cloud session: end this one, then open the player again. */
+    private fun restartStream() {
+        val active = session; val path = sessionPath
+        sessionPath = null
+        closeMenu()
+        showNotice("Restarting the stream…", withButtons = false)
+        Thread({
+            if (active != null && path != null) runCatching { XboxCloudSession.request(active, "DELETE", "/$path") }
+                .onSuccess { XboxDiag.log(applicationContext, "cloud player restart: session closed ${it.status}") }
+            runOnUiThread { if (!isFinishing) { startActivity(Intent(intent)); finish() } }
+        }, "xcloud-restart").start()
+    }
+
     private fun closeMenu() {
         menu?.let { root.removeView(it) }
         menu = null
