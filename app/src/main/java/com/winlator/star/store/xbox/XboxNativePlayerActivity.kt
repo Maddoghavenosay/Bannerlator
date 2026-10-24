@@ -95,6 +95,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
     /** Zero-copy for this stream: chosen, and frame generation off when it started. */
     private val zeroCopy by lazy { startedWith.zeroCopy && startedWith.frameGen == XboxNativeVideo.FG_OFF }
     @Volatile private var zeroCopyFrames = 0L
+    @Volatile private var decoders: org.webrtc.BannerlatorLowLatencyDecoderFactory? = null
     private var lastZeroCopyFrames = 0L
     /** The release of the Guide press that opened the menu must not close it again. */
     private var swallowGuideUp = false
@@ -123,12 +124,14 @@ class XboxNativePlayerActivity : ComponentActivity() {
         surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {}
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-                // Zero-copy: the decoder owns this surface; the Vulkan compositor must not connect to it.
-                if (zeroCopy) return
+                // Zero-copy: the decoder owns this surface (back on it after a stand-in); the Vulkan compositor must not connect to it.
+                if (zeroCopy) { decoders?.setZeroCopySurface(holder.surface); return }
                 @Suppress("DEPRECATION")
                 nativeVideo.setSurface(holder.surface, width, height, windowManager.defaultDisplay.refreshRate)
             }
-            override fun surfaceDestroyed(holder: SurfaceHolder) { if (!zeroCopy) nativeVideo.setSurface(null, 0, 0, 60f) }
+            override fun surfaceDestroyed(holder: SurfaceHolder) {
+                if (zeroCopy) decoders?.setZeroCopySurface(null) else nativeVideo.setSurface(null, 0, 0, 60f)
+            }
         })
         show("Signing in to Xbox Cloud Gaming…")
         worker.execute { runCatching { run() }.onFailure { fail("start", it.message ?: it.javaClass.simpleName) } }
@@ -153,6 +156,9 @@ class XboxNativePlayerActivity : ComponentActivity() {
         if (notice != null || isFinishing || isDestroyed) return@runOnUiThread
         closeMenu()
         show("")
+        // The stream is over: stale numbers must not stay on screen.
+        overlayOn = false
+        overlay.visibility = android.view.View.GONE
         val view = androidx.compose.ui.platform.ComposeView(this)
         view.setContent {
             com.winlator.star.ui.theme.WinlatorTheme {
@@ -216,6 +222,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
         val signals = signalling
         signalling = null
         ticker.shutdownNow()
+        runOnUiThread { overlayOn = false; overlay.visibility = android.view.View.GONE }
         Thread({ signals?.stop()?.let { log("session closed: ${it.status}") } }, "xcloud-native-stop").start()
         runCatching { protocol?.close() }
         runCatching { pc?.close() }
@@ -266,7 +273,8 @@ class XboxNativePlayerActivity : ComponentActivity() {
             "zero-copy ${zeroSurface != null}")
         val f = PeerConnectionFactory.builder()
             .setAudioDeviceModule(JavaAudioDeviceModule.builder(applicationContext).createAudioDeviceModule())
-            .setVideoDecoderFactory(org.webrtc.BannerlatorLowLatencyDecoderFactory(egl.eglBaseContext, settings.fastDecoder, zeroSurface) { zeroCopyFrames++ })
+            .setVideoDecoderFactory(org.webrtc.BannerlatorLowLatencyDecoderFactory(egl.eglBaseContext, settings.fastDecoder, zeroSurface) { zeroCopyFrames++ }
+                .also { decoders = it })
             .setVideoEncoderFactory(DefaultVideoEncoderFactory(egl.eglBaseContext, true, true))
             .createPeerConnectionFactory().also { factory = it }
         val config = PeerConnection.RTCConfiguration(emptyList()).apply { sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN }
@@ -518,6 +526,12 @@ class XboxNativePlayerActivity : ComponentActivity() {
                     (m["currentRoundTripTime"] as? Number)?.toDouble()?.let { rttMs = it * 1000 }
                 }
             }
+            // Zero-copy: WebRTC never sees a decoded frame, so size and decode time come from the decoder itself.
+            if (zeroCopy) decoders?.let { d ->
+                d.videoSize()?.let { size = it }
+                val ms = d.takeDecodeMs()
+                if (ms >= 0) decodeMs = ms
+            }
             val fg = video?.stats()
             val fgOn = fg != null && settings.frameGen != XboxNativeVideo.FG_OFF && fg[2] > 1f
             val fgWaitMs = if (fgOn) 1000.0 / fg!![2] else 0.0
@@ -721,6 +735,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
         runCatching { pc?.close(); pc?.dispose() }
         runCatching { video?.release() }
         runCatching { factory?.dispose() }
+        runCatching { decoders?.release() }
         runCatching { eglBase?.release() }
         worker.shutdownNow()
         super.onDestroy()
