@@ -188,14 +188,15 @@ private fun PanelContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
     }
 
-    if (section == null || section == "overlay") Section("Overlay and sound", null) {
+    // "overlay-native": the native player's page (its sound has no volume boost).
+    if (section == null || section == "overlay" || section == "overlay-native") Section("Overlay and sound", null) {
         Choice("Performance overlay", listOf(0 to "Off", 1 to "FPS only", 2 to "Basic", 3 to "Detailed", 4 to "Full"), settings.statsLevel) {
             onChange(settings.copy(statsLevel = it))
         }
         Choice("Overlay layout", listOf("horizontal" to "Horizontal", "vertical" to "Vertical"), settings.statsLayout) { onChange(settings.copy(statsLayout = it)) }
         Text("Top right. Basic: fps, ping, resolution. Detailed: + bitrate, decode time, packet loss. Full: + codec, jitter, " +
             "dropped frames, server.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Step("Volume", "${settings.volume}%", { onChange(settings.copy(volume = (settings.volume - 25).coerceAtLeast(100))) },
+        if (section != "overlay-native") Step("Volume", "${settings.volume}%", { onChange(settings.copy(volume = (settings.volume - 25).coerceAtLeast(100))) },
             { onChange(settings.copy(volume = (settings.volume + 25).coerceAtMost(300))) })
         Step("Controller rumble", if (settings.rumble == 0) "Off" else "${settings.rumble}%", { onChange(settings.copy(rumble = (settings.rumble - 25).coerceAtLeast(0))) },
             { onChange(settings.copy(rumble = (settings.rumble + 25).coerceAtMost(100))) })

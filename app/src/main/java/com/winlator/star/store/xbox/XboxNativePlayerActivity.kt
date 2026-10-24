@@ -71,6 +71,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
     @Volatile private var settings = XboxCloudSettings()
     @Volatile private var closed = false
     @Volatile private var regionNames = emptyList<String>()
+    @Volatile private var serverName: String? = null
     private val candidates = mutableListOf<IceCandidate>()
     private val gathered = CountDownLatch(1)
     private var menu: androidx.compose.ui.platform.ComposeView? = null
@@ -103,8 +104,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
         setContentView(root)
         settings = XboxCloudSettings.load(this)
         applyDisplayRate(settings.fpsTarget)
-        overlayOn = settings.statsLevel > 0
-        overlay.visibility = if (overlayOn) android.view.View.VISIBLE else android.view.View.GONE
+        applyOverlay()
 
         val egl = EglBase.create().also { eglBase = it }
         val nativeVideo = XboxNativeVideo(this, egl) { log(it) }.also { video = it }
@@ -149,6 +149,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
         val product = cached?.cloudId ?: requested
         val active = XboxCloudSession.get(applicationContext, account).forStream(settings.region, settings.osName)
         regionNames = active.regionList.map { it.name }
+        serverName = active.regionList.firstOrNull { it.baseUri == active.baseUri }?.name
         val title = XboxCloudSession.titles(active)[product] ?: error("This game can't be streamed with this account here.")
         val signals = XboxCloudSignalling(active, title, settings).also { signalling = it }
         log("$product -> $title, region ${java.net.URI(active.baseUri).host}, frame gen ${settings.frameGen}")
@@ -388,24 +389,32 @@ class XboxNativePlayerActivity : ComponentActivity() {
     private var lastJitterCount = 0.0
     private var lastDecodeTime = 0.0
     private var lastDecoded = 0.0
+    private var lastBytes = 0.0
+    private var lastStatsMs = 0.0
+    private var lastLost = 0.0
+    private var lastReceived = 0.0
 
     /**
-     * The overlay: picture size and fps, frame generation base -> shown, and the delay of the picture: network
-     * round trip, WebRTC's jitter buffer and decode time per frame (deltas over the last second), frame generation's
-     * wait for the next real frame plus its GPU time, and an estimate of the total (one-way network + buffer +
-     * decode + frame generation + one screen refresh).
+     * The overlay, at the web player's levels and layout (settings statsLevel / statsLayout): 1 fps and frame
+     * generation base -> shown; 2 + resolution, ping; 3 + bitrate, jitter buffer, decode time, packet loss; 4 + frame
+     * generation's added delay, the estimated picture delay (one-way network + buffer + decode + frame generation +
+     * one screen refresh), codec and server.
      */
     private fun updateOverlay() {
-        if (!overlayOn) return
+        val level = settings.statsLevel
+        if (!overlayOn || level <= 0) return
         val peer = pc ?: return
         peer.getStats { report ->
-            var size = ""; var fps = 0
-            var rttMs = -1.0; var bufferMs = 0.0; var decodeMs = 0.0
+            var size = ""; var fps = 0; var codec = ""
+            var rttMs = -1.0; var bufferMs = 0.0; var decodeMs = 0.0; var mbps = 0.0; var loss = 0.0
+            val codecs = HashMap<String, String>()
+            report.statsMap.values.forEach { s -> if (s.type == "codec") codecs[s.id] = (s.members["mimeType"] as? String).orEmpty().removePrefix("video/") }
             report.statsMap.values.forEach { s ->
                 val m = s.members
                 if (s.type == "inbound-rtp" && m["kind"] == "video") {
                     size = "${m["frameWidth"]}x${m["frameHeight"]}"
                     fps = (m["framesPerSecond"] as? Number)?.toInt() ?: 0
+                    codec = codecs[m["codecId"] as? String].orEmpty()
                     val jd = (m["jitterBufferDelay"] as? Number)?.toDouble() ?: 0.0
                     val jc = (m["jitterBufferEmittedCount"] as? Number)?.toDouble() ?: 0.0
                     if (jc > lastJitterCount) bufferMs = (jd - lastJitterDelay) * 1000 / (jc - lastJitterCount)
@@ -414,27 +423,43 @@ class XboxNativePlayerActivity : ComponentActivity() {
                     val df = (m["framesDecoded"] as? Number)?.toDouble() ?: 0.0
                     if (df > lastDecoded) decodeMs = (dt - lastDecodeTime) * 1000 / (df - lastDecoded)
                     lastDecodeTime = dt; lastDecoded = df
+                    val bytes = (m["bytesReceived"] as? Number)?.toDouble() ?: 0.0
+                    val now = s.timestampUs / 1000.0
+                    if (lastStatsMs > 0 && now > lastStatsMs) mbps = (bytes - lastBytes) * 8 / ((now - lastStatsMs) * 1000)
+                    lastBytes = bytes; lastStatsMs = now
+                    val lost = (m["packetsLost"] as? Number)?.toDouble() ?: 0.0
+                    val received = (m["packetsReceived"] as? Number)?.toDouble() ?: 0.0
+                    val dl = lost - lastLost; val dr = received - lastReceived
+                    if (dl + dr > 0) loss = dl * 100 / (dl + dr)
+                    lastLost = lost; lastReceived = received
                 } else if (s.type == "candidate-pair" && m["state"] == "succeeded" && m["nominated"] == true) {
                     (m["currentRoundTripTime"] as? Number)?.toDouble()?.let { rttMs = it * 1000 }
                 }
             }
             val fg = video?.stats()
             val fgOn = fg != null && settings.frameGen != XboxNativeVideo.FG_OFF && fg[2] > 1f
-            // Frame generation holds the picture until the next real frame arrives, then adds its GPU work.
             val fgWaitMs = if (fgOn) 1000.0 / fg!![2] else 0.0
             val fgGpuMs = if (fgOn && fg!![5] > 0f) fg[5].toDouble() else 0.0
             @Suppress("DEPRECATION") val refreshMs = 1000.0 / windowManager.defaultDisplay.refreshRate
             val total = (if (rttMs >= 0) rttMs / 2 else 0.0) + bufferMs + decodeMs + fgWaitMs + fgGpuMs + refreshMs
             val shownFps = if (zeroCopy) (zeroCopyFrames - lastZeroCopyFrames).toInt().also { lastZeroCopyFrames = zeroCopyFrames } else fps
-            val lines = buildList {
-                add("$size  $shownFps fps" + if (zeroCopy) "  zero-copy" else "")
-                if (fgOn) add("${settings.frameGen}: ${fg!![2].toInt()} → ${fg[3].toInt()} fps")
-                add(if (rttMs >= 0) "ping ${rttMs.toInt()} ms" else "ping –")
-                add("buffer ${"%.1f".format(bufferMs)} ms  decode ${"%.1f".format(decodeMs)} ms")
-                if (fgOn) add("frame gen +${"%.1f".format(fgWaitMs + fgGpuMs)} ms (gpu ${"%.1f".format(fgGpuMs)})")
-                add("picture delay ≈ ${total.toInt()} ms (est.)")
+            val items = buildList {
+                add("$shownFps fps" + if (zeroCopy) " zero-copy" else "")
+                if (fgOn) add("${settings.frameGen} ${fg!![2].toInt()} → ${fg[3].toInt()}")
+                if (level >= 2) { add(size); add(if (rttMs >= 0) "ping ${rttMs.toInt()} ms" else "ping –") }
+                if (level >= 3) {
+                    add("${"%.1f".format(mbps)} Mb/s"); add("buffer ${"%.1f".format(bufferMs)} ms")
+                    add("decode ${"%.1f".format(decodeMs)} ms"); add("loss ${"%.1f".format(loss)}%")
+                }
+                if (level >= 4) {
+                    if (fgOn) add("frame gen +${"%.1f".format(fgWaitMs + fgGpuMs)} ms (gpu ${"%.1f".format(fgGpuMs)})")
+                    add("picture delay ≈ ${total.toInt()} ms (est.)")
+                    if (codec.isNotEmpty()) add(codec)
+                    serverName?.let { add(it) }
+                }
             }
-            runOnUiThread { overlay.text = lines.joinToString("\n") }
+            val text = items.joinToString(if (settings.statsLayout == "vertical") "\n" else "  ·  ")
+            runOnUiThread { overlay.text = text }
         }
     }
 
@@ -485,14 +510,9 @@ class XboxNativePlayerActivity : ComponentActivity() {
                                 entries[2], { lastMainEntry = 2 }) { menuPage = "framegen" }
                             XboxMenuEntry("Frame rate", "Target: ${fpsName(current)}", entries[3], { lastMainEntry = 3 }) { menuPage = "framerate" }
                             XboxMenuEntry("Stream quality", "Engine, resolution, region, codec, bitrate (next stream)", entries[4], { lastMainEntry = 4 }) { menuPage = "stream" }
-                            XboxMenuEntry(if (overlayOn) "Hide performance overlay" else "Show performance overlay", "Resolution, fps, frame generation base → shown",
-                                entries[5], { lastMainEntry = 5 }) {
-                                overlayOn = !overlayOn
-                                overlay.visibility = if (overlayOn) android.view.View.VISIBLE else android.view.View.GONE
-                                settings = settings.copy(statsLevel = if (overlayOn) maxOf(settings.statsLevel, 3) else 0)
-                                XboxCloudSettings.save(this@XboxNativePlayerActivity, settings)
-                                closeMenu()
-                            }
+                            XboxMenuEntry("Performance overlay and rumble", if (current.statsLevel == 0) "Overlay off"
+                                else "Overlay: " + listOf("", "FPS only", "Basic", "Detailed", "Full")[current.statsLevel] + ", " + current.statsLayout,
+                                entries[5], { lastMainEntry = 5 }) { menuPage = "overlay-native" }
                             XboxMenuEntry("Leave", "End the stream", entries[6], { lastMainEntry = 6 }) { finish() }
                             androidx.compose.material3.Text("Guide twice opens this menu; Back or Guide closes it.",
                                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
@@ -539,6 +559,7 @@ class XboxNativePlayerActivity : ComponentActivity() {
                                 settings = changed
                                 XboxCloudSettings.save(this@XboxNativePlayerActivity, changed)
                                 if (rateChanged) { applyDisplayRate(changed.fpsTarget); video?.setFpsTarget(changed.fpsTarget) }
+                                applyOverlay()
                             }
                         }
                     }
@@ -549,6 +570,12 @@ class XboxNativePlayerActivity : ComponentActivity() {
         menu = view
         root.addView(view, FrameLayout.LayoutParams(-1, -1))
         view.requestFocus()
+    }
+
+    private fun applyOverlay() {
+        overlayOn = settings.statsLevel > 0
+        overlay.visibility = if (overlayOn) android.view.View.VISIBLE else android.view.View.GONE
+        overlay.textSize = 12f
     }
 
     /** Stream-start settings need a new cloud session: end this one, then open the player again. */
