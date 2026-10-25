@@ -1,5 +1,12 @@
 # Star-Compose — Progress Log
 
+## 2026-10-24 — Wine locale fix for CJK games (fix/cjk-locale, MERGED, NOT device-tested)
+> - **Why:** report from xxydbc (BannerHub Discord): GBK games show garbled text (code page 1252) on our Proton 10/11 layers. Cause: Android's setlocale(…, "") always answers "C.UTF-8"; Wine's unix_to_win_locale() falls back to LC_ALL only for exactly "C", so it picked en-US / 1252.
+> - **App (`72f6c9d0`):** liblocale_fix.so, loaded with LD_PRELOAD for every game; a setlocale query with "" for LC_ALL/LC_CTYPE/LC_MESSAGES returns the LC_ALL (else LC_CTYPE/LC_MESSAGES, else LANG) name; "C", "C.*", "POSIX" untouched; `LOCALE_FIX_DISABLE=1` turns it off. CI 40128888733 ✅ ×4. The library alone was tested on the device (C.UTF-8 → zh_CN.UTF-8); no CJK game run.
+> - **Layers (proton-wine):** same fix in Wine (`"C.*"` treated like `"C"`, then LC_ALL / LANG) fast-forwarded into proton_10.0 `9877181615`, proton_10.34-GE `0939168e7d`, proton_11.0 `dcc517e34e`, proton_11.0-2 `7b4dd1dfdb`, proton_11.9-GE `6463949d61`, proton_11.11.1-DroidDeck `4f45e18387` (backups `refs/backup/20261024/<branch>-before-cjk-locale`). Push builds 40158648780…40158658587 (release jobs are `if: false`, nothing published). No layer release.
+> - **Merged on the user's go, knowingly without a device test:** main `defb2b9f` (backup `refs/backup/20261024/main-before-cjk-locale` = `73321b90`; diff to the tested `72f6c9d0` = only the #627 merge + this log). Main CI 40158671009.
+> - **Open:** CJK game test (reporter or us) on the app fix and on a rebuilt layer.
+
 ## 2026-10-24 — Xbox: ARM64 Visual C++ runtime for VC14 games in arm64ec containers (PR #627 + winlator-contents #28, MERGED)
 > - **Why:** *Valor Mortis* (Xbox store, 9P861V1542BL) stopped at "Microsoft Visual C++ 2015-2022 Redistributable (arm64)" required, then a black screen (screenshot 17:18). MGamer404's PR #627 (`XboxDependencies` installs `vcredist2022_arm64` for VC14 games in arm64ec containers) and catalog PR winlator-contents #28 (new component `vcredist2022_arm64`, catalog 123 → 124) fix exactly this.
 > - **Test build:** branch `fix/xbox-vc14-arm64-test` = main `94758b23` + cherry-pick `6f094f17` + test-only commit `07d8b823` (catalog URL → MGamer404/winlator-contents@`df63b233`; never merged). CI 40134206184 ✅ ×4. Installed 17:36, hash matched.
