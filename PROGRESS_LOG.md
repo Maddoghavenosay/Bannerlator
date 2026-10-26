@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-26 — 🧩 Components can install Wine Mono again (`fix/offline-msi-mono`, PAUSED: host-tested only, no CI yet)
+## 2026-10-26 — 🧩 Components can install Wine Mono again (`fix/offline-msi-mono`, host-tested, CI run 40416469977 building, NOT device-tested)
 
 > **Why.** On the device (3.1.7-pre4) Components › mono-10.4.1 failed: "Couldn't install mono-10.4.1: the package installs nothing here". Every Mono entry fails the same way (mono 8.0.0, 10.1.0, 10.3.0 checked on the host with main's own code).
 >
@@ -12,9 +12,15 @@
 >
 > **Host test (app's own Java, 7-Zip on the host).** Old code: all four Mono MSIs fail. New code: mono 8.0.0 2,940 files, 10.1.0 2,948, 10.3.0 2,949, official 10.4.1 2,949; each 91 registry values; notes: `REMOVEUSERINSTALLS, INSTALLFAKEDLLS, INSTALLFAKEDLLS64` not run. 10.1.0 file list = the device's real msiexec install exactly, except 14 Wine fake .NET stubs (`Microsoft.NET\Framework\v*\fusion.dll`, `ngen.exe`, `mscorwks.dll`…) that INSTALLFAKEDLLS makes.
 >
-> **Not done yet.** Regression run old-vs-new on other catalog installers (downloaded to the scratchpad: gecko ×2, msxml3/4, physx, xna31/40, XLiveRedist, vcredist 2005/2008/2010/2022 x86) — NOT RUN. Catalog fix (branch `fix/mono-10.4.1` in winlator-contents, nothing committed): upload upstream `wine-mono-10.4.1-x86.msi` (85,504,000 bytes, md5 `e879a02555e3c6259ea508d14617dbcd`, sha256 `071f4b28…358e23` = GitHub digest) to `system-libraries-v1`, point the entry at it. `EaSupport.kt:40` comment "10.4.1 = device-proven" is wrong (it was 10.1.0) — fix in this branch. Then CI artifacts build → stage pubg APK → user's go to install → device test.
+> **Regression (host, old main code vs this branch, same 7-Zip).** 12 catalog installers: XLiveRedist, gecko x86 + x86_64, msxml3, msxml4, physx, vcredist 2005/2008/2010/2022 x86, xna31, xna40. 11 identical (files, registry, notes); msxml4 same files and registry, one note listed in a different order (code-action notes are now made after the selection).
 >
-> **Proof level:** compiled on host + host-tested; NOT CI-built, NOT device-tested.
+> **EA (`27af06b6`).** `EaSupport.MONO_COMPONENTS` now asks for `mono-10.1.0` first: EA Desktop's setup was only ever proven with 10.1.0 (the old "mono-10.4.1" entry downloaded 10.1.0), so EA keeps the exact same package once the catalog entry points at the real 10.4.1. The old "10.4.1 = device-proven" note was wrong.
+>
+> **Catalog (winlator-contents `fix/mono-10.4.1` @ `37fc846f`, NOT merged; the app reads `components.json` from winlator-contents main, so nothing changes for users until it is).** Uploaded the official `wine-mono-10.4.1-x86.msi` (wine-mono release `wine-mono-10.4.1`) to `system-libraries-v1` with the user's OK; re-downloaded from there: 85,504,000 bytes, MD5 `e879a02555e3c6259ea508d14617dbcd`, SHA-256 `071f4b28…358e23` = upstream's GitHub digest. Entry `mono-10.4.1` now points at it (file name, URL, mirror, checksum, size).
+>
+> **Next.** CI run 40416469977 (headSha `27af06b6` asserted) → stage pubg APK `/sdcard/Download/Bannerlator-offline-msi-mono-<sha8>.apk` with sha256 host + device → ASK before install → device test: Components › mono-10.1.0 (catalog main) on a container, then a managed .NET exe; 10.4.1 needs the catalog branch merged (or a test container pointed at the branch catalog). Then the user's go for both merges.
+>
+> **Proof level:** host-tested; CI building; NOT device-tested.
 
 ## 2026-10-24 — Wine locale fix for CJK games (fix/cjk-locale, MERGED, NOT device-tested)
 > - **Why:** report from xxydbc (BannerHub Discord): GBK games show garbled text (code page 1252) on our Proton 10/11 layers. Cause: Android's setlocale(…, "") always answers "C.UTF-8"; Wine's unix_to_win_locale() falls back to LC_ALL only for exactly "C", so it picked en-US / 1252.
