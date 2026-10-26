@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-26 — 🧩 Components can install Wine Mono again (`fix/offline-msi-mono`, host-tested, CI-green run 40416469977, APK staged, NOT device-tested)
+## 2026-10-26 — 🧩 Components can install Wine Mono again (`fix/offline-msi-mono`, CI-green run 40416469977, DEVICE-PROVEN install of 10.4.1; .NET program run not tested yet)
 
 > **Why.** On the device (3.1.7-pre4) Components › mono-10.4.1 failed: "Couldn't install mono-10.4.1: the package installs nothing here". Every Mono entry fails the same way (mono 8.0.0, 10.1.0, 10.3.0 checked on the host with main's own code).
 >
@@ -26,9 +26,11 @@
 >
 > **Installed.** `pm install -r` of the staged APK: Success; installed base.apk sha256 `4fffdf51…` = staged. logcat cleared, capture running to `/sdcard/Download/.mono-test-logcat.txt` (OfflineComponents, ComponentUndo, crashes). Before the test both containers have Mono 10.1.0 (`bin/libmono-2.0-x86.dll` 3,738,112 bytes; 10.4.1's is 3,741,696).
 >
+> **Device test (2026-10-26 19:18 EDT, Pocket FIT, installed APK `4fffdf51…`).** User: Components › mono-10.4.1 → installed, no error. It went into **Container-2 (`xuser-2`)**; the user said "container 1" — `xuser-1` "DD P11-11.1 Arm" untouched (system.reg still 14:33, no journal). Log: `mono-10.4.1: msi [winemono-support.msi, mono-10.4.1-1.msi] files=2949 registry=91`, `1 registry value(s) written` (the rest already present from the 10-23 EA install), notes `REMOVEUSERINSTALLS, INSTALLFAKEDLLS, INSTALLFAKEDLLS64`. Files: all 2,949 expected paths present with the host-expected sizes (`bin/libmono-2.0-x86.dll` 3,741,696 = 10.4.1); extras left from 10.1.0: the 14 fake .NET stubs and `lib/mono/gac/WineMono.FNA/25.4.0.0__…` (the catalog's "uninstall Wine Mono" step is a no-op offline, so an older version's leftovers stay). Registry: `NET Framework Setup\NDP\v4\Full` Install=1, `.NETFramework` InstallRoot, `mscoree`=`native,builtin`. Undo journal `.bannerlator-component-undo/mono-10.4.1` with backups. No crash: crash buffer empty, capture has no FATAL/AndroidRuntime lines. NOT tested yet: running a managed (.NET) program on it.
+>
 > **Next.** CI run 40416469977 (headSha `27af06b6` asserted) → stage pubg APK `/sdcard/Download/Bannerlator-offline-msi-mono-<sha8>.apk` with sha256 host + device → ASK before install → device test: Components › mono-10.1.0 (catalog main) on a container, then a managed .NET exe; 10.4.1 needs the catalog branch merged (or a test container pointed at the branch catalog). Then the user's go for both merges.
 >
-> **Proof level:** host-tested + CI-green; NOT device-tested.
+> **Proof level:** device-proven install (files, registry, no crash); a .NET program run on it is NOT tested; app branch NOT merged.
 
 ## 2026-10-24 — Wine locale fix for CJK games (fix/cjk-locale, MERGED, NOT device-tested)
 > - **Why:** report from xxydbc (BannerHub Discord): GBK games show garbled text (code page 1252) on our Proton 10/11 layers. Cause: Android's setlocale(…, "") always answers "C.UTF-8"; Wine's unix_to_win_locale() falls back to LC_ALL only for exactly "C", so it picked en-US / 1252.
