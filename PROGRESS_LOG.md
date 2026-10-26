@@ -1,5 +1,21 @@
 # Star-Compose — Progress Log
 
+## 2026-10-26 — 🧩 Components can install Wine Mono again (`fix/offline-msi-mono`, PAUSED: host-tested only, no CI yet)
+
+> **Why.** On the device (3.1.7-pre4) Components › mono-10.4.1 failed: "Couldn't install mono-10.4.1: the package installs nothing here". Every Mono entry fails the same way (mono 8.0.0, 10.1.0, 10.3.0 checked on the host with main's own code).
+>
+> **Cause (app).** wine-mono's MSI names its files with folder paths (`bin\libmono-2.0-x86.dll`); 7-Zip unpacks the cabinet into real folders, so `MsiLayout.unpack()` found none of the 2,920 files. Second gap: its custom action `INSTALLSUPPORT` (`msiexec /i [$support]\winemono-support.msi`, the "Wine Mono Windows Support" package: .NET folders + 91 registry values) never ran and was never noted, because code-action conditions (`&wine_mono=3`) were checked before the features were chosen.
+>
+> **Cause (catalog).** winlator-contents `components.json` entry `mono-10.4.1` downloads `wine-mono-10.1.0-x86.msi`; no 10.4.1 file is hosted. The layers ship no Mono (share/wine = fonts/nls/wine.inf/winmd; prefixPack has no windows/mono). The containers' Mono 10.1.0 (InstallDate 20261023) came from the EA install-script path (real msiexec in session).
+>
+> **Built.** `f64298c5`: cabinet files also found by the backslash name; a package installed by the package's own `msiexec /i` custom action is laid out too (nested, depth ≤ 2, failure = note); code actions checked after selection; "none of the package's N files were found in its cabinets" instead of "installs nothing here" when that is the cause.
+>
+> **Host test (app's own Java, 7-Zip on the host).** Old code: all four Mono MSIs fail. New code: mono 8.0.0 2,940 files, 10.1.0 2,948, 10.3.0 2,949, official 10.4.1 2,949; each 91 registry values; notes: `REMOVEUSERINSTALLS, INSTALLFAKEDLLS, INSTALLFAKEDLLS64` not run. 10.1.0 file list = the device's real msiexec install exactly, except 14 Wine fake .NET stubs (`Microsoft.NET\Framework\v*\fusion.dll`, `ngen.exe`, `mscorwks.dll`…) that INSTALLFAKEDLLS makes.
+>
+> **Not done yet.** Regression run old-vs-new on other catalog installers (downloaded to the scratchpad: gecko ×2, msxml3/4, physx, xna31/40, XLiveRedist, vcredist 2005/2008/2010/2022 x86) — NOT RUN. Catalog fix (branch `fix/mono-10.4.1` in winlator-contents, nothing committed): upload upstream `wine-mono-10.4.1-x86.msi` (85,504,000 bytes, md5 `e879a02555e3c6259ea508d14617dbcd`, sha256 `071f4b28…358e23` = GitHub digest) to `system-libraries-v1`, point the entry at it. `EaSupport.kt:40` comment "10.4.1 = device-proven" is wrong (it was 10.1.0) — fix in this branch. Then CI artifacts build → stage pubg APK → user's go to install → device test.
+>
+> **Proof level:** compiled on host + host-tested; NOT CI-built, NOT device-tested.
+
 ## 2026-10-24 — Wine locale fix for CJK games (fix/cjk-locale, MERGED, NOT device-tested)
 > - **Why:** report from xxydbc (BannerHub Discord): GBK games show garbled text (code page 1252) on our Proton 10/11 layers. Cause: Android's setlocale(…, "") always answers "C.UTF-8"; Wine's unix_to_win_locale() falls back to LC_ALL only for exactly "C", so it picked en-US / 1252.
 > - **App (`72f6c9d0`):** liblocale_fix.so, loaded with LD_PRELOAD for every game; a setlocale query with "" for LC_ALL/LC_CTYPE/LC_MESSAGES returns the LC_ALL (else LC_CTYPE/LC_MESSAGES, else LANG) name; "C", "C.*", "POSIX" untouched; `LOCALE_FIX_DISABLE=1` turns it off. CI 40128888733 ✅ ×4. The library alone was tested on the device (C.UTF-8 → zh_CN.UTF-8); no CJK game run.
