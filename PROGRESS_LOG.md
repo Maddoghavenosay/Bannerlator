@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-26 — 🧩 Components can install Wine Mono again (`fix/offline-msi-mono`, host-tested, CI run 40416469977 building, NOT device-tested)
+## 2026-10-26 — 🧩 Components can install Wine Mono again (`fix/offline-msi-mono`, host-tested, CI-green run 40416469977, APK staged, NOT device-tested)
 
 > **Why.** On the device (3.1.7-pre4) Components › mono-10.4.1 failed: "Couldn't install mono-10.4.1: the package installs nothing here". Every Mono entry fails the same way (mono 8.0.0, 10.1.0, 10.3.0 checked on the host with main's own code).
 >
@@ -18,9 +18,13 @@
 >
 > **Catalog (winlator-contents `fix/mono-10.4.1` @ `37fc846f`, NOT merged; the app reads `components.json` from winlator-contents main, so nothing changes for users until it is).** Uploaded the official `wine-mono-10.4.1-x86.msi` (wine-mono release `wine-mono-10.4.1`) to `system-libraries-v1` with the user's OK; re-downloaded from there: 85,504,000 bytes, MD5 `e879a02555e3c6259ea508d14617dbcd`, SHA-256 `071f4b28…358e23` = upstream's GitHub digest. Entry `mono-10.4.1` now points at it (file name, URL, mirror, checksum, size).
 >
+> **CI.** Run 40416469977, headSha `27af06b6` = pushed commit; jobs pubg/standard/ludashi/antutu all success; pubg log: `compilePubgReleaseKotlin` + `compilePubgReleaseJavaWithJavac` ran, `BUILD SUCCESSFUL in 6m 9s`; skipped steps are cache hits and main-only cache saves. The new error text is in the APK's classes3.dex.
+>
+> **Staged.** `/sdcard/Download/Bannerlator-offline-msi-mono-27af06b6.apk` sha256 `4fffdf51…cfee6d4` (host = device). Installed build before the test: 3.1.7-pre4 (lastUpdateTime 10-24 18:38), base.apk sha256 `7084e973…80440b`, backed up to `/sdcard/Download/Bannerlator-installed-before-offline-msi-mono-7084e973.apk`. Waiting for the user's OK to install.
+>
 > **Next.** CI run 40416469977 (headSha `27af06b6` asserted) → stage pubg APK `/sdcard/Download/Bannerlator-offline-msi-mono-<sha8>.apk` with sha256 host + device → ASK before install → device test: Components › mono-10.1.0 (catalog main) on a container, then a managed .NET exe; 10.4.1 needs the catalog branch merged (or a test container pointed at the branch catalog). Then the user's go for both merges.
 >
-> **Proof level:** host-tested; CI building; NOT device-tested.
+> **Proof level:** host-tested + CI-green; NOT device-tested.
 
 ## 2026-10-24 — Wine locale fix for CJK games (fix/cjk-locale, MERGED, NOT device-tested)
 > - **Why:** report from xxydbc (BannerHub Discord): GBK games show garbled text (code page 1252) on our Proton 10/11 layers. Cause: Android's setlocale(…, "") always answers "C.UTF-8"; Wine's unix_to_win_locale() falls back to LC_ALL only for exactly "C", so it picked en-US / 1252.
