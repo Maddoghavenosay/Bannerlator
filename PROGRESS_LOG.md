@@ -20,7 +20,11 @@
 >
 > **CI.** Run 40416469977, headSha `27af06b6` = pushed commit; jobs pubg/standard/ludashi/antutu all success; pubg log: `compilePubgReleaseKotlin` + `compilePubgReleaseJavaWithJavac` ran, `BUILD SUCCESSFUL in 6m 9s`; skipped steps are cache hits and main-only cache saves. The new error text is in the APK's classes3.dex.
 >
-> **Staged.** `/sdcard/Download/Bannerlator-offline-msi-mono-27af06b6.apk` sha256 `4fffdf51…cfee6d4` (host = device). Installed build before the test: 3.1.7-pre4 (lastUpdateTime 10-24 18:38), base.apk sha256 `7084e973…80440b`, backed up to `/sdcard/Download/Bannerlator-installed-before-offline-msi-mono-7084e973.apk`. Waiting for the user's OK to install.
+> **Staged.** `/sdcard/Download/Bannerlator-offline-msi-mono-27af06b6.apk` sha256 `4fffdf51…cfee6d4` (host = device). Installed build before the test: 3.1.7-pre4 (lastUpdateTime 10-24 18:38), base.apk sha256 `7084e973…80440b`, backed up to `/sdcard/Download/Bannerlator-installed-before-offline-msi-mono-7084e973.apk`. User OK'd the install and making the catalog fix live (2026-10-26).
+>
+> **Catalog live.** winlator-contents main fast-forwarded `b32ae4fe` → `37fc846f` (backup ref `refs/backup/20261026/main-before-mono-10.4.1`); raw `components.json` on main serves `wine-mono-10.4.1-x86.msi` / `E879A025…`. Note: the released 3.1.7-pre4 asks for `mono-10.4.1` first for EA setup, so EA installs on the release now get the real 10.4.1 (untested with EA); this branch asks for 10.1.0 first.
+>
+> **Installed.** `pm install -r` of the staged APK: Success; installed base.apk sha256 `4fffdf51…` = staged. logcat cleared, capture running to `/sdcard/Download/.mono-test-logcat.txt` (OfflineComponents, ComponentUndo, crashes). Before the test both containers have Mono 10.1.0 (`bin/libmono-2.0-x86.dll` 3,738,112 bytes; 10.4.1's is 3,741,696).
 >
 > **Next.** CI run 40416469977 (headSha `27af06b6` asserted) → stage pubg APK `/sdcard/Download/Bannerlator-offline-msi-mono-<sha8>.apk` with sha256 host + device → ASK before install → device test: Components › mono-10.1.0 (catalog main) on a container, then a managed .NET exe; 10.4.1 needs the catalog branch merged (or a test container pointed at the branch catalog). Then the user's go for both merges.
 >
