@@ -30,6 +30,8 @@
 >
 > **Official APK on the device (2026-10-27).** User: "yes install the official 3.1.7". Staging the published pubg APK (`564c6a79…`, byte-identical to the release asset digest) as `/sdcard/Download/Bannerlator-3.1.7-pubg-564c6a79.apk` (host = device = release digest). `pm install -r` Success; installed base.apk sha256 `564c6a79…`, versionCode 103 / 3.1.7. The device now runs the published release.
 >
+> **Release page link preview (2026-10-27).** Telegram showed an empty bubble for the 3.1.7 link: GitHub's og:description is the page's first text, and the logo + 7 badge lines came out as 6 blank lines before "Bannerlator 3.1.7" (3.1.5: 3, pre4: 4, 3.1.6: 5). User: "just hand edit the release description" / "hand fix it in place". Live 3.1.7 description edited in place (`gh release edit --notes-file`): the badge block moved below the title + intro line, on one line; same 8 images and text otherwise. Tag/assets/Latest unchanged. og:description now starts "Bannerlator 3.1.7 / Run Windows apps and games on Android…". Repo `docs/releases/3.1.7.md`, the template (`new_release_notes.py`) and the layout check were not changed (user chose the hand fix only); local branch `fix/release-page-preview` has the same move uncommitted, never pushed.
+>
 > **Next.** Branches release/3.1.7, feat/release-notes-3.1.7, fix/mono-clear-old, fix/offline-msi-mono kept until the user says.
 >
 > **Proof level:** RELEASED; RC device-proven (smoke test); published APK/patches/manifests verified; in-app patch update host-verified, not device-tested.
