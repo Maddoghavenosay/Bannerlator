@@ -28,6 +28,8 @@
 >
 > **Device.** The RC (`74060d5b…`, vc103) stays installed; same source as the release except docs, but not the same bytes. The updater compares versionCode, so it won't offer 3.1.7 over it. The in-app small update was checked on the host (exact rebuild), not on the device.
 >
+> **Official APK on the device (2026-10-27).** User: "yes install the official 3.1.7". Staging the published pubg APK (`564c6a79…`, byte-identical to the release asset digest) as `/sdcard/Download/Bannerlator-3.1.7-pubg-564c6a79.apk` and installing over the RC.
+>
 > **Next.** Branches release/3.1.7, feat/release-notes-3.1.7, fix/mono-clear-old, fix/offline-msi-mono kept until the user says.
 >
 > **Proof level:** RELEASED; RC device-proven (smoke test); published APK/patches/manifests verified; in-app patch update host-verified, not device-tested.
