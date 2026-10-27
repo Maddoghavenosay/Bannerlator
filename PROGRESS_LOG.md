@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-27 — 🏷️ 3.1.7 stable prep (release/3.1.7, RC device-tested, NOT released)
+## 2026-10-27 — 🏷️ 3.1.7 stable RELEASED (tag `3.1.7` @ `14615841`, Latest)
 
 > **Why.** User: "prep 3.1.7 stable, make sure it covers all new work since 3.1.6 and pre releases" (2026-10-27; first asked for "3.2.0", then corrected to 3.1.7; "make it stable"). No tag, release or asset until the user says cut.
 >
@@ -22,9 +22,15 @@
 >
 > **Cut (2026-10-27).** User: "cut it". main fast-forwarded to this branch (backup ref `refs/backup/20261027/main-before-3.1.7` = `610fd1bc`; same way as 3.1.6 `6bd20841` and pre4 `83942dfe`: release commit on main's first-parent line), then release.yml on main: release_tag 3.1.7, release_title "Bannerlator 3.1.7", release_number 3.1.7, make_prerelease false. Nothing pushed to main while it runs.
 >
-> **Next.** Verify the release: tag == built commit, 4 APKs + update.json, notes page, Latest, manifest update.json/update-pre.json, patches in Bannerlator-updates. The in-app small update (patch) can only be tested after the release.
+> **Released.** release.yml run 40474530841 (headSha `14615841` = pushed main), 08:35→09:01 UTC: notes, build ×4 (pubg/ludashi/standard/antutu `BUILD SUCCESSFUL` 6m29s / 6m38s / 4m7s / 5m17s), patches ×4 ("made 8 patches" each, no rebuild warnings), release all success. Only warnings: GitHub's Node 20 / setup-java v4 deprecation notes.
 >
-> **Proof level:** CI green, notes dry run green, DEVICE-PROVEN smoke test (install over vc102, version, one game, one Xbox launch); updater patch path not tested; nothing released.
+> **Verified after the release.** Tag `3.1.7` → `14615841` = built commit = main. Release "Bannerlator 3.1.7", prerelease false, draft false, **Latest = 3.1.7** (was 3.1.6). Assets: 4 APKs (pubg 574,582,504 bytes, sha256 `564c6a79…`; standard `fdc3aaec…`; ludashi `1d825814…`; antutu `a20059a8…`) + update.json. Page = `docs/releases/3.1.7.md` exactly + "Every change since 3.1.6 — 165 merged" before Credits; no TODO. Manifest branch `126ecdba` "manifest: 3.1.7": update.json == update-pre.json == the release asset; versionCode 103, versionName 3.1.7, 5 highlights, apkSha256 = the asset digests, 32 patches (8 releases × 4 flavors, 3.1.6-pre1 … 3.1.7-pre4). Bannerlator-updates release `3.1.7`: 32 assets, names/sizes/sha256 = update.json; older patch releases pruned ("keeping patch releases 3.1.7 and 3.1.7"). Host check from the live URLs: pubg patches from 3.1.7-pre4 (31.7 MB) and 3.1.6 (136.2 MB) both rebuild `564c6a79…` exactly; that APK's badging = com.tencent.ig versionCode 103 / 3.1.7.
+>
+> **Device.** The RC (`74060d5b…`, vc103) stays installed; same source as the release except docs, but not the same bytes. The updater compares versionCode, so it won't offer 3.1.7 over it. The in-app small update was checked on the host (exact rebuild), not on the device.
+>
+> **Next.** Branches release/3.1.7, feat/release-notes-3.1.7, fix/mono-clear-old, fix/offline-msi-mono kept until the user says.
+>
+> **Proof level:** RELEASED; RC device-proven (smoke test); published APK/patches/manifests verified; in-app patch update host-verified, not device-tested.
 
 ## 2026-10-27 — 🧩 Installing a Wine Mono clears the earlier version's leftovers (MERGED main `80746813`, DEVICE-PROVEN)
 
