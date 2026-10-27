@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-27 — 🧩 Installing a Wine Mono clears the earlier version's leftovers (fix/mono-clear-old, CI running, NOT device-tested)
+## 2026-10-27 — 🧩 Installing a Wine Mono clears the earlier version's leftovers (fix/mono-clear-old, CI green, installing for device test)
 
 > **Why.** User: "make it clear out the old Mono first" (2026-10-27). After the 10-26 fix, installing a newer Mono over an older one left the old version's extra files (Container-2 after 10.1.0 → 10.4.1: `lib/mono/gac/WineMono.FNA/25.4.0.0__…` (2 files) beside 10.4.1's 25.11.0.0). The catalog's `uninstall` / "Wine Mono" step was a no-op offline.
 >
@@ -8,7 +8,11 @@
 >
 > **Host test (app's Java, 7-Zip; old layout placed into a prefix, then removeStale + place).** 10.1.0→10.4.1: removed 2 (FNA 25.4), result = 10.4.1 layout exactly (2,921 files byte-identical, 0 extra, 0 empty folders), stub kept. 10.4.1→10.1.0: removed 3 (Xna Avatar, FNA 25.11). 8.0.0→10.4.1: removed 14 (FAudio/FNA3D/FNAMF…). 10.3.0→10.4.1: removed 2. 10.4.1→10.4.1: removed 0, placed 0. Outside `windows/mono` older versions' files are a subset of newer ones (8.0.0 lacks 6 msbuild.exe), so only a downgrade to 8.0.0 would leave those 6 small files.
 >
-> **CI.** Run 40443192131 dispatched on `fix/mono-clear-old`, headSha `5c236340` = pushed commit.
+> **CI.** Run 40443192131, headSha `5c236340` = pushed commit: pubg/standard/ludashi/antutu success; pubg log `compilePubgReleaseKotlin` + `compilePubgReleaseJavaWithJavac` ran, `BUILD SUCCESSFUL in 5m 58s`; skipped steps are cache hits / main-only saves. New log text is in the APK's classes3.dex.
+>
+> **Staged.** `/sdcard/Download/Bannerlator-mono-clear-old-5c236340.apk` sha256 `ea049192…3616ae` (host = device), vc102 / 3.1.7-pre4 numbers. Installed before: `4fffdf51…` (the 10-26 test build, copy on SD as `Bannerlator-offline-msi-mono-27af06b6.apk`). User said "yes install it when the build is done" (2026-10-27).
+>
+> **Before the device test (Container-2).** `windows/mono` 2,923 files (10.4.1's 2,921 + FNA 25.4.0.0's 2); gac/WineMono.FNA has 25.11.0.0 and 25.4.0.0; mono-10.4.1 journal has 257 backups.
 >
 > **Next.** CI green → stage pubg APK `/sdcard/Download/Bannerlator-mono-clear-old-5c236340.apk` (sha256 host + device) → ASK before install → device test: Components › mono-10.4.1 again on Container-2 (expect "removed 2 file(s) of the earlier Wine Mono", FNA 25.4 gone, journal holds them), logcat FATAL check → user's go to merge.
 >
