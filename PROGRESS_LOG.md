@@ -1,5 +1,19 @@
 # Star-Compose — Progress Log
 
+## 2026-10-27 — 🏷️ 3.1.7 stable prep (release/3.1.7, NOT released)
+
+> **Why.** User: "prep 3.1.7 stable, make sure it covers all new work since 3.1.6 and pre releases" (2026-10-27; first asked for "3.2.0", then corrected to 3.1.7; "make it stable"). No tag, release or asset until the user says cut.
+>
+> **Scope checked.** `scripts/release_notes.py` change list 3.1.6..main: 163 entries; all four 3.1.7-pre tags are ancestors of main. After pre4 (`83942dfe`): refresh-unlock EmulateModeset `ea07e522`, DroidDeck layer family `301facfe`, Xbox Cloud Gaming `5b868f86` + native player `a73140d7` / `6c44c331` / `94758b23`, #627 ARM64 VC++ `4857a48d`, CJK locale `defb2b9f`, Wine Mono `93a8e8ff` + `80746813`. Also new since 3.1.6 but never written up: unsaved-edits prompt, Win-FG model list, MIDI SoundFont saved, VEGAS sheet (Sept 29 commits on the Deck line, not in 3.1.6). The Select+Start chord was removed again in `a1fe75b8` (not mentioned). Layers v15 (proton-wine `build-bionic-layers-20261023-v15`) are in the catalog and get a section.
+>
+> **Built (`6c4d45b7`).** versionCode 102 → 103, versionName 3.1.7; `docs/releases/3.1.7.md` from the feat/release-notes-3.1.7 draft (10-23) + pre4's published text + everything after pre4; README 3.1.7 section, pre sections relabelled "(3.1.7)" with "First in", version row, credits rows for Greenlight (UnknownSKL) and Better xCloud (redphx), MGamer404 #627. Local `release_notes.py 3.1.7`: layout OK; one `TODO(notes)` left for the patch size.
+>
+> **CI.** Run 40446693933 on `release/3.1.7`, headSha `6c4d45b7` = pushed commit.
+>
+> **Next.** CI green → patch size from 3.1.6 / pre4 (apk_delta.py) → fill the TODO → notes dry run → stage pubg APK, ASK before install → device smoke test → user's go → release commit onto main (backup ref) → user says cut → release.yml (release_tag 3.1.7, make_prerelease false).
+>
+> **Proof level:** notes layout checked locally; build pending; nothing released.
+
 ## 2026-10-27 — 🧩 Installing a Wine Mono clears the earlier version's leftovers (MERGED main `80746813`, DEVICE-PROVEN)
 
 > **Why.** User: "make it clear out the old Mono first" (2026-10-27). After the 10-26 fix, installing a newer Mono over an older one left the old version's extra files (Container-2 after 10.1.0 → 10.4.1: `lib/mono/gac/WineMono.FNA/25.4.0.0__…` (2 files) beside 10.4.1's 25.11.0.0). The catalog's `uninstall` / "Wine Mono" step was a no-op offline.
