@@ -1,5 +1,19 @@
 # Star-Compose — Progress Log
 
+## 2026-10-27 — 🧩 Installing a Wine Mono clears the earlier version's leftovers (fix/mono-clear-old, CI running, NOT device-tested)
+
+> **Why.** User: "make it clear out the old Mono first" (2026-10-27). After the 10-26 fix, installing a newer Mono over an older one left the old version's extra files (Container-2 after 10.1.0 → 10.4.1: `lib/mono/gac/WineMono.FNA/25.4.0.0__…` (2 files) beside 10.4.1's 25.11.0.0). The catalog's `uninstall` / "Wine Mono" step was a no-op offline.
+>
+> **Built (`5c236340`).** `PrefixPlacer.removeStale(fresh, old, before)`: deletes the files under the prefix's folder that the new layout does not have (case-insensitive), calls `before` on each first, removes folders that become empty. `OfflineComponentInstaller.installOne`: for a component with an `uninstall` "Wine Mono" step, `clearOldMono` runs it on `windows/mono` right before placing, with `journal.beforeWrite` so uninstalling the component restores the removed files (hard-link backups). Nothing happens when the component brings no Mono (the dotnet* entries also carry the step; their stage has no `windows/mono`). Wine's placeholder DLLs under Microsoft.NET (the 14 "Wine builtin DLL" stubs INSTALLFAKEDLLS made) are kept: same for every version, can't be made offline. Old product registration (Uninstall/Installer keys of the msiexec-installed 10.1.0) is left as it was.
+>
+> **Host test (app's Java, 7-Zip; old layout placed into a prefix, then removeStale + place).** 10.1.0→10.4.1: removed 2 (FNA 25.4), result = 10.4.1 layout exactly (2,921 files byte-identical, 0 extra, 0 empty folders), stub kept. 10.4.1→10.1.0: removed 3 (Xna Avatar, FNA 25.11). 8.0.0→10.4.1: removed 14 (FAudio/FNA3D/FNAMF…). 10.3.0→10.4.1: removed 2. 10.4.1→10.4.1: removed 0, placed 0. Outside `windows/mono` older versions' files are a subset of newer ones (8.0.0 lacks 6 msbuild.exe), so only a downgrade to 8.0.0 would leave those 6 small files.
+>
+> **CI.** Run 40443192131 dispatched on `fix/mono-clear-old`, headSha `5c236340` = pushed commit.
+>
+> **Next.** CI green → stage pubg APK `/sdcard/Download/Bannerlator-mono-clear-old-5c236340.apk` (sha256 host + device) → ASK before install → device test: Components › mono-10.4.1 again on Container-2 (expect "removed 2 file(s) of the earlier Wine Mono", FNA 25.4 gone, journal holds them), logcat FATAL check → user's go to merge.
+>
+> **Proof level:** host-tested; compiled/CI pending; NOT device-tested.
+
 ## 2026-10-26 — 🧩 Components can install Wine Mono again (MERGED main `93a8e8ff`, DEVICE-PROVEN install of 10.4.1; .NET program run not tested yet)
 
 > **Why.** On the device (3.1.7-pre4) Components › mono-10.4.1 failed: "Couldn't install mono-10.4.1: the package installs nothing here". Every Mono entry fails the same way (mono 8.0.0, 10.1.0, 10.3.0 checked on the host with main's own code).
