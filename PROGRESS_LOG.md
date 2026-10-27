@@ -8,11 +8,17 @@
 >
 > **Built (`6c4d45b7`).** versionCode 102 → 103, versionName 3.1.7; `docs/releases/3.1.7.md` from the feat/release-notes-3.1.7 draft (10-23) + pre4's published text + everything after pre4; README 3.1.7 section, pre sections relabelled "(3.1.7)" with "First in", version row, credits rows for Greenlight (UnknownSKL) and Better xCloud (redphx), MGamer404 #627. Local `release_notes.py 3.1.7`: layout OK; one `TODO(notes)` left for the patch size.
 >
-> **CI.** Run 40446693933 on `release/3.1.7`, headSha `6c4d45b7` = pushed commit.
+> **CI.** Run 40446693933 on `release/3.1.7`, headSha `6c4d45b7` = pushed commit: pubg/standard/ludashi/antutu success, pubg `BUILD SUCCESSFUL in 6m 2s`. APK reports versionCode 103 / 3.1.7.
 >
-> **Next.** CI green → patch size from 3.1.6 / pre4 (apk_delta.py) → fill the TODO → notes dry run → stage pubg APK, ASK before install → device smoke test → user's go → release commit onto main (backup ref) → user says cut → release.yml (release_tag 3.1.7, make_prerelease false).
+> **Update size (apk_delta.py, pubg, against the published APKs).** 3.1.6 → 3.1.7: patch 136.25 MB (literal 138.8 MB, copied 435.8 MB); 3.1.7-pre4 → 3.1.7: 31.69 MB; both `apply` checks rebuilt sha256 `74060d5b…` exactly. Full APK 574.6 MB. Filled into the notes (`aa5e2ae6`); the release build's own patches will differ slightly.
 >
-> **Proof level:** notes layout checked locally; build pending; nothing released.
+> **Notes dry run.** Local `release_notes.py 3.1.7`: layout OK, 5 highlights; workflow run 40447686720 on `aa5e2ae6`: success, "layout OK, 165 changes since 3.1.6 appended" (the page's change list includes 16 Mali-report data commits, as 3.1.6's had 6 — left as is).
+>
+> **Staged.** `/sdcard/Download/Bannerlator-3.1.7-rc-6c4d45b7.apk` sha256 `74060d5b…aaf36ee` (host = device). Installed now: `ea049192…` (mono-clear-old test build).
+>
+> **Next.** ASK before install → device smoke test → user's go → release commit onto main (backup ref) → user says cut → release.yml (release_tag 3.1.7, make_prerelease false).
+>
+> **Proof level:** CI green, notes dry run green; NOT device-tested; nothing released.
 
 ## 2026-10-27 — 🧩 Installing a Wine Mono clears the earlier version's leftovers (MERGED main `80746813`, DEVICE-PROVEN)
 
