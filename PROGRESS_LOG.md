@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-27 — 🏷️ 3.1.7 stable prep (release/3.1.7, NOT released)
+## 2026-10-27 — 🏷️ 3.1.7 stable prep (release/3.1.7, RC device-tested, NOT released)
 
 > **Why.** User: "prep 3.1.7 stable, make sure it covers all new work since 3.1.6 and pre releases" (2026-10-27; first asked for "3.2.0", then corrected to 3.1.7; "make it stable"). No tag, release or asset until the user says cut.
 >
@@ -18,9 +18,11 @@
 >
 > **Install (2026-10-27).** User: "yes install it". Installing the RC over `ea049192…` (vc102); smoke test: version shows 3.1.7, a container + one game launch, Xbox tab; logcat checked for FATAL.
 >
-> **Next.** Device smoke test → user's go → release commit onto main (backup ref) → user says cut → release.yml (release_tag 3.1.7, make_prerelease false).
+> **Device smoke test (2026-10-27, Pocket FIT).** `pm install -r` Success; installed base.apk sha256 `74060d5b…` = staged, versionCode 103 / versionName 3.1.7. User: "done, it shows 3.1.7 and the game ran fine". Log (`/sdcard/Download/bannerlator/3.1.7-rc-smoke-logcat-20261027.txt`, main+system+crash): DiRT Showdown on Container 1 (04:30:42, Wayland, Direct XInput on) ran ~26 s; Xbox store game BALL x PIT (`9MWXF3SRD7QN`, 04:31:17) launch prepared, ran ~20 s, `save sync on exit: no save helper running`, `launch released`. The two app-process ends (04:31:09, 04:31:42) are the normal game-exit path: `AppUtils.restartApplication` (`core/AppUtils.java:72-77`, restart intent flg 0x10008000 then exit(0)), each followed by MainActivity. No AndroidRuntime/FATAL/Fatal signal for com.tencent.ig; crash buffer only has a Magisk app crash (BadParcelableException), not ours. ANR loop of `com.qti.diagservices` (system app, every 20 s) predates the install (dropbox system_app_anr from 00:46). App E/ lines = LSFG layer "missing some instance enumeration functions", adrenotools mapping flag, libjpeg namespace — same libraries ship in 3.1.6 and pre4 (layer 596,096 bytes in both; libwinlator asks for libjpeg.so in both).
 >
-> **Proof level:** CI green, notes dry run green; NOT device-tested; nothing released.
+> **Next.** User's go → release commit onto main (backup ref) → user says cut → release.yml (release_tag 3.1.7, make_prerelease false). The in-app small update (patch) can only be tested after the release.
+>
+> **Proof level:** CI green, notes dry run green, DEVICE-PROVEN smoke test (install over vc102, version, one game, one Xbox launch); updater patch path not tested; nothing released.
 
 ## 2026-10-27 — 🧩 Installing a Wine Mono clears the earlier version's leftovers (MERGED main `80746813`, DEVICE-PROVEN)
 
