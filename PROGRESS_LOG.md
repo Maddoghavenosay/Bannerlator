@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-27 — 🧩 Installing a Wine Mono clears the earlier version's leftovers (fix/mono-clear-old, DEVICE-PROVEN, not merged)
+## 2026-10-27 — 🧩 Installing a Wine Mono clears the earlier version's leftovers (MERGED main `80746813`, DEVICE-PROVEN)
 
 > **Why.** User: "make it clear out the old Mono first" (2026-10-27). After the 10-26 fix, installing a newer Mono over an older one left the old version's extra files (Container-2 after 10.1.0 → 10.4.1: `lib/mono/gac/WineMono.FNA/25.4.0.0__…` (2 files) beside 10.4.1's 25.11.0.0). The catalog's `uninstall` / "Wine Mono" step was a no-op offline.
 >
@@ -18,9 +18,9 @@
 >
 > **Device test (2026-10-27, Pocket FIT, installed APK `ea049192…`).** User reinstalled Components › mono-10.4.1 on Container-2. Log: `reverted mono-10.4.1: 260 file(s), 1 value(s), 0 left` (the reinstall takes the old install out first, which put 10.1.0's replaced files back), `msi [winemono-support.msi, mono-10.4.1-1.msi] files=2949 registry=91`, **`removed 2 file(s) of the earlier Wine Mono`**, `1 registry value(s) written`, same three setup-action notes. After: `windows/mono` 2,921 files (= 10.4.1 layout; was 2,923), gac/WineMono.FNA holds only 25.11.0.0 (25.4.0.0 folder gone), Wine stub `Microsoft.NET/Framework/v4.0.30319/fusion.dll` kept (10-23 date). Journal: the two FNA 25.4 files with backups 0/1 and size -1 (uninstall puts them back); 259 backups. One empty folder `lib/mono/4.0` remains, dated 10-23 (made by the real msiexec 10.1.0 install, not by this change). Crash buffer empty, no FATAL/AndroidRuntime lines; logcat kept at `/sdcard/Download/bannerlator/mono-clear-old-test-logcat-20261027.txt`.
 >
-> **Next.** User's go to merge `fix/mono-clear-old` into main (backup ref first, `--no-ff`, tree = tested `5c236340` + log). Still open from 10-26: a .NET program run on the offline-installed Mono.
+> **Merged (user's go, 2026-10-27).** `--no-ff` merge `80746813` of `fix/mono-clear-old` (`6931d2be`) into main (`bc1139b9`, no drift), backup ref `refs/backup/20261027/main-before-mono-clear-old`. Merged tree = the device-tested build `5c236340` plus PROGRESS_LOG.md only. Main CI run 40444989929 on `80746813`: pubg/standard/ludashi/antutu success, pubg `BUILD SUCCESSFUL in 3m 59s`. Branch and worktree kept. Still open from 10-26: a .NET program run on the offline-installed Mono.
 >
-> **Proof level:** host-tested, CI green, DEVICE-PROVEN (upgrade path 10.1.0 leftovers → 10.4.1 on Container-2); uninstall-restores-removed-files path not run on the device; NOT merged.
+> **Proof level:** host-tested, CI green, DEVICE-PROVEN (upgrade path 10.1.0 leftovers → 10.4.1 on Container-2); uninstall-restores-removed-files path not run on the device; merged, main CI green.
 
 ## 2026-10-26 — 🧩 Components can install Wine Mono again (MERGED main `93a8e8ff`, DEVICE-PROVEN install of 10.4.1; .NET program run not tested yet)
 
