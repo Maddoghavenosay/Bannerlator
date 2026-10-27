@@ -16,7 +16,9 @@
 >
 > **Staged.** `/sdcard/Download/Bannerlator-3.1.7-rc-6c4d45b7.apk` sha256 `74060d5b…aaf36ee` (host = device). Installed now: `ea049192…` (mono-clear-old test build).
 >
-> **Next.** ASK before install → device smoke test → user's go → release commit onto main (backup ref) → user says cut → release.yml (release_tag 3.1.7, make_prerelease false).
+> **Install (2026-10-27).** User: "yes install it". Installing the RC over `ea049192…` (vc102); smoke test: version shows 3.1.7, a container + one game launch, Xbox tab; logcat checked for FATAL.
+>
+> **Next.** Device smoke test → user's go → release commit onto main (backup ref) → user says cut → release.yml (release_tag 3.1.7, make_prerelease false).
 >
 > **Proof level:** CI green, notes dry run green; NOT device-tested; nothing released.
 
