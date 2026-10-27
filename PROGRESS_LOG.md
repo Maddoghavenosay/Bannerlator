@@ -26,9 +26,9 @@
 >
 > **Verified after the release.** Tag `3.1.7` → `14615841` = built commit = main. Release "Bannerlator 3.1.7", prerelease false, draft false, **Latest = 3.1.7** (was 3.1.6). Assets: 4 APKs (pubg 574,582,504 bytes, sha256 `564c6a79…`; standard `fdc3aaec…`; ludashi `1d825814…`; antutu `a20059a8…`) + update.json. Page = `docs/releases/3.1.7.md` exactly + "Every change since 3.1.6 — 165 merged" before Credits; no TODO. Manifest branch `126ecdba` "manifest: 3.1.7": update.json == update-pre.json == the release asset; versionCode 103, versionName 3.1.7, 5 highlights, apkSha256 = the asset digests, 32 patches (8 releases × 4 flavors, 3.1.6-pre1 … 3.1.7-pre4). Bannerlator-updates release `3.1.7`: 32 assets, names/sizes/sha256 = update.json; older patch releases pruned ("keeping patch releases 3.1.7 and 3.1.7"). Host check from the live URLs: pubg patches from 3.1.7-pre4 (31.7 MB) and 3.1.6 (136.2 MB) both rebuild `564c6a79…` exactly; that APK's badging = com.tencent.ig versionCode 103 / 3.1.7.
 >
-> **Device.** The RC (`74060d5b…`, vc103) stays installed; same source as the release except docs, but not the same bytes. The updater compares versionCode, so it won't offer 3.1.7 over it. The in-app small update was checked on the host (exact rebuild), not on the device.
+> **Device.** The RC (`74060d5b…`, vc103) was installed at release time (same source except docs; the updater compares versionCode, so it wouldn't offer 3.1.7 over it) — replaced by the official APK below. The in-app small update was checked on the host (exact rebuild), not on the device.
 >
-> **Official APK on the device (2026-10-27).** User: "yes install the official 3.1.7". Staging the published pubg APK (`564c6a79…`, byte-identical to the release asset digest) as `/sdcard/Download/Bannerlator-3.1.7-pubg-564c6a79.apk` and installing over the RC.
+> **Official APK on the device (2026-10-27).** User: "yes install the official 3.1.7". Staging the published pubg APK (`564c6a79…`, byte-identical to the release asset digest) as `/sdcard/Download/Bannerlator-3.1.7-pubg-564c6a79.apk` (host = device = release digest). `pm install -r` Success; installed base.apk sha256 `564c6a79…`, versionCode 103 / 3.1.7. The device now runs the published release.
 >
 > **Next.** Branches release/3.1.7, feat/release-notes-3.1.7, fix/mono-clear-old, fix/offline-msi-mono kept until the user says.
 >
