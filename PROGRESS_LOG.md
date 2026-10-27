@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-27 — 🧩 Installing a Wine Mono clears the earlier version's leftovers (fix/mono-clear-old, CI green, installing for device test)
+## 2026-10-27 — 🧩 Installing a Wine Mono clears the earlier version's leftovers (fix/mono-clear-old, DEVICE-PROVEN, not merged)
 
 > **Why.** User: "make it clear out the old Mono first" (2026-10-27). After the 10-26 fix, installing a newer Mono over an older one left the old version's extra files (Container-2 after 10.1.0 → 10.4.1: `lib/mono/gac/WineMono.FNA/25.4.0.0__…` (2 files) beside 10.4.1's 25.11.0.0). The catalog's `uninstall` / "Wine Mono" step was a no-op offline.
 >
@@ -14,9 +14,13 @@
 >
 > **Before the device test (Container-2).** `windows/mono` 2,923 files (10.4.1's 2,921 + FNA 25.4.0.0's 2); gac/WineMono.FNA has 25.11.0.0 and 25.4.0.0; mono-10.4.1 journal has 257 backups.
 >
-> **Next.** CI green → stage pubg APK `/sdcard/Download/Bannerlator-mono-clear-old-5c236340.apk` (sha256 host + device) → ASK before install → device test: Components › mono-10.4.1 again on Container-2 (expect "removed 2 file(s) of the earlier Wine Mono", FNA 25.4 gone, journal holds them), logcat FATAL check → user's go to merge.
+> **Installed.** `pm install -r` Success; installed base.apk sha256 `ea049192…` = staged. logcat cleared, capture of OfflineComponents/ComponentUndo/AndroidRuntime/DEBUG/libc.
 >
-> **Proof level:** host-tested; compiled/CI pending; NOT device-tested.
+> **Device test (2026-10-27, Pocket FIT, installed APK `ea049192…`).** User reinstalled Components › mono-10.4.1 on Container-2. Log: `reverted mono-10.4.1: 260 file(s), 1 value(s), 0 left` (the reinstall takes the old install out first, which put 10.1.0's replaced files back), `msi [winemono-support.msi, mono-10.4.1-1.msi] files=2949 registry=91`, **`removed 2 file(s) of the earlier Wine Mono`**, `1 registry value(s) written`, same three setup-action notes. After: `windows/mono` 2,921 files (= 10.4.1 layout; was 2,923), gac/WineMono.FNA holds only 25.11.0.0 (25.4.0.0 folder gone), Wine stub `Microsoft.NET/Framework/v4.0.30319/fusion.dll` kept (10-23 date). Journal: the two FNA 25.4 files with backups 0/1 and size -1 (uninstall puts them back); 259 backups. One empty folder `lib/mono/4.0` remains, dated 10-23 (made by the real msiexec 10.1.0 install, not by this change). Crash buffer empty, no FATAL/AndroidRuntime lines; logcat kept at `/sdcard/Download/bannerlator/mono-clear-old-test-logcat-20261027.txt`.
+>
+> **Next.** User's go to merge `fix/mono-clear-old` into main (backup ref first, `--no-ff`, tree = tested `5c236340` + log). Still open from 10-26: a .NET program run on the offline-installed Mono.
+>
+> **Proof level:** host-tested, CI green, DEVICE-PROVEN (upgrade path 10.1.0 leftovers → 10.4.1 on Container-2); uninstall-restores-removed-files path not run on the device; NOT merged.
 
 ## 2026-10-26 — 🧩 Components can install Wine Mono again (MERGED main `93a8e8ff`, DEVICE-PROVEN install of 10.4.1; .NET program run not tested yet)
 
