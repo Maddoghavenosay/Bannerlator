@@ -61,6 +61,7 @@ import com.winlator.star.core.DInputVisibility
 import com.winlator.star.core.RumbleMotors
 import com.winlator.star.core.StickPacing
 import com.winlator.star.core.DirectAudioSupport
+import com.winlator.star.core.MoveGameToContainer
 import com.winlator.star.core.SyncMode
 import com.winlator.star.core.SyncSupport
 import com.winlator.star.core.StringUtils
@@ -185,6 +186,8 @@ private fun generalRows(xmb: XmbScope, p: XmbPrefs, host: XmbGameHost): List<Xmb
         value = if (onC) "SD card / USB storage" else "Current drive", subtitle = "Move to Drive C") { xmbCopyToDriveCMenu(xmb, s) }
     rows += XmbRow.Link("exe", "Executable", Icons.Filled.SwapHoriz,
         value = File(s.path ?: "").name.ifEmpty { "Unknown" }, subtitle = "Pick another .exe") { xmbChangeExeMenu(xmb, s) }
+    rows += XmbRow.Link("container", p.str(R.string.container), Icons.Filled.Widgets,
+        value = c.name, subtitle = "Move this game to another container") { xmbMoveToContainerMenu(xmb, s, host) }
     rows += XmbRow.Link("icon", "Icon", Icons.Filled.Image, subtitle = "Pick an image for this game") { iconPickerMenu(xmb, s) }
 
     if (s.getExtra("storeSource") == "epic") {
@@ -1063,12 +1066,43 @@ internal fun xmbPropertiesMenu(xmb: XmbScope, s: Shortcut): XmbMenu = XmbMenu("P
 // ── Clone / Remove ──────────────────────────────────────────────────────────────────────────────────
 
 internal fun xmbCloneMenu(xmb: XmbScope, s: Shortcut, host: XmbGameHost): XmbMenu = XmbMenu("Select container", Icons.Filled.ContentCopy) {
-    host.containers().mapIndexed { i, c ->
-        XmbRow.Action("c${c.id}_$i", c.name, Icons.Filled.Folder, subtitle = if (c.id == s.container.id) "Current container" else null) {
-            val ok = runCatching { s.cloneToContainer(c) }.getOrDefault(false)
-            xmb.toast(if (ok) "Shortcut cloned." else "Failed to clone shortcut.")
+    val others = host.containers().filter { it.id != s.container.id }
+    if (others.isEmpty()) XmbTools.para("none", NO_OTHER_CONTAINER_XMB, Icons.Filled.Info, context)
+    else others.mapIndexed { i, c ->
+        XmbRow.Action("c${c.id}_$i", c.name, Icons.Filled.Folder) { xmbMoveGame(xmb, s, c, keepCopy = true) }
+    }
+}
+
+private const val NO_OTHER_CONTAINER_XMB = "There's no other container. Create one in the Containers screen first."
+
+/** "Container": pick another container, then Move (default) or Copy. MoveGameToContainer does the work. */
+internal fun xmbMoveToContainerMenu(xmb: XmbScope, s: Shortcut, host: XmbGameHost): XmbMenu =
+    XmbMenu("Move to container", Icons.Filled.Widgets) {
+        val others = host.containers().filter { it.id != s.container.id }
+        if (others.isEmpty()) XmbTools.para("none", NO_OTHER_CONTAINER_XMB, Icons.Filled.Info, context)
+        else others.map { c ->
+            XmbRow.Link("c${c.id}", c.name, Icons.Filled.Widgets, subtitle = c.wineVersion) { xmbMoveChoiceMenu(xmb, s, c) }
+        }
+    }
+
+private fun xmbMoveChoiceMenu(xmb: XmbScope, s: Shortcut, c: Container): XmbMenu =
+    XmbMenu("Move to \"${c.name}\"", Icons.Filled.Widgets, initialKey = "move") {
+        listOf(
+            XmbRow.Action("move", "Move here", Icons.Filled.DriveFileMove,
+                subtitle = "Saves stored inside \"${s.container.name}\" stay there for now") { xmbMoveGame(xmb, s, c, keepCopy = false) },
+            XmbRow.Action("copy", "Copy here, keep it in \"${s.container.name}\"", Icons.Filled.ContentCopy) {
+                xmbMoveGame(xmb, s, c, keepCopy = true)
+            },
+        )
+    }
+
+private fun xmbMoveGame(xmb: XmbScope, s: Shortcut, c: Container, keepCopy: Boolean) {
+    xmb.scope.launch {
+        val r = withContext(Dispatchers.IO) { MoveGameToContainer.run(xmb.context, s, c, keepCopy) }
+        xmb.toast(MoveGameToContainer.message(r, s.name, c.name, keepCopy))
+        if (r is MoveGameToContainer.Result.Done) {
             xmb.popToRoot()
-            if (ok) xmb.reloadGames()
+            xmb.reloadGames()
         }
     }
 }

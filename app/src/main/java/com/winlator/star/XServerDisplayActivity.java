@@ -2735,6 +2735,14 @@ public class XServerDisplayActivity extends AppCompatActivity {
         // Construct the shortcut (if any) up front so per-game overrides (frame-gen engine, fps
         // limiter, renderer) can be resolved against it below; each falls back to the container value.
         if (shortcutPath != null && !shortcutPath.isEmpty()) {
+            // A home-screen icon can outlive its entry (game moved to another container or removed);
+            // an empty file would throw in the Shortcut constructor.
+            if (!new File(shortcutPath).isFile()) {
+                Log.e("XServerDisplayActivity", "Shortcut file missing: " + shortcutPath);
+                Toast.makeText(this, "This game isn't here anymore. It was moved to another container or removed.", Toast.LENGTH_LONG).show();
+                finish();
+                return;
+            }
             shortcut = new Shortcut(container, new File(shortcutPath));
         }
         // Fix the Goldberg cloud-sync decision now, for the whole session (see skipCloudForGoldberg()).
