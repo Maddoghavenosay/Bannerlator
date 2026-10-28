@@ -9,7 +9,9 @@
 > - Seen, not from this branch: after quitting, the game list shows "No shortcuts yet." for about a second while the restarted app loads (`ShortcutsScreen.kt:506`, unchanged vs main).
 > - Not tested yet: a real move (Keep a copy off), Deck, XMB, pin after a move, refusal while a game runs.
 >
-> **Fix (`84cfc556`).** `MoveGameToContainer.findSaves`: discovered folders now need SaveLocator score ≥ 70 (`SAVE_NAME_MATCH`: same name, or one name inside the other); remembered save_maps roots and the emulator app-id saves unchanged. For DiRT Showdown: "DiRT Showdown" 100 kept, "DiRT Rally 2.0" 50 dropped. The save vault's own use of `discover` is left as is (main behaviour). CI: pending.
+> **Fix (`84cfc556`).** `MoveGameToContainer.findSaves`: discovered folders now need SaveLocator score ≥ 70 (`SAVE_NAME_MATCH`: same name, or one name inside the other); remembered save_maps roots and the emulator app-id saves unchanged. For DiRT Showdown: "DiRT Showdown" 100 kept, "DiRT Rally 2.0" 50 dropped. The save vault's own use of `discover` is left as is (main behaviour); user asked whether to fix it separately, no answer yet. CI: run 40767167057 (headSha `a475a6fb` = pushed head) success ×4 (pubg/standard/ludashi/antutu). APK NOT staged yet: artifact download reset mid-transfer, user leaving Wi-Fi ("I'll download later when I get home").
+>
+> **Resume point.** Branch `feat/move-game-container` head `a475a6fb`. Next: download artifact `Bannerlator-move-game-container-a475a6fb-pubg` from run 40767167057 → stage `/sdcard/Download/Bannerlator-move-game-container-a475a6fb.apk` (sha256 host + device) → ask before install → test a real Move (Keep a copy off; different game, or remove the DiRT Showdown copy in Container-2 first), then Deck / XMB / pin / running refusal.
 
 > **Why.** Device test 1 (entry below): the copy of DiRT Showdown failed in Container-2 because OpenAL wasn't there. User: "I don't see redistributables followed though", then "yes start step 2".
 >
