@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-28 — 📦 Move a game to another container from its settings (branch `feat/move-game-container`, step 1 of 3, CI-green, NOT device-tested)
+## 2026-10-28 — 📦 Move a game to another container from its settings (branch `feat/move-game-container`, step 1 of 3, CI-green, copy device-proven, move not yet)
 
 > **Why.** User: "after making a game shortcut, could we possibly add the ability to select a different container to run it on?" Recon first (main `b74261e6`), then: "yes start step 1, keep copy off, copy old settings all on a new branch off main".
 >
@@ -18,9 +18,15 @@
 >
 > **Device test (plan).** Install only after the user says yes. Move a game from Container 1 to Container-2 and back (classic, Deck, XMB), launch it after each move; Keep-a-copy on → two entries, separate pins; pinned home-screen icon after a move opens the game; game running → move refused; logcat FATAL check.
 >
+> **Device test 1 (2026-10-28, Pocket FIT).** User installed the staged APK themselves ("I installed it"); installed base.apk sha256 `17c2cd77…` = staged (lastUpdateTime 14:32:52). User copied DiRT Showdown from Container 1 to Container-2 with Keep a copy ON (classic view). Files: both `.desktop` present; copy has every extra, `customCoverArtPath` re-pointed to `xuser-2/app_data/cover_arts/DiRT Showdown.png` (file copied, 952,957 bytes), 64px icon copied, Exec unchanged (`F:\…\showdown.exe`; F: = same SD path in both containers), no uuid (original was never pinned). User launched the copy at 14:33:48 in Container-2 (`home/xuser -> ./xuser-2`): wine_debug.log `err:module:import_dll Library OpenAL32.dll (which is needed by …showdown.exe) not found` → `c0000135`; app exited normally (exit-reasons: EXIT_SELF, exit code 0, `System.exit called, status: 0`). No FATAL/AndroidRuntime crash in logcat or the exit report.
+>
+> **User: "I don't see redistributables followed though."** Correct, expected for step 1 (step 2 = what-to-bring checklist). Measured: showdown.exe imports OpenAL32.dll, D3DCOMPILER_43, d3dx11_43, XINPUT1_3. Container 1 has native OpenAL32 (oalinst installed, journal `oalinst_dll`) in system32+syswow64; Container-2 has NO OpenAL32.dll → the failure above. The DirectX DLLs are native in both. **Stale record found:** `component_installs` `c2` lists `vcredist2022` but xuser-2 has no undo journal for it and its msvcp140.dll is Wine's builtin → a leftover from an earlier container id 2 (records `c3`/`c4` also exist with no containers). Step 2 must check the target's real files/journals, not the prefs record alone. The game folder ships its own installers in `_Redist` (oalinst.exe, vcredist x86/x64 + 2015-2019, dxwebsetup, dotNetFx40, xnafx40).
+>
+> **Still untested:** a real move (Keep a copy off), Deck hand-off, XMB, pinned icon after a move, refusal while a game runs, Clone.
+>
 > **Resume point.** Branch `feat/move-game-container` (worktree `/root/src/Bannerlator-wt/move-game-container`), code `ad0d41f9`, log head `8d9a30b1`. APK staged. Next: user's yes → `pm install -r` → device test above.
 >
-> **Proof level:** CI-green; NOT device-tested.
+> **Proof level:** CI-green; copy (Keep a copy) DEVICE-PROVEN at file level (classic view); the copied game can't start in Container-2 without OpenAL (step 2 scope); move/Deck/XMB/pins NOT device-tested.
 
 ## 2026-10-27 — 🏷️ 3.1.7 stable RELEASED (tag `3.1.7` @ `14615841`, Latest)
 
