@@ -41,6 +41,8 @@ import java.util.Locale
  */
 object MoveGameToContainer {
     private const val TAG = "MoveGameToContainer"
+    /** SaveLocator score for the same name or one name inside the other (token overlap is 50). */
+    private const val SAVE_NAME_MATCH = 70
     private val ICON_SIZES = intArrayOf(64, 48, 32, 16)
 
     /** The game's save folders in the source: profile-relative roots, plus emulator saves for [appId]. */
@@ -294,11 +296,17 @@ object MoveGameToContainer {
 
     // ---- saves ----------------------------------------------------------------------------------
 
-    /** The game's remembered save folders, else the discovered ones, plus its emulator saves (as the vault does). */
+    /**
+     * The game's remembered save folders, else the discovered ones that match its name outright,
+     * plus its emulator saves. A shared word alone ("DiRT Showdown" vs "DiRT Rally 2.0") is not
+     * enough here: the copy lands on the target's own folder of that name.
+     */
     private fun findSaves(source: Container, shortcut: Shortcut): Saves? {
         val key = SaveLocator.gameKey(shortcut.wmClass, shortcut.file.name)
         val roots = SaveLocator.loadMap(source, key)?.roots?.takeIf { it.isNotEmpty() }
-            ?: SaveLocator.discover(source, shortcut.name, shortcut.path ?: "", shortcut.wmClass ?: "").map { it.relPath }
+            ?: SaveLocator.discover(source, shortcut.name, shortcut.path ?: "", shortcut.wmClass ?: "")
+                .filter { it.score >= SAVE_NAME_MATCH }
+                .map { it.relPath }
         val appId = EmuSaveRoots.appIdFor(source, shortcut)
         if (roots.isEmpty() && appId == null) return null
         val parts = roots.map { it.trimEnd('/') } + listOfNotNull(appId?.let { "emulator saves for app $it" })
