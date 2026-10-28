@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-28 — 📦 Move a game to another container, step 2: what comes along (branch `feat/move-game-container`, NOT device-tested)
+## 2026-10-28 — 📦 Move a game to another container, step 2: what comes along (branch `feat/move-game-container`, CI-green, NOT device-tested)
 
 > **Why.** Device test 1 (entry below): the copy of DiRT Showdown failed in Container-2 because OpenAL wasn't there. User: "I don't see redistributables followed though", then "yes start step 2".
 >
@@ -8,13 +8,15 @@
 >
 > **Found while building.** `component_installs` `c2` claims vcredist2022 with no journal and Wine's builtin msvcp140 → target "has" is decided from journals/files, never the record alone.
 >
-> **CI.** pending.
+> **CI.** Run 40748563170 (headSha `ffc849f5` = pushed head): pubg/standard/ludashi/antutu success, pubg `BUILD SUCCESSFUL in 6m 18s`; only warning on changed lines = the existing `DriveFileMove` deprecation (XMB Move row).
+>
+> **Staged.** `/sdcard/Download/Bannerlator-move-game-container-ffc849f5.apk` sha256 `1289d4b1…6d943e92f` (host = device). Installed now: step-1 build `17c2cd77…`. Not installed — waiting for the user's yes.
 >
 > **Device test (plan).** Same DiRT Showdown pair: remove the copy in Container-2 first (or move a different game). Move C1 → C2 with saves + OpenAL ticked; launch in C2 (expect no OpenAL error; saves present); check `xuser-2/.bannerlator-component-undo/oalinst_dll/journal.json`, OpenAL32.dll in system32/syswow64, save files under `xuser-2/.wine/drive_c/users/xuser/…`; move back; logcat FATAL check.
 >
-> **Resume point.** Branch `feat/move-game-container`, code `73a0a67f`. Next: push, CI, stage, ask before install.
+> **Resume point.** Branch `feat/move-game-container`, code `73a0a67f`, APK staged. Next: user's yes → install → device test above.
 >
-> **Proof level:** written; not compiled yet; NOT device-tested.
+> **Proof level:** CI-green; NOT device-tested.
 
 ## 2026-10-28 — 📦 Move a game to another container from its settings (branch `feat/move-game-container`, step 1 of 3, CI-green, copy device-proven, move not yet)
 
