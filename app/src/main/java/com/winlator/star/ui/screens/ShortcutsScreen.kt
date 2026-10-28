@@ -1029,6 +1029,8 @@ internal fun ShortcutActionDialogs(actions: ShortcutActions) {
     MoveToContainerCoordinator(
         target = moveTarget,
         containers = { vm.containers() },
+        // Copied saves can carry an emulator account id the target already has a different one of.
+        onEmuConflicts = { emuConflicts = it },
         onFinished = { moveTarget = null; vm.refresh() },
     )
 
@@ -10184,14 +10186,17 @@ private const val NO_OTHER_CONTAINER = "There's no other container. Create one i
 
 /**
  * Shared coordinator for the editor's Container row and the Deck "Move to another container" hand-off.
- * Picks the target container and whether to keep a copy in this one (off: a move), shows why a choice
- * can't be used, and runs [MoveGameToContainer] off the main thread. [onFinished] clears [target] and
- * refreshes the list.
+ * Picks the target container and whether to keep a copy in this one (off: a move), then offers what
+ * can come along to that target ([MoveGameToContainer.plan]: saves, the game's C: folder, the extras
+ * the target lacks), shows why a choice can't be used, and runs [MoveGameToContainer] off the main
+ * thread. [onEmuConflicts] gets emulator account ids from the copied saves that differ from the
+ * target's. [onFinished] clears [target] and refreshes the list.
  */
 @Composable
 private fun MoveToContainerCoordinator(
     target: Shortcut?,
     containers: () -> List<Container>,
+    onEmuConflicts: (List<GameSaveBackup.EmuIdConflict>) -> Unit,
     onFinished: () -> Unit,
 ) {
     if (target == null) return
@@ -10200,14 +10205,37 @@ private fun MoveToContainerCoordinator(
     val others = remember(target) { containers().filter { it.id != target.container.id } }
     var chosen by remember(target) { mutableStateOf(others.singleOrNull()) }
     var keepCopy by remember(target) { mutableStateOf(false) }
+    // What can come along to the chosen container (null while it is worked out), and what is ticked.
+    var plan by remember(target) { mutableStateOf<MoveGameToContainer.Plan?>(null) }
+    var bringSaves by remember(target) { mutableStateOf(false) }
+    var bringFolder by remember(target) { mutableStateOf(false) }
+    var bringExtras by remember(target) { mutableStateOf(emptySet<String>()) }
     // Why the current choice can't be used (null = it can), checked off the main thread.
     var problem by remember(target) { mutableStateOf<String?>(null) }
     var checking by remember(target) { mutableStateOf(false) }
-    var busy by remember(target) { mutableStateOf(false) }
-    LaunchedEffect(chosen, keepCopy) {
+    // The step running now; non-null while the move runs.
+    var stage by remember(target) { mutableStateOf<String?>(null) }
+    val busy = stage != null
+
+    LaunchedEffect(chosen) {
         val c = chosen ?: return@LaunchedEffect
+        plan = null
+        val p = withContext(Dispatchers.IO) { MoveGameToContainer.plan(context, target, c) }
+        bringSaves = p.saves != null
+        bringFolder = p.gameFolder != null && p.gameFolder.problem == null
+        bringExtras = p.extras.filter { it.suggested && it.source != MoveGameToContainer.ExtraSource.UNAVAILABLE }.map { it.name }.toSet()
+        plan = p
+    }
+    val options = MoveGameToContainer.Options(
+        saves = bringSaves && plan?.saves != null,
+        gameFolder = bringFolder && plan?.gameFolder != null,
+        extras = bringExtras,
+    )
+    LaunchedEffect(chosen, keepCopy, plan, bringSaves, bringFolder, bringExtras) {
+        val c = chosen ?: return@LaunchedEffect
+        if (plan == null) return@LaunchedEffect
         checking = true
-        problem = withContext(Dispatchers.IO) { MoveGameToContainer.problem(context, target, c, keepCopy) }
+        problem = withContext(Dispatchers.IO) { MoveGameToContainer.problem(context, target, c, keepCopy, options, plan) }
         checking = false
     }
     val from = target.container.name
@@ -10238,41 +10266,76 @@ private fun MoveToContainerCoordinator(
                         }
                     }
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().clickable(enabled = !busy) { keepCopy = !keepCopy },
-                ) {
-                    Checkbox(checked = keepCopy, onCheckedChange = { keepCopy = it }, enabled = !busy)
-                    Text("Keep a copy in \"$from\"", color = OnSurface)
+                MoveBringRow(keepCopy, !busy, "Keep a copy in \"$from\"", null) { keepCopy = it }
+                val p = plan
+                if (chosen != null) {
+                    Text("Bring along", style = MaterialTheme.typography.labelMedium, color = OnSurface)
+                    if (p == null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Checking what this game uses…", style = MaterialTheme.typography.bodySmall, color = OnSurfaceVariant)
+                        }
+                    } else {
+                        MoveBringRow(
+                            bringSaves && p.saves != null, p.saves != null && !busy, "Saves",
+                            p.saves?.label ?: "No save folders found for this game",
+                        ) { bringSaves = it }
+                        p.gameFolder?.let { gf ->
+                            val size = android.text.format.Formatter.formatShortFileSize(context, gf.sizeBytes)
+                            MoveBringRow(
+                                bringFolder && gf.problem == null, gf.problem == null && !busy,
+                                "Game files (C:\\${gf.relPath.replace('/', '\\')})",
+                                gf.problem ?: if (keepCopy) "$size, copied" else "$size, moved (no copying)",
+                            ) { bringFolder = it }
+                        }
+                        if (p.extras.isEmpty()) {
+                            Text(
+                                "Extras: nothing this game needs is missing in \"${chosen?.name}\".",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OnSurfaceVariant,
+                            )
+                        }
+                        p.extras.forEach { e ->
+                            MoveBringRow(
+                                e.name in bringExtras, e.source != MoveGameToContainer.ExtraSource.UNAVAILABLE && !busy, e.label, e.note,
+                            ) { on -> bringExtras = if (on) bringExtras + e.name else bringExtras - e.name }
+                        }
+                    }
                 }
                 Text(
-                    "The game's settings, icon and cover art go with it. Saves stored inside \"$from\" stay there for now.",
+                    "The game's settings, icon and cover art always come along.",
                     style = MaterialTheme.typography.bodySmall,
                     color = OnSurfaceVariant,
                 )
                 problem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-                if (busy) {
+                stage?.let { s ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(8.dp))
-                        Text(if (keepCopy) "Copying…" else "Moving…", color = OnSurface)
+                        Text(s, color = OnSurface)
                     }
                 }
             }
         },
         confirmButton = {
             val c = chosen
+            val p = plan
             if (c != null) TextButton(
-                enabled = !busy && !checking && problem == null,
+                enabled = !busy && !checking && p != null && problem == null,
                 onClick = {
-                    busy = true
                     val copy = keepCopy
+                    val opts = options
+                    stage = if (copy) "Copying…" else "Moving…"
                     scope.launch {
-                        val r = withContext(Dispatchers.IO) { MoveGameToContainer.run(context, target, c, copy) }
-                        busy = false
+                        val r = withContext(Dispatchers.IO) {
+                            MoveGameToContainer.run(context, target, c, copy, opts, p) { s -> stage = s }
+                        }
+                        stage = null
                         when (r) {
                             is MoveGameToContainer.Result.Done -> {
                                 Toast.makeText(context, MoveGameToContainer.message(r, target.name, c.name, copy), Toast.LENGTH_LONG).show()
+                                if (r.emuConflicts.isNotEmpty()) onEmuConflicts(r.emuConflicts)
                                 onFinished()
                             }
                             is MoveGameToContainer.Result.Refused -> { problem = r.reason }
@@ -10283,6 +10346,21 @@ private fun MoveToContainerCoordinator(
         },
         dismissButton = { TextButton(enabled = !busy, onClick = onFinished) { Text("Cancel") } },
     )
+}
+
+/** One tick box of the move dialog, with a line under it saying what it means. */
+@Composable
+private fun MoveBringRow(checked: Boolean, enabled: Boolean, title: String, subtitle: String?, onChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) },
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onChange, enabled = enabled)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = if (enabled) OnSurface else OnSurfaceVariant)
+            subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = OnSurfaceVariant) }
+        }
+    }
 }
 
 private enum class CopyToCPhase { CONFIRM, OVERWRITE, COPYING, DELETE_ORIGINAL }
