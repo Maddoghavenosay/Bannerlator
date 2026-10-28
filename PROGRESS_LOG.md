@@ -1,5 +1,25 @@
 # Star-Compose — Progress Log
 
+## 2026-10-28 — 📦 Move a game to another container from its settings (branch `feat/move-game-container`, step 1 of 3, NOT device-tested)
+
+> **Why.** User: "after making a game shortcut, could we possibly add the ability to select a different container to run it on?" Recon first (main `b74261e6`), then: "yes start step 1, keep copy off, copy old settings all on a new branch off main".
+>
+> **Decisions (user, 2026-10-28).** Plan in three steps: (1) safe move + Container row in the game settings + Clone fixes, (2) "what to bring" checklist (saves, C: game files, redistributables), (3) "New container with another Wine/Proton layer". "Keep a copy" is OFF by default (a move). A new container (step 3) copies the old container's settings. Per-game layer inside the same container: not done (the prefix is built for its layer; the app already says "Games always use their container's layer", `SetAsDefaultSheet.kt:157`).
+>
+> **Recon facts.** Device: 2 containers (DD P11-11.1 Arm 2.8 GB, Container-2 2.3 GB with no games, 1.8 GB of it the Windows folder), all 30 game entries on shared drives (F 17, Z 8, E 4, D 1, C 0); each layer stored once (~910 MB). Old Clone (`Shortcut.cloneToContainer`): overwrote a same-name game, returned true without a check, copied the pin uuid (removing one disabled the other's home-screen icon), left the cover pointing into the old container, listed the game's own container.
+>
+> **Built (`ad0d41f9`).** New `core/MoveGameToContainer.kt` (problem/run/message/pinIntent): refuses same-name game in target, game on the old container's C:, Xbox not downloaded, move while a game runs (`ContainerLayerUpdater.isRunning` on both); copies icon PNGs + cover (rewrites `customCoverArtPath`), re-points `Exec=` through the target drive map when the path resolves differently (Z: never; may add a drive letter to the target, reported in the toast), checks the new entry loads, then deletes the original `.desktop` + `.lnk` + old cover, keeps mtime, re-points a pinned icon (`ShortcutManager.updateShortcuts`, same uuid); a copy drops the uuid. UI: classic editor Container row (General, after Executable; own composable `ContainerRow`, Storage row moved to `StorageRow` to stay under the method-size limit; D-pad id `container`; pending edits are saved before the hand-off) + `MoveToContainerCoordinator` (radio list of other containers with layer, Keep-a-copy checkbox, saves note, inline refusal reason); Deck hand-off `TARGET_MOVE_CONTAINER` (hint names the container) + Deck-classic editor; XMB General `Container` link → container column → Move here / Copy here. Clone (classic + XMB) now runs the same code with keepCopy and hides the own container. `Shortcut.cloneToContainer` (Xbox install flow) returns false when the file isn't written. `XServerDisplayActivity`: a missing shortcut file shows a message and finishes instead of throwing.
+>
+> **Not in step 1.** Saves stay in the old container (the dialog says so); C: games are refused; redistributables not copied.
+>
+> **CI.** pending.
+>
+> **Device test (plan).** Install only after the user says yes. Move a game from Container 1 to Container-2 and back (classic, Deck, XMB), launch it after each move; Keep-a-copy on → two entries, separate pins; pinned home-screen icon after a move opens the game; game running → move refused; logcat FATAL check.
+>
+> **Resume point.** Branch `feat/move-game-container` (worktree `/root/src/Bannerlator-wt/move-game-container`), code `ad0d41f9`. Next: push, dispatch CI, stage the pubg APK, ask before installing.
+>
+> **Proof level:** written; not compiled yet; NOT device-tested.
+
 ## 2026-10-27 — 🏷️ 3.1.7 stable RELEASED (tag `3.1.7` @ `14615841`, Latest)
 
 > **Why.** User: "prep 3.1.7 stable, make sure it covers all new work since 3.1.6 and pre releases" (2026-10-27; first asked for "3.2.0", then corrected to 3.1.7; "make it stable"). No tag, release or asset until the user says cut.
