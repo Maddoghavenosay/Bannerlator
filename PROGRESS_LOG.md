@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-28 — 📦 Move a game to another container from its settings (branch `feat/move-game-container`, step 1 of 3, NOT device-tested)
+## 2026-10-28 — 📦 Move a game to another container from its settings (branch `feat/move-game-container`, step 1 of 3, CI-green, NOT device-tested)
 
 > **Why.** User: "after making a game shortcut, could we possibly add the ability to select a different container to run it on?" Recon first (main `b74261e6`), then: "yes start step 1, keep copy off, copy old settings all on a new branch off main".
 >
@@ -12,13 +12,15 @@
 >
 > **Not in step 1.** Saves stay in the old container (the dialog says so); C: games are refused; redistributables not copied.
 >
-> **CI.** pending.
+> **CI.** Run 40737476810 (workflow_dispatch, headSha `8d9a30b1` = pushed branch head): pubg/standard/ludashi/antutu success, pubg `BUILD SUCCESSFUL in 5m`. No compile errors; the only warnings on changed lines are the existing `Icons.Filled.DriveFileMove` deprecation (StorageRow move, XMB Move row). No MethodTooLarge.
+>
+> **Staged.** `/sdcard/Download/Bannerlator-move-game-container-8d9a30b1.apk` sha256 `17c2cd77…28172d7` (host = device). Installed now: official 3.1.7 pubg `564c6a79…` (vc103). Not installed — waiting for the user's yes.
 >
 > **Device test (plan).** Install only after the user says yes. Move a game from Container 1 to Container-2 and back (classic, Deck, XMB), launch it after each move; Keep-a-copy on → two entries, separate pins; pinned home-screen icon after a move opens the game; game running → move refused; logcat FATAL check.
 >
-> **Resume point.** Branch `feat/move-game-container` (worktree `/root/src/Bannerlator-wt/move-game-container`), code `ad0d41f9`. Next: push, dispatch CI, stage the pubg APK, ask before installing.
+> **Resume point.** Branch `feat/move-game-container` (worktree `/root/src/Bannerlator-wt/move-game-container`), code `ad0d41f9`, log head `8d9a30b1`. APK staged. Next: user's yes → `pm install -r` → device test above.
 >
-> **Proof level:** written; not compiled yet; NOT device-tested.
+> **Proof level:** CI-green; NOT device-tested.
 
 ## 2026-10-27 — 🏷️ 3.1.7 stable RELEASED (tag `3.1.7` @ `14615841`, Latest)
 
