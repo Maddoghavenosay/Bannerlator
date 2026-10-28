@@ -1,5 +1,21 @@
 # Star-Compose — Progress Log
 
+## 2026-10-28 — 📦 Move a game to another container, step 2: what comes along (branch `feat/move-game-container`, NOT device-tested)
+
+> **Why.** Device test 1 (entry below): the copy of DiRT Showdown failed in Container-2 because OpenAL wasn't there. User: "I don't see redistributables followed though", then "yes start step 2".
+>
+> **Built (`73a0a67f`).** `MoveGameToContainer.plan(context, shortcut, target)` works out, per target: **Saves** (SaveLocator remembered roots, else discovered, + `EmuSaveRoots` app id; same selection as the save vault), **Game files** (only when Exec is on the source's C:; root = `CopyGameToDriveC.defaultSourceRoot`; refused for `windows/*`, `users/<name>[/x]`, top-level Program Files / ProgramData / users / Games, an existing folder in the target, or when another entry in the source runs from the same folder and it's a move), **Extras** (`GameRecommendations` RECOMMENDED group minus what the target has by journal or `PrefixInstalledDetector`; COPY from the source journal when same arch, else DOWNLOAD via catalog when it needs no installer run, else unavailable with a note; ticked when the source has it). `run(..., options, plan, onStage)`: C: folder first (rename on move, `copyTree` + free-space check on copy; Exec unchanged; rolled back if the entry fails), then the entry as in step 1, then saves (`backupToFile` → `restoreInto`, save_maps entry copied, emulator conflicts returned) and extras (failures reported in the toast, not undone). New `ComponentUndo.copyInto(fromRoot, toRoot, name)`: copies the journal's files + `kept` files (links kept) and its registry keys/values into the target under a journal of the same name (removable there later). UI: classic/Deck dialog "Bring along" tick boxes (`MoveBringRow`), "Checking what this game uses…", stage text while it runs; XMB Move column: Move/Copy actions + toggles. `xmbEmuConflicts` made internal for reuse.
+>
+> **Found while building.** `component_installs` `c2` claims vcredist2022 with no journal and Wine's builtin msvcp140 → target "has" is decided from journals/files, never the record alone.
+>
+> **CI.** pending.
+>
+> **Device test (plan).** Same DiRT Showdown pair: remove the copy in Container-2 first (or move a different game). Move C1 → C2 with saves + OpenAL ticked; launch in C2 (expect no OpenAL error; saves present); check `xuser-2/.bannerlator-component-undo/oalinst_dll/journal.json`, OpenAL32.dll in system32/syswow64, save files under `xuser-2/.wine/drive_c/users/xuser/…`; move back; logcat FATAL check.
+>
+> **Resume point.** Branch `feat/move-game-container`, code `73a0a67f`. Next: push, CI, stage, ask before install.
+>
+> **Proof level:** written; not compiled yet; NOT device-tested.
+
 ## 2026-10-28 — 📦 Move a game to another container from its settings (branch `feat/move-game-container`, step 1 of 3, CI-green, copy device-proven, move not yet)
 
 > **Why.** User: "after making a game shortcut, could we possibly add the ability to select a different container to run it on?" Recon first (main `b74261e6`), then: "yes start step 1, keep copy off, copy old settings all on a new branch off main".
