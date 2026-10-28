@@ -8,6 +8,8 @@
 > - **Bug: wrong save folder came along.** DiRT Rally 2.0's folder was copied with DiRT Showdown. Cause: `SaveLocator.discover` token score — "DiRT Showdown" {dirt, showdown} vs "DiRT Rally 2.0" {dirt, rally, 2, 0} overlap 1/min(2,4) = 0.5 → score 50 = `KEEP_THRESHOLD`. No data lost here (saves are only copied, never removed from the source, and C2 had none), but a target that already had DiRT Rally 2.0 progress would have it overwritten. Same loose match is used by the save vault on main (`CustomSaveVault.kt:151`, `:223`) — not changed here.
 > - Seen, not from this branch: after quitting, the game list shows "No shortcuts yet." for about a second while the restarted app loads (`ShortcutsScreen.kt:506`, unchanged vs main).
 > - Not tested yet: a real move (Keep a copy off), Deck, XMB, pin after a move, refusal while a game runs.
+>
+> **Fix (`84cfc556`).** `MoveGameToContainer.findSaves`: discovered folders now need SaveLocator score ≥ 70 (`SAVE_NAME_MATCH`: same name, or one name inside the other); remembered save_maps roots and the emulator app-id saves unchanged. For DiRT Showdown: "DiRT Showdown" 100 kept, "DiRT Rally 2.0" 50 dropped. The save vault's own use of `discover` is left as is (main behaviour). CI: pending.
 
 > **Why.** Device test 1 (entry below): the copy of DiRT Showdown failed in Container-2 because OpenAL wasn't there. User: "I don't see redistributables followed though", then "yes start step 2".
 >
