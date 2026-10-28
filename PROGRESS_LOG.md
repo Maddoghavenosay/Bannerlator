@@ -1,6 +1,13 @@
 # Star-Compose — Progress Log
 
-## 2026-10-28 — 📦 Move a game to another container, step 2: what comes along (branch `feat/move-game-container`, CI-green, NOT device-tested)
+## 2026-10-28 — 📦 Move a game to another container, step 2: what comes along (branch `feat/move-game-container`, CI-green, copy device-proven; one bug found)
+
+> **Device test 2 (2026-10-28, Pocket FIT).** User: "installed, made a new video testing it". Installed base.apk sha256 `1289d4b1…` = staged (lastUpdateTime 16:42:09). Video `/sdcard/Movies/screen-20261028-164425.mp4` (106 s): classic settings → Container → Change… → Container-2; "Bring along" listed Saves ("Documents/My Games/DiRT Showdown, Documents/My Games/DiRT Rally 2.0, emulator saves for app 201700", ticked), DirectX 9 / 11 / shader compiler 43 / XACT / XAudio 2.7 ("Downloaded (… doesn't have it either)", unticked), OpenAL ("Copied from DD P11-11.1 Arm", ticked). User ticked Keep a copy → **Copy**. Toast: "Copied "DiRT Showdown" to "Container-2". 33 save files copied; OpenAL added." Launched from Container-2: no OpenAL error, intros, menu, "Missions 75/75 / Hidden packages 60/60" (old progress present), drove in Battersea; exit → app restart (`restartApplication`, process 7317 died 16:44:22 as designed).
+> - Files: `xuser-2/.bannerlator-component-undo/oalinst_dll/journal.json` written 16:42:58 (system32 + syswow64 OpenAL32.dll, HKCU DllOverrides openal32=native,builtin); both DLLs present, same sizes as C1 (3,834,368 / 4,071,950). Saves in C2: My Games/DiRT Showdown 10 files (= C1), My Games/DiRT Rally 2.0 2 files (= C1), ProgramData/Steam/elamigos/201700 19 files (= C1), plus GSE Saves account files (33 = 31 save + 2 account). C1 entry untouched; C2 entry Exec unchanged, cover re-pointed to xuser-2.
+> - Logcat from 16:40: no FATAL / AndroidRuntime for com.tencent.ig; crash buffer empty.
+> - **Bug: wrong save folder came along.** DiRT Rally 2.0's folder was copied with DiRT Showdown. Cause: `SaveLocator.discover` token score — "DiRT Showdown" {dirt, showdown} vs "DiRT Rally 2.0" {dirt, rally, 2, 0} overlap 1/min(2,4) = 0.5 → score 50 = `KEEP_THRESHOLD`. No data lost here (saves are only copied, never removed from the source, and C2 had none), but a target that already had DiRT Rally 2.0 progress would have it overwritten. Same loose match is used by the save vault on main (`CustomSaveVault.kt:151`, `:223`) — not changed here.
+> - Seen, not from this branch: after quitting, the game list shows "No shortcuts yet." for about a second while the restarted app loads (`ShortcutsScreen.kt:506`, unchanged vs main).
+> - Not tested yet: a real move (Keep a copy off), Deck, XMB, pin after a move, refusal while a game runs.
 
 > **Why.** Device test 1 (entry below): the copy of DiRT Showdown failed in Container-2 because OpenAL wasn't there. User: "I don't see redistributables followed though", then "yes start step 2".
 >
