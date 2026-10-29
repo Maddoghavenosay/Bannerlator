@@ -12,9 +12,11 @@
 >
 > **Staged.** `/sdcard/Download/Bannerlator-move-game-xbox-5c9d996a.apk` sha256 `beb49aad…437050` (host = staged = device). Installed now: `3328c29c…` (Xbox test build). Asking before installing.
 >
-> **Next.** Install (user's yes), Xbox library check, then device test 3 as planned below (real move of DiRT 3 + the save-folder match fix `84cfc556`).
+> **Installed (2026-10-29 10:06:46 device time).** User: "yes install it". `pm install -r` Success; installed base.apk sha256 `beb49aad…` = staged, 3.1.7 / vc103. Replaced `3328c29c…` (Xbox test build). Logcat checks for the tests start from 10:06:55; crash buffer empty at install.
 >
-> **Proof level:** move feature: copy device-proven (test 2), save-folder fix and real move NOT device-tested; merged build: CI green, NOT device-tested.
+> **Next.** Xbox library check, then device test 3 as planned below (real move of DiRT 3 + the save-folder match fix `84cfc556`).
+>
+> **Proof level:** move feature: copy device-proven (test 2), save-folder fix and real move NOT device-tested; merged build: CI green, installed, NOT device-tested.
 
 ## 2026-10-29 — 🎮 Xbox backend 0.2.12 + compact ticket fix from DroidDeck (fix/xbox-backend-0.2.12, CI GREEN, DEVICE-PROVEN, awaiting merge go)
 
