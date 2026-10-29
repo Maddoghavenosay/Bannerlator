@@ -1,14 +1,20 @@
 # Star-Compose — Progress Log
 
-## 2026-10-29 — 📦 Move game: main (Xbox backend 0.2.12) merged in, rebuild for device test 3 (branch `feat/move-game-container`, CI pending)
+## 2026-10-29 — 📦 Move game: main (Xbox backend 0.2.12) merged in, rebuild for device test 3 (branch `feat/move-game-container`, CI GREEN, APK staged)
 
 > **Why.** The Xbox test build replaced this branch's APK (`79d0affd…`) on the device before device test 3 (real move of DiRT 3, C1 → C2). User chose "option 2": bring the branch up to date with main first, so one test build carries both the move feature and the Xbox fix.
 >
 > **Done.** Backup `refs/backup/20261029/feat-move-game-container-before-main-merge` = `0b1cf413`. Merge commit `47502963` (parents `0b1cf413` + main `dbd0289c`), made in a separate worktree (`Bannerlator-wt/move-game-main-merge`); the other session's worktree was clean at `0b1cf413` and was not touched. Only conflict: this log (both sides added entries at the top), kept both, newest first. Checked: `tools/xbox` identical to main, `app/` identical to the tested branch.
 >
-> **Next.** CI build on the branch, stage the APK, ask before installing, then device test 3 as planned below (real move of DiRT 3 + the save-folder match fix `84cfc556`).
+> **CI.** Run 40870990219 (dispatch, headSha `5c9d996a`, label move-game-xbox): pubg/standard/ludashi/antutu success, pubg `BUILD SUCCESSFUL in 5m 52s`. Main after the Xbox merge: APK run 40869596519 + backend run 40869596218 success.
 >
-> **Proof level:** move feature: copy device-proven (test 2), save-folder fix and real move NOT device-tested; merged build: CI pending.
+> **Xbox backend bytes differ from the device-tested Xbox build (same source).** All builds compiled `source-f4760d202e960485`; the backend workflow uses the runner's newest NDK (tested `libxodus_cli.so` `054bd990…`, main's run `d1ed1c5e…`), while `_build.yml` pins NDK 26.1 and, on a cache miss, compiles the backend itself and saves the shared `xbox-out-<hash of tools/xbox>` key. Main's APK run missed the cache (both main runs started together), built with NDK 26.1 and saved it; this branch restored that copy (`484790e0…`, `.text` ~33 KB smaller, has `.preinit_array`). Pre-existing CI quirk, not from the port: which NDK's backend ships depends on which workflow saves the key first. Suggest one Xbox check (library loads) on this build.
+>
+> **Staged.** `/sdcard/Download/Bannerlator-move-game-xbox-5c9d996a.apk` sha256 `beb49aad…437050` (host = staged = device). Installed now: `3328c29c…` (Xbox test build). Asking before installing.
+>
+> **Next.** Install (user's yes), Xbox library check, then device test 3 as planned below (real move of DiRT 3 + the save-folder match fix `84cfc556`).
+>
+> **Proof level:** move feature: copy device-proven (test 2), save-folder fix and real move NOT device-tested; merged build: CI green, NOT device-tested.
 
 ## 2026-10-29 — 🎮 Xbox backend 0.2.12 + compact ticket fix from DroidDeck (fix/xbox-backend-0.2.12, CI GREEN, DEVICE-PROVEN, awaiting merge go)
 
