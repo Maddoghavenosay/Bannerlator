@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-29 — 🎮 Xbox backend 0.2.12 + compact ticket fix from DroidDeck (fix/xbox-backend-0.2.12, CI GREEN, APK staged)
+## 2026-10-29 — 🎮 Xbox backend 0.2.12 + compact ticket fix from DroidDeck (fix/xbox-backend-0.2.12, CI GREEN, DEVICE-PROVEN, awaiting merge go)
 
 > **Why.** User: "port the Xbox fixes to bannerlator on a new branch off main". DroidDeck's library/download failure for accounts with delegation-compact (`d=`) tickets (`store-ticket-format`, Droid-Deck/DroidDeck#1713) was fixed by devSharaku in Droid-Deck/DroidDeck#1729 (merged `e871557b`, 7 testers confirmed). Bannerlator's `tools/xbox/backend.lock.json` was byte-identical to DroidDeck's lock before that fix (Nexus 0.2.8), so it has the same bug.
 >
@@ -20,13 +20,15 @@
 >
 > **Device test 2 (07:35–07:41).** No pause button: Xbox downloads register `supportsPause = false` (`XboxDownloads.kt:63`); Cancel on a not-yet-installed game deletes the folder (`deleteOnCancel = fresh`), verified: user cancelled INSIDE (C17GQF31D617), folder gone, other installs untouched, no crash. Resume via a connection drop instead: INSIDE re-started, Wi-Fi off ~25 % → "Xbox download did not complete. Try again to resume with fresh licenses.", folder kept (555 MB, 885 journal records). Install again 07:40: the reopened journal (same identity `173f621d…`) kept 285 files / 348 MB of checkpoints (one at 67,108,864 = a finished 64 MB chunk); the ~200 MB past the last checkpoints was trimmed by `prepare_output` as designed. Completed 07:41 (2.1 GB, in installs.json), crash buffer empty, no FATAL. The bar showed "4 % · 2.0 GB to go" right after the resume: 0.2.12 credits a file's saved bytes only when that file's job starts (`streaming_progress.rs`), upstream behaviour, not from this port.
 >
-> **Still to test.** Launch a downloaded game (Among Us or INSIDE).
+> **Device test 3 (07:46).** INSIDE (the resumed download) launched: loading screen 07:46:35, gameplay 07:46:57 at 71.9 fps (D3D11 · DXVK, Wayland, Adreno 750) per the user's screenshots. Exit: `save sync on exit: no save helper running`, `launch released: C17GQF31D617`, game process exit code 0; crash buffer empty; the only Java stack dumps are `com.qti.diagservices` (pid 2920, waiting for the missing diag HAL; disabled at the user's request, gone after a reboot).
+>
+> **Next.** Merge to main after the user's go (backup ref first, tree = tested `a25a889a` code). The device needs the move-game-container build back for that branch's test 3.
 >
 > **Next.** Device test = sign in, library loads, download a big game (chunk path) + pause/resume, launch it. Merge only after that and the user's go.
 >
 > **Credit.** devSharaku (Droid-Deck/DroidDeck#1729), co-author on `d6c166c0`.
 >
-> **Proof level:** CI-green; DEVICE-PROVEN: library + full download incl. chunk path; resume after a dropped connection + cancel DEVICE-PROVEN; launch NOT tested yet.
+> **Proof level:** CI-green; DEVICE-PROVEN on the Pocket FIT: library, full download incl. the chunk path, cancel, resume after a dropped connection, launch + clean exit.
 
 ## 2026-10-27 — 🏷️ 3.1.7 stable RELEASED (tag `3.1.7` @ `14615841`, Latest)
 
