@@ -1,5 +1,21 @@
 # Star-Compose — Progress Log
 
+## 2026-10-29 — 🎮 Xbox backend 0.2.12 + compact ticket fix from DroidDeck (fix/xbox-backend-0.2.12, CI pending)
+
+> **Why.** User: "port the Xbox fixes to bannerlator on a new branch off main". DroidDeck's library/download failure for accounts with delegation-compact (`d=`) tickets (`store-ticket-format`, Droid-Deck/DroidDeck#1713) was fixed by devSharaku in Droid-Deck/DroidDeck#1729 (merged `e871557b`, 7 testers confirmed). Bannerlator's `tools/xbox/backend.lock.json` was byte-identical to DroidDeck's lock before that fix (Nexus 0.2.8), so it has the same bug.
+>
+> **Which DroidDeck Xbox fixes apply.** #1729 (backend + ticket): yes, ported. #1521 (slow StrongBox Keystore sign-in): not needed, Bannerlator never asks for StrongBox and its backend runs as an Android child process, not in PRoot, so the loopback-socket fallback has nothing to fix; its 30 s reply timeout and step codes are not ported. #1322 / #1342 (sign-in messages, gamertag): Bannerlator already has its own (`XboxAccountStore`, `Xodus.KNOWN_ERRORS`). #1531 (cloud gaming): Bannerlator has its own.
+>
+> **Built (`d6c166c0`).** From DroidDeck `e871557b`: `backend.lock.json` (Nexus 0.2.12, 52 upstream patches), `droiddeck-credentials.patch`, `droiddeck-launch-view.patch`, `droiddeck-xbox-ticket.patch` (new, last in `prepare.py`), cloud-token (kept as `bannerlator-cloud-token.patch`, only the doc line says Bannerlator). Bannerlator's own patches rebased in a scratch repo holding both stacks (cherry-pick old → new): android unchanged, diagnostics new offsets only, **parallel-download rewritten** onto 0.2.12's loop (user chose "merge the speedup now" over shipping without it): CDN-host rotation, adaptive window, 64 MB page-aligned chunks for files over 128 MB as before; chunk errors go through 0.2.12's `failure` path (no `expect`, other jobs cancelled, final checkpoint only on success); no own retry loop (0.2.12 recovers ranged requests and must not hammer a 429); chunk progress only advances on sent events. Checkpoints stay page-aligned (0.2.12's journal and `prepare_output` require it).
+>
+> **Checked locally.** `prepare.py` from a fresh cache applies everything with plain `git apply`; result identical to the scratch tree. `rustfmt` parses the merged `streaming.rs`. CLI: 0.2.12 only adds options (`--include-dlc`, bandwidth limit, `social`), so the app's calls are unchanged. Not compiled locally (CI builds the backend).
+>
+> **Next.** CI `build-xbox-android.yml` (push), then an APK build; device test = sign in, library loads, download a big game (chunk path) + pause/resume, launch it. Merge only after that and the user's go.
+>
+> **Credit.** devSharaku (Droid-Deck/DroidDeck#1729), co-author on `d6c166c0`.
+>
+> **Proof level:** compiled locally: no; CI: pending; NOT device-tested.
+
 ## 2026-10-27 — 🏷️ 3.1.7 stable RELEASED (tag `3.1.7` @ `14615841`, Latest)
 
 > **Why.** User: "prep 3.1.7 stable, make sure it covers all new work since 3.1.6 and pre releases" (2026-10-27; first asked for "3.2.0", then corrected to 3.1.7; "make it stable"). No tag, release or asset until the user says cut.
