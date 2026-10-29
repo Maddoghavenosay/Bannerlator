@@ -1,6 +1,6 @@
 # Star-Compose — Progress Log
 
-## 2026-10-29 — 🎮 Xbox backend 0.2.12 + compact ticket fix from DroidDeck (fix/xbox-backend-0.2.12, CI pending)
+## 2026-10-29 — 🎮 Xbox backend 0.2.12 + compact ticket fix from DroidDeck (fix/xbox-backend-0.2.12, CI GREEN, APK staged)
 
 > **Why.** User: "port the Xbox fixes to bannerlator on a new branch off main". DroidDeck's library/download failure for accounts with delegation-compact (`d=`) tickets (`store-ticket-format`, Droid-Deck/DroidDeck#1713) was fixed by devSharaku in Droid-Deck/DroidDeck#1729 (merged `e871557b`, 7 testers confirmed). Bannerlator's `tools/xbox/backend.lock.json` was byte-identical to DroidDeck's lock before that fix (Nexus 0.2.8), so it has the same bug.
 >
@@ -10,11 +10,15 @@
 >
 > **Checked locally.** `prepare.py` from a fresh cache applies everything with plain `git apply`; result identical to the scratch tree. `rustfmt` parses the merged `streaming.rs`. CLI: 0.2.12 only adds options (`--include-dlc`, bandwidth limit, `social`), so the app's calls are unchanged. Not compiled locally (CI builds the backend).
 >
-> **Next.** CI `build-xbox-android.yml` (push), then an APK build; device test = sign in, library loads, download a big game (chunk path) + pause/resume, launch it. Merge only after that and the user's go.
+> **CI.** Backend run 40858985527 (push, headSha `a25a889a`): success, `xodus-cli` finished in 3m54s, no compiler warning from the patched code (only `commands/run.rs`, untouched), source dir `source-f4760d20…` = the local prepare. APK run 40859887870 (dispatch, `a25a889a`, label xbox-0.2.12): pubg/standard/ludashi/antutu success; pubg restored `xbox-out-0f45b60a…` from the backend run; the APK's `libxodus_cli.so` `054bd990…` / `libxodus_service.so` `39db3cf4…` = backend CI output.
+>
+> **Staged.** `/sdcard/Download/Bannerlator-xbox-0.2.12-a25a889a.apk` sha256 `3328c29c…cf6f79` (host = staged = device). Installed now: `79d0affd…` = the move-game-container test build (its test 3 not run yet); installing this replaces it.
+>
+> **Next.** Device test = sign in, library loads, download a big game (chunk path) + pause/resume, launch it. Merge only after that and the user's go.
 >
 > **Credit.** devSharaku (Droid-Deck/DroidDeck#1729), co-author on `d6c166c0`.
 >
-> **Proof level:** compiled locally: no; CI: pending; NOT device-tested.
+> **Proof level:** CI-green (backend + 4 APKs); NOT device-tested.
 
 ## 2026-10-27 — 🏷️ 3.1.7 stable RELEASED (tag `3.1.7` @ `14615841`, Latest)
 
