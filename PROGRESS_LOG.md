@@ -18,13 +18,15 @@
 >
 > **Device test 1 (2026-10-29 07:14, Pocket FIT).** User's screenshot 07:14:41: Among Us (Game Pass, 9NG07QJNK38J) downloading, 12.4 MB/s. Log: `resolve-package exited 0`, `download window ceiling 32`, `download 9NG07QJNK38J exited 0 complete=true` at 07:15:26 (start 07:14:31, ~1.07 GB in 55 s), `installed … exe=Among Us.exe version=2026.9.293.0`. Chunk path proven by the journal: the three files over 128 MB (207,653,285 / 148,565,769 / 207,612,336 B) checkpoint only at 64 MB multiples then their full length; GameAssembly.dll (60 MB, single stream) at 32 MB then length. Crash buffer empty; no FATAL from the app; the only ANRs are `com.qti.diagservices` (system, every 20 s since before the install).
 >
-> **Still to test.** Pause + resume of a running download; launch the game.
+> **Device test 2 (07:35–07:41).** No pause button: Xbox downloads register `supportsPause = false` (`XboxDownloads.kt:63`); Cancel on a not-yet-installed game deletes the folder (`deleteOnCancel = fresh`), verified: user cancelled INSIDE (C17GQF31D617), folder gone, other installs untouched, no crash. Resume via a connection drop instead: INSIDE re-started, Wi-Fi off ~25 % → "Xbox download did not complete. Try again to resume with fresh licenses.", folder kept (555 MB, 885 journal records). Install again 07:40: the reopened journal (same identity `173f621d…`) kept 285 files / 348 MB of checkpoints (one at 67,108,864 = a finished 64 MB chunk); the ~200 MB past the last checkpoints was trimmed by `prepare_output` as designed. Completed 07:41 (2.1 GB, in installs.json), crash buffer empty, no FATAL. The bar showed "4 % · 2.0 GB to go" right after the resume: 0.2.12 credits a file's saved bytes only when that file's job starts (`streaming_progress.rs`), upstream behaviour, not from this port.
+>
+> **Still to test.** Launch a downloaded game (Among Us or INSIDE).
 >
 > **Next.** Device test = sign in, library loads, download a big game (chunk path) + pause/resume, launch it. Merge only after that and the user's go.
 >
 > **Credit.** devSharaku (Droid-Deck/DroidDeck#1729), co-author on `d6c166c0`.
 >
-> **Proof level:** CI-green; DEVICE-PROVEN: library + full download incl. chunk path; pause/resume and launch NOT tested yet.
+> **Proof level:** CI-green; DEVICE-PROVEN: library + full download incl. chunk path; resume after a dropped connection + cancel DEVICE-PROVEN; launch NOT tested yet.
 
 ## 2026-10-27 — 🏷️ 3.1.7 stable RELEASED (tag `3.1.7` @ `14615841`, Latest)
 
