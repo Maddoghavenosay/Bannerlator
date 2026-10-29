@@ -16,11 +16,15 @@
 >
 > **Installed (2026-10-29 07:02 device time).** User: "yes install it". `pm install -r` Success; installed base.apk sha256 `3328c29c…` = staged, versionCode 103 / 3.1.7. Replaced `79d0affd…` (move-game-container test build).
 >
+> **Device test 1 (2026-10-29 07:14, Pocket FIT).** User's screenshot 07:14:41: Among Us (Game Pass, 9NG07QJNK38J) downloading, 12.4 MB/s. Log: `resolve-package exited 0`, `download window ceiling 32`, `download 9NG07QJNK38J exited 0 complete=true` at 07:15:26 (start 07:14:31, ~1.07 GB in 55 s), `installed … exe=Among Us.exe version=2026.9.293.0`. Chunk path proven by the journal: the three files over 128 MB (207,653,285 / 148,565,769 / 207,612,336 B) checkpoint only at 64 MB multiples then their full length; GameAssembly.dll (60 MB, single stream) at 32 MB then length. Crash buffer empty; no FATAL from the app; the only ANRs are `com.qti.diagservices` (system, every 20 s since before the install).
+>
+> **Still to test.** Pause + resume of a running download; launch the game.
+>
 > **Next.** Device test = sign in, library loads, download a big game (chunk path) + pause/resume, launch it. Merge only after that and the user's go.
 >
 > **Credit.** devSharaku (Droid-Deck/DroidDeck#1729), co-author on `d6c166c0`.
 >
-> **Proof level:** CI-green (backend + 4 APKs); NOT device-tested.
+> **Proof level:** CI-green; DEVICE-PROVEN: library + full download incl. chunk path; pause/resume and launch NOT tested yet.
 
 ## 2026-10-27 — 🏷️ 3.1.7 stable RELEASED (tag `3.1.7` @ `14615841`, Latest)
 
