@@ -1,5 +1,15 @@
 # Star-Compose — Progress Log
 
+## 2026-10-29 — 📦 Move game: main (Xbox backend 0.2.12) merged in, rebuild for device test 3 (branch `feat/move-game-container`, CI pending)
+
+> **Why.** The Xbox test build replaced this branch's APK (`79d0affd…`) on the device before device test 3 (real move of DiRT 3, C1 → C2). User chose "option 2": bring the branch up to date with main first, so one test build carries both the move feature and the Xbox fix.
+>
+> **Done.** Backup `refs/backup/20261029/feat-move-game-container-before-main-merge` = `0b1cf413`. Merge commit `47502963` (parents `0b1cf413` + main `dbd0289c`), made in a separate worktree (`Bannerlator-wt/move-game-main-merge`); the other session's worktree was clean at `0b1cf413` and was not touched. Only conflict: this log (both sides added entries at the top), kept both, newest first. Checked: `tools/xbox` identical to main, `app/` identical to the tested branch.
+>
+> **Next.** CI build on the branch, stage the APK, ask before installing, then device test 3 as planned below (real move of DiRT 3 + the save-folder match fix `84cfc556`).
+>
+> **Proof level:** move feature: copy device-proven (test 2), save-folder fix and real move NOT device-tested; merged build: CI pending.
+
 ## 2026-10-29 — 🎮 Xbox backend 0.2.12 + compact ticket fix from DroidDeck (fix/xbox-backend-0.2.12, CI GREEN, DEVICE-PROVEN, awaiting merge go)
 
 > **Why.** User: "port the Xbox fixes to bannerlator on a new branch off main". DroidDeck's library/download failure for accounts with delegation-compact (`d=`) tickets (`store-ticket-format`, Droid-Deck/DroidDeck#1713) was fixed by devSharaku in Droid-Deck/DroidDeck#1729 (merged `e871557b`, 7 testers confirmed). Bannerlator's `tools/xbox/backend.lock.json` was byte-identical to DroidDeck's lock before that fix (Nexus 0.2.8), so it has the same bug.
