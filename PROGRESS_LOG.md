@@ -14,9 +14,11 @@
 >
 > **Installed (2026-10-29 10:06:46 device time).** User: "yes install it". `pm install -r` Success; installed base.apk sha256 `beb49aad…` = staged, 3.1.7 / vc103. Replaced `3328c29c…` (Xbox test build). Logcat checks for the tests start from 10:06:55; crash buffer empty at install.
 >
-> **Next.** Xbox library check, then device test 3 as planned below (real move of DiRT 3 + the save-folder match fix `84cfc556`).
+> **Device test 3 — real Move of DiRT 3, C1 → C2 (13:57, file level).** User: "moved dirt 3". App started 13:57:26; log 13:57:51 `moved 'DiRT 3' from container 1 to 2; 4 save files copied` (no drive added: both containers already map F: to `/storage/7B7F-E3AA`; no extras). C1: `DiRT 3.desktop` gone, no `.lnk`, cover `app_data/cover_arts/DiRT 3.png` gone, saves `My Games/DiRT3` kept. C2: `DiRT 3.desktop` with Exec unchanged (`F:\Winlator\Games\DiRT 3 Complete Edition\dirt3_game.exe`), `customCoverArtPath` re-pointed to xuser-2, mtime kept (06:15 = source's), cover + 64x64 icon copied. The 4 files = `My Games/DiRT3/hardwaresettings/*` (2, md5 = C1's) + `GSE Saves/settings/configs.{main,user}.ini` (2, md5 = C1's). **Save-folder fix `84cfc556` proven:** nothing under C2 `My Games/DiRT Rally 2.0` or `DiRT Showdown` changed (only files newer than 15 min are the ones above). Crash buffer empty since the install; no FATAL; only ANRs are `com.qti.diagservices` (reboot pending). Small leftover: the move copies the icon PNGs but doesn't delete them from the source (C1 still has `.local/share/icons/hicolor/64x64/apps/DiRT 3.png`); harmless, an icon name could be shared by another shortcut. Side notes: C2's DiRT Showdown copy from test 2 is no longer there (its cover/icon are); C1 now has 32 `.desktop` (Among Us + INSIDE added by the Xbox tests).
 >
-> **Proof level:** move feature: copy device-proven (test 2), save-folder fix and real move NOT device-tested; merged build: CI green, installed, NOT device-tested.
+> **Next.** User launches DiRT 3 from Container 2 (saves/settings present?) + Xbox library check (the Xbox tab wasn't opened in this app run), then logcat check.
+>
+> **Proof level:** real move: device-proven at file level, game start in C2 NOT tested yet; save-folder fix: device-proven; merged build Xbox side: NOT device-tested.
 
 ## 2026-10-29 — 🎮 Xbox backend 0.2.12 + compact ticket fix from DroidDeck (fix/xbox-backend-0.2.12, CI GREEN, DEVICE-PROVEN, awaiting merge go)
 
