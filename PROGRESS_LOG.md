@@ -14,6 +14,8 @@
 >
 > **Staged.** `/sdcard/Download/Bannerlator-xbox-0.2.12-a25a889a.apk` sha256 `3328c29c…cf6f79` (host = staged = device). Installed now: `79d0affd…` = the move-game-container test build (its test 3 not run yet); installing this replaces it.
 >
+> **Installed (2026-10-29 07:02 device time).** User: "yes install it". `pm install -r` Success; installed base.apk sha256 `3328c29c…` = staged, versionCode 103 / 3.1.7. Replaced `79d0affd…` (move-game-container test build).
+>
 > **Next.** Device test = sign in, library loads, download a big game (chunk path) + pause/resume, launch it. Merge only after that and the user's go.
 >
 > **Credit.** devSharaku (Droid-Deck/DroidDeck#1729), co-author on `d6c166c0`.
