@@ -8,9 +8,12 @@ import android.os.Looper
 import android.widget.Toast
 import com.winlator.star.R
 import com.winlator.star.components.Component
+import com.winlator.star.components.ComponentCatalog
 import com.winlator.star.components.ComponentExecInstaller
 import com.winlator.star.components.ComponentInstallRecords
+import com.winlator.star.components.ComponentInstaller
 import com.winlator.star.components.ComponentStep
+import com.winlator.star.components.StoreRedists
 import com.winlator.star.container.Container
 import com.winlator.star.container.ContainerManager
 import com.winlator.star.core.unpack.ReadBuffer
@@ -33,6 +36,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  *   - {@link ComponentExecInstaller}, the existing exec-installer plan/restart engine that RUNS an
  *     installer inside the container (so Windows registers the runtime) and drives multi-installer
  *     sequences across the app-restart a container session forces.
+ *
+ * A dep that maps to Win Components ([StoreRedists.gog]) which install straight into the prefix
+ * (Visual C++, .NET, DirectX, PhysX, XNA, OpenAL…) is installed from those instead, with no
+ * container session; only the rest go to GOG's own installers.
  *
  * Redists install into the CONTAINER's prefix (runtimes register system-wide, not per-game), so the
  * only valid trigger is at/after add-to-container — never at download time (there is no target yet).
@@ -100,8 +107,9 @@ object GogRedistInstaller {
                 .setTitle("Install prerequisites?")
                 .setMessage(
                     "This game needs: $listStr.\n\n" +
-                        "They'll be installed into \"${container.name}\". A brief setup window will " +
-                        "appear for each one and close on its own."
+                        "They'll be installed into \"${container.name}\" from Win Components, without " +
+                        "opening the container. One with no matching component opens a brief setup " +
+                        "window that closes on its own."
                 )
                 .setPositiveButton("Install") { _, _ -> installPrereqs(activity, container, gameId) }
                 .setNegativeButton("Skip", null)
@@ -161,17 +169,22 @@ object GogRedistInstaller {
             val log = ConcurrentLinkedQueue<String>()
             val steps = ArrayList<ComponentStep>()
             try {
+                val installed = ComponentInstallRecords.verified(app, container)
+                val pending = installFromComponents(activity, app, container, info.deps, installed)
+                if (pending.isEmpty()) {
+                    finish(activity, "Prerequisites installed.")
+                    return@Thread
+                }
                 val repo = GogDependencyRepository.fetchRepository()
                 debug(app, "repository build_id=${GogDependencyRepository.lastBuildId()} entries=${repo.size}")
                 if (repo.isEmpty()) {
                     finish(activity, "Couldn't reach GOG's redist repository — launch anyway.")
                     return@Thread
                 }
-                val installed = ComponentInstallRecords.verified(app, container)
                 val stageRoot = File(app.cacheDir, "gog_redist/$gameId").apply { mkdirs() }
 
                 // Install in the game's declared dependency order (order matters for some stacks).
-                for (depId in info.deps) {
+                for (depId in pending) {
                     val entry = repo[depId]
                     if (entry == null) { debug(app, "dep '$depId' not in repository — skip"); continue }
                     if (entry.internal) { debug(app, "dep '$depId' internal — skip"); continue }
@@ -248,6 +261,51 @@ object GogRedistInstaller {
                 finish(activity, "Prerequisite install error — launch anyway.")
             }
         }.also { it.name = "gog-redist-install" }.start()
+    }
+
+    /**
+     * Installs, in order, each of [deps] whose Win Components ([StoreRedists.gog]; the file-drop
+     * `_dll` variant first, as the Win Components screens do) all install without opening the
+     * container. Returns the deps left for GOG's own installers: no matching component, one that
+     * needs its installer, or an install that failed. Records each component and the dep's
+     * `GOG:<depId>` marker. Runs on the caller's background thread.
+     */
+    private fun installFromComponents(
+        activity: Activity, app: Context, container: Container, deps: List<String>, installed: Set<String>,
+    ): List<String> {
+        if (ComponentCatalog.byName.isEmpty()) runCatching { ComponentCatalog.load() }
+        val left = ArrayList<String>()
+        var told = false
+        for (depId in deps) {
+            val marker = "GOG:$depId"
+            if (marker in installed) { debug(app, "dep '$depId' already installed — skip"); continue }
+            val names = StoreRedists.gog(depId)
+            val components = names.map { ComponentCatalog.byName["${it}_dll"] ?: ComponentCatalog.byName[it] }
+            if (names.isEmpty() || components.any { it == null || !ComponentInstaller.isInstallable(it) }) {
+                debug(app, "dep '$depId' → ${names.ifEmpty { listOf("no component") }}: GOG's installer")
+                left += depId
+                continue
+            }
+            if (!told) { finish(activity, "Installing prerequisites from Win Components…"); told = true }
+            var ok = true
+            for ((name, c) in names.zip(components)) {
+                if (name in installed) continue
+                val error = ComponentInstaller.install(app, container, c!!) {}
+                if (error != null) {
+                    debug(app, "dep '$depId': ${c.name} failed ($error) — GOG's installer instead")
+                    ok = false
+                    break
+                }
+                ComponentInstallRecords.add(app, container.id, name)
+            }
+            if (ok) {
+                ComponentInstallRecords.add(app, container.id, marker)
+                debug(app, "dep '$depId' installed from Win Components: $names")
+            } else {
+                left += depId
+            }
+        }
+        return left
     }
 
     /** Build one exec-installer step pointing at a pre-staged local installer + its idempotency marker. */
