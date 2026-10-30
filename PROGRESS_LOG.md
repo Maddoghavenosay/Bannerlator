@@ -14,7 +14,11 @@
 >
 > **Test 3 (04:52, +seh +vulkan).** Not Vulkan: thread 015c (GOG `Galaxy64.dll` init) → `sechost.dll` (+0x2A9A4 → +0x21648 → +0x21714 → +0x28290 → +0x2B76C) → **ACCESS_VIOLATION in Wine `rpcrt4.dll` +0x64AAC**, no handler takes it → DOOM's CrashHandler ("Storing data and writing local report", "FATAL ERROR: Filesystem call made without initialization") → C++ throw → crash dialog. Same bug as the EA app install (confirmed-issues: rpcrt4 AV writing 0x10 via sechost, both v15 layers 11.0-11.1 / 11.0-2, open). Device has only those two v15 layers. Early `RPC_S_SERVER_UNAVAILABLE` exceptions in other processes too.
 >
-> **Test 4 (next).** `WINEDEBUG=+err,+warn,+seh,+rpc,+service` to name the failing service call.
+> **Test 4 (04:54, +rpc +service).** The failing call is the service-manager open from `Galaxy64.dll`: svcctl over `\\.\pipe\svcctl` (services.exe, rpcss.exe, plugplay.exe, svchost.exe all running), bind OK, request sent, 24-byte reply received; the access violation happens in `ndr_client_call` UNMARSHAL of param[3] (out context handle, FC 0x30) — i.e. rpcrt4 writes the returned handle through a bad pointer. Same crash as the EA install (x64 EABackgroundService). Not graphics; the Subgroups switch (the DOOM Eternal fix, 10-21) is already `auto` on this shortcut. DOOM (2016) never ran in Bannerlator before: its 10-03 config/profile came from the GOG cloud save written by DroidDeck (0.3.2 notes: "GOG DOOM 143 fps").
+>
+> **State left.** Shortcut `Exec` = `DOOMx64vk.exe`, no envVars (original in `/sdcard/Download/bannerlator/shortcut-backups/`). Test captures `/sdcard/Download/bannerlator/doom-test/t1…t4`, crash reports in `…/doom-test/crash/`.
+>
+> **Two bugs, both need a decision.** (1) App: the auto-close watcher must follow a game that relaunches itself as another exe (DOOMx64.exe → DOOMx64vk.exe). (2) Layers (proton-wine): rpcrt4 crash on the first service-manager call from a 64-bit program on the v15 layers; suspect (unproven) the newer base's delay-loaded rpcrt4 in sechost on ARM64EC. Fix = layer rebuild; quick check = an older (v14) layer.
 
 ## 2026-10-30 — 📦 Move a game to another container MERGED (main `4f44f456`, DEVICE-PROVEN)
 
