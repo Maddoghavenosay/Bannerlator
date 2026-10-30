@@ -1,5 +1,11 @@
 # Star-Compose — Progress Log
 
+## 2026-10-30 — 📦 Proton layers v16 RELEASED (proton-wine `build-bionic-layers-20261030-v16`, Latest + catalog default)
+
+> **User:** "merge the proton fixes", then "merge them, then rebuild and make a new v16 aio release using the same type of release name, release description style and method as … v13 v14 v15 … use GitHub network".
+>
+> Five layer branches fast-forwarded to their `staging/<parent>/rpcrt4-exit-thunks` fix (backups `refs/backup/20261030/<parent>-before-rpcrt4-exit-thunks`), rebuilt green, release assembled on GitHub (temp workflows; no wcp through the device). Release: 8 wcp (DroidDeck-Proton 11.0-11.1 + GE 11.0-9 + Proton 11.0-2 arm64ec/x86_64, Proton 10.0-4 + GE 10.0-34 arm64ec), tag == proton_11.0-2 `2c0670d0`, Latest, v15-style notes + credits (Billy Laws / Jacek Caban, Valve). Mirror winlator-contents `bionic-layers-20261030-v16`; catalog 93c6d0d8 (8 rows → v16, 11.0-1 stays v15). Device-tested: DroidDeck-Proton 11.0-11.1 arm64ec (DOOM 2016 GOG); others CI only. Details: proton-wine PROGRESS_LOG on proton_11.0-2 (d8e65b0e).
+
 ## 2026-10-30 — 🧰 GOG prerequisites from Win Components, no container session (branch `feat/gog-prereqs-components` 466433b6, CI running, NOT device-tested)
 
 > **User:** "when a GOG game is downloaded and added to a container it asks if the user wants to install prerequisites … could they match up to the win components we offer and install those instead? to keep from having to open a container", then "yes build it on a new branch, use our components" (also for DirectX, without d3dx10).
