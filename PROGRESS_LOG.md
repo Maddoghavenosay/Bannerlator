@@ -1,5 +1,21 @@
 # Star-Compose — Progress Log
 
+## 2026-10-30 — 🧩 Visual C++ components count only with their files (branch `fix/vcredist-files` 6b444faf + winlator-contents `fix/vcredist-files` c982f20e, CI running, NOT device-tested)
+
+> **User:** "do all 3 fixes on one new branch" (app check + re-check, catalog MFC, recommendations scan). The catalog is another repo, so the same branch name in both.
+>
+> **CORRECTION (my earlier entry):** container 2's false "vcredist2022" is NOT the v15 rpcrt4 bug. Proof: Bannerlator lays out vcredist2022 itself (OfflineComponentInstaller, no Wine), and every install leaves an undo journal; container 1 has `.bannerlator-component-undo/vcredist2022` from 10-22 07:44:36 listing all files incl. MFC, container 2 has none. Records exist for containers 3 and 4, which no longer exist; container ids are reused (`maxContainerId + 1`) and nothing clears the record → container 2 (recreated 10-23) inherited an old "installed".
+>
+> **Built (app 6b444faf):** `ComponentInstallRecords` — record reset on container create/remove, copied on duplicate; `verified()` drops Visual C++ entries (vcredist2015/2019/2022, _dll, GOG:MSVC20xx) whose prefix lacks a non-Wine vcruntime140.dll (Wine's carry "Wine builtin DLL" at 0x40) or mfc140u.dll; used by the 4 Components screens, OfflineComponentInstaller, Xbox VC14, GOG prerequisites. `ComponentInstaller.install` and the installer-session finish return an error instead of recording when the files are missing. `GameRecommendations` also reads up to 16 non-imported DLLs beside the exe (DOOM's CChromaEditorLibrary.dll → mfc140u → Visual C++ 2015-2022). Simulated on Pocket FIT: container 1 keeps all VC records, container 2 drops them.
+>
+> **Built (catalog c982f20e):** vcredist2022_dll / 2015_dll / 2019_dll → new archive with MFC, all 51 DLLs 14.51.36247 from Microsoft's installers; vcredist2022 label → 14.44.35211.0. Asset kept at `/root/src/dl/vcredist-files/` — NOT uploaded (needs user OK).
+>
+> **CI:** app run 41073080201 (headSha 6b444faf checked).
+>
+> **Merge order:** asset upload → catalog merge → app merge (the app's check needs MFC in the _dll archive).
+>
+> **Device test plan:** install app build → container 2 Components shows Visual C++ not installed → install Visual C++ 2015-2022 → files + record; DOOM custom shortcut shows the Visual C++ recommendation; logcat FATAL check.
+
 ## 2026-10-30 — 🧩 Visual C++ components: marked installed without the files (investigation, nothing built)
 
 > **Why.** User: "how do we fix the vcredist or redistributables to include those files correctly" (after the Fold DOOM 2016 mfc140u report).
