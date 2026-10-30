@@ -30,7 +30,7 @@
 >
 > **App test build.** Auto-close branch CI 41030838366 ✅×4. Combined build for the device = `fix/combined-gog-autoclose` a7f647f1 (fix/gog-progress-bytes + merge fix/auto-close-relaunch; only the log conflicted), CI 41035141019 running. Install only with the user's yes, after the Xbox download.
 >
-> **05:55 device.** Xbox DOOM Eternal download finished (92.3 GB, installs.json entry "DOOM Eternal (BATTLEMODE - PC)", exe `launcher/idTechLauncher.exe`, xodus process gone). Combined app CI 41035141019 ✅×4 (not installed). **Test 5 (next):** DOOM (2016) with the fixed DLLs, `Exec` = `DOOMx64vk.exe`, no envVars, 120 s, screenshots.
+> **05:55 device.** Xbox DOOM Eternal download finished (92.3 GB, installs.json entry "DOOM Eternal (BATTLEMODE - PC)", exe `launcher/idTechLauncher.exe`, xodus process gone). Combined app CI 41035141019 ✅×4 (not installed). **Test 5 (05:56):** DOOM (2016) with the fixed DLLs, `Exec` = `DOOMx64vk.exe`: still "engine has crashed" (`Crash.LOCALHOST.00001.html` 05:56:42, 0xE06D7363), vk exe gone at t+89 s; default log shows no cause. **Test 6 (next):** `WINEDEBUG=+err,+warn,+seh,+loaddll`.
 >
 > **Two bugs, both need a decision.** (1) App: the auto-close watcher must follow a game that relaunches itself as another exe (DOOMx64.exe → DOOMx64vk.exe). (2) Layers (proton-wine): rpcrt4 crash on the first service-manager call from a 64-bit program on the v15 layers; suspect (unproven) the newer base's delay-loaded rpcrt4 in sechost on ARM64EC. Fix = layer rebuild; quick check = an older (v14) layer.
 
