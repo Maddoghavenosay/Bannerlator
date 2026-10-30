@@ -1,5 +1,17 @@
 # Star-Compose — Progress Log
 
+## 2026-10-30 — 🧰 GOG prerequisites from Win Components, no container session (branch `feat/gog-prereqs-components` 466433b6, CI running, NOT device-tested)
+
+> **User:** "when a GOG game is downloaded and added to a container it asks if the user wants to install prerequisites … could they match up to the win components we offer and install those instead? to keep from having to open a container", then "yes build it on a new branch, use our components" (also for DirectX, without d3dx10).
+>
+> **Found (main ee42b45c):** `GogRedistInstaller.installPrereqs` downloads GOG's redist installers and runs them through `ComponentExecInstaller` (a container session per installer). `StoreRedists.gog()` already maps GOG dep ids to catalog names (used for recommendations). Live catalog (winlator-contents acc3fe6): every mapped component installs offline — vcredist2005…2022 (`_dll`), dotnet35…48, d3dx9, d3dx11, d3dcompiler_43, xact, xact_x64, xaudio2.7, physx, xna31/40, XLiveRedist, `oalinst_dll` (plain `oalinst` runs its own setup).
+>
+> **Built (466433b6):** `installFromComponents()` runs first: per dep, the mapped components (`_dll` variant first) are installed with `ComponentInstaller.install` when all are offline-installable; each name + `GOG:<depId>` recorded. Only unmapped deps, ones needing an installer, or failed installs go to GOG's installer session as before. DirectX → d3dx9, d3dx11, d3dcompiler_43, xact, xact_x64, xaudio2.7 (no d3dx10 component; XInput is the app's own) — also what the recommendation list shows. Prompt text says the install happens without opening the container. New `ComponentInstallRecords.add`.
+>
+> **CI:** run 41084596262 (headSha 466433b6 checked).
+>
+> **Test plan:** a GOG game with prerequisites (DOOM 2016: MSVC2015 + DirectX) added to a container with none of them → prompt → Install → no container session; components appear in Win Components; REDIST lines in the GOG debug log; logcat FATAL check.
+
 ## 2026-10-30 — 🔀 Merged `fix/vcredist-files` to main (`6b481273`)
 
 > **User:** "merge it" (with screenshot 11:17: DOOM (2016) Components → Recommended "vcredist2022 · Installed · CChromaEditorLibrary.dll loads mfc140u.dll" = recommendation scan DEVICE-PROVEN; no FATAL since 11:13).
