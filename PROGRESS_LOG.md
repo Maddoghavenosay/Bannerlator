@@ -1,6 +1,20 @@
 # Star-Compose — Progress Log
 
-## 2026-10-29 — 📦 Move game: main (Xbox backend 0.2.12) merged in, rebuild for device test 3 (branch `feat/move-game-container`, CI GREEN, APK staged)
+## 2026-10-30 — 📦 Move a game to another container MERGED (main `4f44f456`, DEVICE-PROVEN)
+
+> **Xbox check (the open item).** User 2026-10-30: "xbox library loads" on the installed build `6ea422cc…` (= `93488d58` code), which carries the same NDK 26.1 Xbox backend copy (`484790e0…`) that main's builds restore from the shared cache. So main's Xbox binary is now seen working on the device (library only; no download/launch on this binary).
+>
+> **Merge.** User: "merge the move game". Fast-forward: main `dbd0289c` → `4f44f456` (branch head; main was an ancestor via merge commit `47502963`). Backups: `refs/backup/20261030/main-before-move-game-container` = `dbd0289c`, `refs/backup/20261030/feat-move-game-container` = `4f44f456`. Tree check: everything except this log is identical to the device-tested `93488d58`.
+>
+> **What main gains.** Move a game to another container from its settings (saves, C: game files, missing extras, cover/pin/Exec follow); Move only brings save folders whose name matches the game (`84cfc556`); per-game save backup + Move find older CODEX saves under `%APPDATA%\Steam\CODEX\<appid>` (`93488d58`).
+>
+> **Not in this merge.** `fix/save-folder-match` (`c40620df`, SaveLocator's own matching for backups/vault/picker): CI green, NOT device-tested, 7 behind main. Small open item: Move leaves the game's icon PNGs in the source container.
+>
+> **Earlier fix, logged late.** Xbox backend 0.2.12 was merged 2026-10-29 11:59Z after the user's "yes merge it" (fast-forward `b74261e6` → `dbd0289c`, backups `refs/backup/20261029/main-before-xbox-backend-0.2.12` + `fix-xbox-backend-0.2.12`; main builds 40869596519 + 40869596218 green). The merge was not written here at the time; header above corrected.
+>
+> **Next.** Main build (dispatch) to confirm; pre-release only when the user says.
+
+## 2026-10-29 — 📦 Move game: main (Xbox backend 0.2.12) merged in, device tests 3–4 (branch `feat/move-game-container`, CI GREEN, DEVICE-PROVEN, merged 10-30)
 
 > **Why.** The Xbox test build replaced this branch's APK (`79d0affd…`) on the device before device test 3 (real move of DiRT 3, C1 → C2). User chose "option 2": bring the branch up to date with main first, so one test build carries both the move feature and the Xbox fix.
 >
@@ -30,7 +44,7 @@
 >
 > **Next.** Xbox tab check on this build, then the user's merge go (backup ref `refs/backup/<date>/main-before-move-game-container` first; tree must equal tested `93488d58` code).
 
-## 2026-10-29 — 🎮 Xbox backend 0.2.12 + compact ticket fix from DroidDeck (fix/xbox-backend-0.2.12, CI GREEN, DEVICE-PROVEN, awaiting merge go)
+## 2026-10-29 — 🎮 Xbox backend 0.2.12 + compact ticket fix from DroidDeck (MERGED main `dbd0289c`, DEVICE-PROVEN)
 
 > **Why.** User: "port the Xbox fixes to bannerlator on a new branch off main". DroidDeck's library/download failure for accounts with delegation-compact (`d=`) tickets (`store-ticket-format`, Droid-Deck/DroidDeck#1713) was fixed by devSharaku in Droid-Deck/DroidDeck#1729 (merged `e871557b`, 7 testers confirmed). Bannerlator's `tools/xbox/backend.lock.json` was byte-identical to DroidDeck's lock before that fix (Nexus 0.2.8), so it has the same bug.
 >
