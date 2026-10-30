@@ -12,7 +12,13 @@
 >
 > **Device test.** Pending: install (closes the running DOOM Eternal), then DOOM (2016) via `DOOMx64.exe` (auto-close follow) and a GOG download (progress bar). NOT device-tested yet.
 >
-> **Resume point.** If the session dies: APK already staged (hash above); check `pm path com.tencent.ig` base.apk sha256 == `d8e91cd7…` to see whether the install happened.
+> **Installed 07:59:09** (pm install Success; installed base.apk sha256 == `d8e91cd7…`; the install closed the stuck DOOM Eternal; no FATAL). DOOM (2016) shortcut: leftover `envVars=WINEDEBUG=+err,+warn,+seh` removed (backup `shortcut-backups/DOOM (2016).desktop.20261030-debuglog`), now == the 06:05 working shortcut except HUD position. v16 `.wcp` ×8 staged in `/sdcard/Download/Proton-v16/` (sha256 host == device).
+>
+> **08:07 user installed `11.0-11.1-arm64ec-16` and switched container 1 to it** (`.container` wineVersion `Proton-11.0-11.1-arm64ec-16`). Bannerlator copied the v16 sechost/advapi32 into container 1 system32 (md5 `4cb5ddb1` / `dcec37b6` = the v16 layer's). Import tables match the hand-swapped files proven at 06:05 (sechost: rpcrt4 normal import only; advapi32: rpcrt4 normal + delay, same as the proven copy). The v15 layer dir still holds the hand-swapped files (originals in `doom-test/dll-backup/layer`).
+>
+> **Next tests (user-driven):** (A) DOOM (2016) as is (Exec `DOOMx64vk.exe`, zero-copy off) on v16 → proves the layer fix without hand-swapped files; (B) Exec back to `DOOMx64.exe` → proves the auto-close relaunch follow; (C) a GOG download → byte progress, speed, time left; (D) DOOM Eternal NOTICE network trace.
+>
+> **Resume point.** Installed app `a7f647f1` (`d8e91cd7…`), container 1 on v16, DOOM 2016 shortcut == working. Nothing running in the background. If the session dies, start with `cc -c` and continue at test A.
 
 ## 2026-10-30 — 🎮 DOOM Eternal (Xbox) closes after ~1 min (investigation)
 
