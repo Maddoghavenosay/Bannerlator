@@ -1,5 +1,19 @@
 # Star-Compose — Progress Log
 
+## 2026-10-30 — 📦 Combined build (GOG progress + auto-close follow) INSTALL + v16 layers staged for testing (branch `fix/combined-gog-autoclose`, CI GREEN, installing)
+
+> **Why.** User: "save v16 to my downloads folder so we can test, download and install the new apk". Earlier "yes" to installing the combined build when not playing.
+>
+> **Built.** `fix/combined-gog-autoclose` `a7f647f1` (GOG byte progress + speed/ETA from `fix/gog-progress-bytes` + auto-close follows relaunched exe from `fix/auto-close-relaunch`), CI run **41035141019** green 4/4. pubg APK sha256 `d8e91cd7…` (com.tencent.ig, vc 103 / 3.1.7 = dev build keeps release numbers), staged `/sdcard/Download/Bannerlator-gog-autoclose-a7f647f1-pubg.apk`, hash host == device. Replaces installed GOG-progress build `5d888e70` (05:03:18).
+>
+> **v16 layers (proton-wine, rpcrt4 exit-thunk fix, versionCode 16):** all 5 runs green — DD 11.0-11.1 41039855304 (`068807e2`), 11.0-2 41039880065 (`2c0670d0`), GE 11-9 41039905284 (`a01a7c58`), 10.0-4 41039929651 (`cc815410`), GE 10-34 41039944113 (`b76055cc`). arm64ec + x86_64 `.wcp` files going to `/sdcard/Download/Proton-v16/` for testing. **Not released** (user wants to test first).
+>
+> **DOOM Eternal E4 (06:37, user relaunch).** Same stop on the Bethesda NOTICE "Loading…" box. 06:41:08 Android's low-memory killer closed Termux (the Claude session) and ~15 other background apps; the game kept running (≈2.6 GB RAM + ≈4.9 GB GPU memory). The session now runs in a tmux session started via root outside Termux's process group (`cc`, Termux-side setup, not part of this repo).
+>
+> **Device test.** Pending: install (closes the running DOOM Eternal), then DOOM (2016) via `DOOMx64.exe` (auto-close follow) and a GOG download (progress bar). NOT device-tested yet.
+>
+> **Resume point.** If the session dies: APK already staged (hash above); check `pm path com.tencent.ig` base.apk sha256 == `d8e91cd7…` to see whether the install happened.
+
 ## 2026-10-30 — 🎮 DOOM Eternal (Xbox) closes after ~1 min (investigation)
 
 > **Why.** User downloaded DOOM Eternal from the Xbox store (product 9P74BRFBXXC6 "Doom Eternal - PC", 92.3 GB, done 05:55) and: "now what about doom eternal I just tried to launch?"
