@@ -1,5 +1,11 @@
 # Star-Compose — Progress Log
 
+## 2026-10-30 — 🔀 Merged `fix/vcredist-files` to main (`6b481273`)
+
+> **User:** "merge it" (with screenshot 11:17: DOOM (2016) Components → Recommended "vcredist2022 · Installed · CChromaEditorLibrary.dll loads mfc140u.dll" = recommendation scan DEVICE-PROVEN; no FATAL since 11:13).
+>
+> Backup ref `refs/backup/20261030/main-before-vcredist-files` = 7cd6717f (pushed). `--no-ff` merge 6b481273 (parents 7cd6717f + 6b444faf); `git diff 6b444faf 6b481273` = PROGRESS_LOG.md only → code == installed, device-tested build. All three fixes device-proven on the Pocket FIT. Catalog side already live (winlator-contents acc3fe6). Not released.
+
 ## 2026-10-30 — 🧩 Visual C++ components count only with their files (branch `fix/vcredist-files` 6b444faf + winlator-contents `fix/vcredist-files` c982f20e, CI running, NOT device-tested)
 
 > **User:** "do all 3 fixes on one new branch" (app check + re-check, catalog MFC, recommendations scan). The catalog is another repo, so the same branch name in both.
