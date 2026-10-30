@@ -1,5 +1,9 @@
 # Star-Compose — Progress Log
 
+## 2026-10-30 — 🔀 Merged `feat/gog-prereqs-components` to main (`3be00eff`)
+
+> **User:** "yes merge it" (after "good done" on 4119eb6b). Backup ref `refs/backup/20261030/main-before-gog-prereqs-components` = bf3f8efb (pushed). `--no-ff` merge 3be00eff (parents bf3f8efb + 4119eb6b); main had only PROGRESS_LOG commits since the base; `git diff 4119eb6b 3be00eff` = PROGRESS_LOG.md only → code == the installed, device-tested build. Not released.
+
 ## 2026-10-30 — 📦 Proton layers v16 RELEASED (proton-wine `build-bionic-layers-20261030-v16`, Latest + catalog default)
 
 > **User:** "merge the proton fixes", then "merge them, then rebuild and make a new v16 aio release using the same type of release name, release description style and method as … v13 v14 v15 … use GitHub network".
