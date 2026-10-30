@@ -12,7 +12,9 @@
 >
 > **Test 2 (04:49).** Shortcut `Exec` → `DOOMx64vk.exe`, envVars removed: no auto-close any more (vk exe alive 120 s). DOOM itself now shows "DOOM Unhandled Exception — The engine has crashed" (`Crash.LOCALHOST.00001.html`: ExpCode 0xE06D7363 = C++ throw via kernelbase, 04:49:36); `qconsole.log` last lines: Vulkan device "Wrapper(Adreno (TM) 750)", vendor 5143, VRAM 11458MB, driver 26.99.99, VK 1.3.366, "RENDER THREAD STACK SIZE: 4194304". Second, separate problem.
 >
-> **Test 3 (next).** Same, with `WINEDEBUG=+err,+warn,+seh,+vulkan` to see the last Vulkan calls before the throw.
+> **Test 3 (04:52, +seh +vulkan).** Not Vulkan: thread 015c (GOG `Galaxy64.dll` init) → `sechost.dll` (+0x2A9A4 → +0x21648 → +0x21714 → +0x28290 → +0x2B76C) → **ACCESS_VIOLATION in Wine `rpcrt4.dll` +0x64AAC**, no handler takes it → DOOM's CrashHandler ("Storing data and writing local report", "FATAL ERROR: Filesystem call made without initialization") → C++ throw → crash dialog. Same bug as the EA app install (confirmed-issues: rpcrt4 AV writing 0x10 via sechost, both v15 layers 11.0-11.1 / 11.0-2, open). Device has only those two v15 layers. Early `RPC_S_SERVER_UNAVAILABLE` exceptions in other processes too.
+>
+> **Test 4 (next).** `WINEDEBUG=+err,+warn,+seh,+rpc,+service` to name the failing service call.
 
 ## 2026-10-30 — 📦 Move a game to another container MERGED (main `4f44f456`, DEVICE-PROVEN)
 
