@@ -1,5 +1,13 @@
 # Star-Compose — Progress Log
 
+## 2026-10-30 — 🎮 DOOM Eternal (Xbox) closes after ~1 min (investigation)
+
+> **Why.** User downloaded DOOM Eternal from the Xbox store (product 9P74BRFBXXC6 "Doom Eternal - PC", 92.3 GB, done 05:55) and: "now what about doom eternal I just tried to launch?"
+>
+> **Found.** The Xbox launch runs the install record's exe (`files/xbox/installs.json` → `"exe":"launcher/idTechLauncher.exe"`, from appxmanifest `Application Executable`), not the shortcut `Exec` (`XServerDisplayActivity` ~15254 uses `xboxLaunch.getExe()`). `idTechLauncher.exe` = id's Electron launcher; the 06:16 log shows only the launcher's process for ~1 min, no `DOOMEternalx64vk.exe` (no BANNERIN XInput line for it), then the app exits (EXIT_SELF 0, 06:16:53). The Steam copy that worked 10-21 ran `DOOMEternalx64vk.exe` directly; this shortcut has container 1 defaults (adapter, FEX TSO, Subgroups default = pass-through).
+>
+> **Test E1 (next).** Back up installs.json (`/sdcard/Download/bannerlator/shortcut-backups/xbox-installs.json.20261030-orig`), set the record's exe to `DOOMEternalx64vk.exe`, launch with `WINEDEBUG=+err,+warn,+seh`.
+
 ## 2026-10-30 — 🎮 DOOM (2016) GOG: starts, black screen, closes (investigation, no code change yet)
 
 > **Why.** User: "doom 2016 just starts then shut down automatically on a black screen, can you look at logs and use root to drive test launches for me until successful launch?"
