@@ -10,7 +10,9 @@
 >
 > **Checked locally.** `cargo test --lib store_dl::gog`: 22 passed (new: chunk bytes counted per verified chunk, not for a failed one; gate lets one event per interval). javac syntax pass on `GogDownloadManager.java` (only missing-Android-class errors). Kotlin not compiled locally (CI).
 >
-> **Next.** CI build (dispatch), stage the pubg APK, ask before installing; device test = a GOG download (DOOM is installed now, so a different game or reinstall) — bar, GB to go, speed, time left on the game page, Download Manager and notification.
+> **CI.** Run 41028284572 (dispatch, headSha `b26e3e0b`, label gog-progress-b26e3e0): pubg/standard/ludashi/antutu success. **Staged** `/sdcard/Download/Bannerlator-gog-progress-b26e3e0b.apk` sha256 `5d888e70…c5ee6d` (host = device); dex has `GogDownloadTicker`, `libblsteam.so` has `onBytes`. Not installed (ask first).
+>
+> **Next.** Ask before installing; device test = a GOG download (DOOM is installed now, so a different game or reinstall) — bar, GB to go, speed, time left on the game page, Download Manager and notification.
 
 ## 2026-10-30 — 📦 Move a game to another container MERGED (main `4f44f456`, DEVICE-PROVEN)
 
