@@ -25,6 +25,8 @@
 > **Logs** (`/sdcard/Download/DOOM 2016.zip`): app 3.1.7 (103), container 2, Proton-11.0-11.1-arm64ec-16, Turnip Gen8 V38-patched, game at `E:\Winlator\Games\DOOM (2016)\DOOMx64vk.exe`. All 4 runs stop at the same spot: `err:module:import_dll Library mfc140u.dll (which is needed by ...CChromaEditorLibrary.dll) not found`, then `err:seh:call_seh_handlers invalid frame ...` / `Exception frame is not in stack limits` → process gone.
 >
 > **Compare (Pocket FIT, works):** GOG copy also ships CChromaEditorLibrary.dll, but container 1 has mfc140u.dll (+ vcruntime140, VC++ 2015-2022 files dated 2026-10-22); containers 2/3 lack it; no Pocket FIT DOOM log has the mfc140u line. "could not pin libvulkan_wrapper.so" (doubled path) appears on the Pocket FIT too → not the cause (separate small bug). Likely fix for the user: install "Visual C++ 2015-2022" (vcredist2022) in container 2 (container → "Browse & install components"). Not verified on the Fold.
+>
+> **Update.** User: vcredist2022 + vcredist2022_arm64 already installed on the Fold. Pocket FIT check: the app lists vcredist2022 as installed in containers 1–4, but only container 1 has Microsoft's DLLs (x64 14.44.35211.0); container 2 has Wine's builtin msvcp140/vcruntime140 and no mfc140u. Catalog: vcredist2022_arm64 = registry keys only; vcredist2022_dll has no MFC DLLs. "GOG Prerequisites" shows only for GOG-store games. Workaround: container 1's three DLLs staged in `/sdcard/Download/DOOM-2016-vc-dlls/` (hash-checked) for the user to copy beside DOOMx64vk.exe on the Fold. Not tested. App follow-ups for the user to pick (new branches).
 
 ## 2026-10-30 — 📦 Combined build (GOG progress + auto-close follow) INSTALL + v16 layers staged for testing (branch `fix/combined-gog-autoclose`, CI GREEN, installing)
 
