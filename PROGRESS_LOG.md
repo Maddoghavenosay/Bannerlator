@@ -10,7 +10,9 @@
 >
 > **Test 1 (04:46, debug).** DOOMx64.exe → `CreateProcess DOOMx64vk.exe … +r_renderAPI -2` at 04:46:20, vk exe connects over Wayland 04:46:20.27 (black screen), loads Galaxy64/steam_api64/bink2w64, no exception. At 04:46:26.155 the APP resumes all guest processes and at 04:46:27.16 sends SIGKILL/SIGTERM to every guest process incl. DOOMx64vk.exe (pid 10261) → **the session is ended by Bannerlator, not by DOOM.** Cause: auto-close-on-exit watcher (`XServerDisplayActivity.evaluateGameExitTick`, `:17767`, default ON, `autoCloseOnExit=1` in the shortcut) watches only the exact launched exe name (`doomx64.exe`); DOOM's stub exits after handing off to `DOOMx64vk.exe`, 3 ticks without it → `exit()`. Also: DOOM's `DOOMConfig.cfg/.local` (10-03, `r_renderAPI "1"` = Vulkan) come from the GOG cloud save (`BH_GOG_CLOUD autopath … DOOM/base`).
 >
-> **Test 2 (next).** Shortcut `Exec` → `DOOMx64vk.exe` (no hand-off, watcher follows the real game), envVars removed.
+> **Test 2 (04:49).** Shortcut `Exec` → `DOOMx64vk.exe`, envVars removed: no auto-close any more (vk exe alive 120 s). DOOM itself now shows "DOOM Unhandled Exception — The engine has crashed" (`Crash.LOCALHOST.00001.html`: ExpCode 0xE06D7363 = C++ throw via kernelbase, 04:49:36); `qconsole.log` last lines: Vulkan device "Wrapper(Adreno (TM) 750)", vendor 5143, VRAM 11458MB, driver 26.99.99, VK 1.3.366, "RENDER THREAD STACK SIZE: 4194304". Second, separate problem.
+>
+> **Test 3 (next).** Same, with `WINEDEBUG=+err,+warn,+seh,+vulkan` to see the last Vulkan calls before the throw.
 
 ## 2026-10-30 — 📦 Move a game to another container MERGED (main `4f44f456`, DEVICE-PROVEN)
 
