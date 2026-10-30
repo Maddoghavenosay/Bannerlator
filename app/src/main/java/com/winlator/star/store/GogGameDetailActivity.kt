@@ -25,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import com.winlator.star.store.compose.GogPrereqDialogs
 import com.winlator.star.ui.screens.OutlinedAlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -81,6 +82,7 @@ class GogGameDetailActivity : ComponentActivity(), GogRedistInstaller.Host {
     /** Redist install feedback → the shared themed bar (system Toasts are an unreadable black box
      *  on this ROM). Posted on the main thread; GogRedistInstaller already calls on main. */
     override fun onRedistMessage(msg: String) { runOnUiThread { resultBarMsg = msg } }
+    override val prereqUi = GogRedistInstaller.PrereqUi()
 
 
     companion object {
@@ -351,6 +353,7 @@ class GogGameDetailActivity : ComponentActivity(), GogRedistInstaller.Host {
                         onDismiss = { showExePicker = null },
                     )
                 }
+                GogPrereqDialogs(prereqUi)
                 resultBarMsg?.let { UninstallResultBar(it) { resultBarMsg = null } }
             }
         }

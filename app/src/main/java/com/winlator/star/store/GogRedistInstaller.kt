@@ -1,18 +1,14 @@
 package com.winlator.star.store
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.view.ContextThemeWrapper
-import android.view.View
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.ScrollView
-import android.widget.TextView
 import android.widget.Toast
-import com.winlator.star.R
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.winlator.star.components.Component
 import com.winlator.star.components.ComponentCatalog
 import com.winlator.star.components.ComponentExecInstaller
@@ -100,27 +96,19 @@ object GogRedistInstaller {
 
     /**
      * Post-add prompt: offered right after the game is added to a container (the moment we know the
-     * target prefix). Shows what will be installed, warns a brief setup window will appear, and on
-     * confirm drives the install. No-op (silent) when the game declared no deps.
+     * target prefix). Shows what will be installed and, on confirm, drives the install. No-op
+     * (silent) when the game declared no deps.
      */
     @JvmStatic
     fun promptAndInstall(activity: Activity, container: Container, gameId: String) {
         val info = readGameDeps(activity, gameId)
         if (info == null || info.deps.isEmpty()) return
+        val host = activity as? Host ?: return
         mainHandler().post {
             if (activity.isFinishing || activity.isDestroyed) return@post
-            val listStr = info.deps.joinToString(", ")
-            AlertDialog.Builder(activity, R.style.StoreAlertDialogDark)
-                .setTitle("Install prerequisites?")
-                .setMessage(
-                    "This game needs: $listStr.\n\n" +
-                        "They'll be installed into \"${container.name}\" from Win Components, without " +
-                        "opening the container. One with no matching component opens a brief setup " +
-                        "window that closes on its own."
-                )
-                .setPositiveButton("Install") { _, _ -> installPrereqs(activity, container, gameId) }
-                .setNegativeButton("Skip", null)
-                .show()
+            host.prereqUi.confirm = Confirm(info.deps, container.name?.ifEmpty { null } ?: "Container ${container.id}") {
+                installPrereqs(activity, container, gameId)
+            }
         }
     }
 
@@ -134,25 +122,16 @@ object GogRedistInstaller {
             mainHandler().post { toast(activity, "No prerequisites needed for this game.") }
             return
         }
+        val host = activity as? Host ?: return
         Thread {
-            val containers = runCatching { ContainerManager(activity).containers }.getOrNull()
+            val containers: List<Container> = runCatching { ContainerManager(activity).containers }.getOrNull().orEmpty()
             mainHandler().post {
                 if (activity.isFinishing || activity.isDestroyed) return@post
-                if (containers.isNullOrEmpty()) {
-                    toast(activity, "Add this game to a container first.")
-                    return@post
+                when {
+                    containers.isEmpty() -> toast(activity, "Add this game to a container first.")
+                    containers.size == 1 -> promptAndInstall(activity, containers[0], gameId)
+                    else -> host.prereqUi.pick = Pick(containers) { promptAndInstall(activity, it, gameId) }
                 }
-                if (containers.size == 1) {
-                    promptAndInstall(activity, containers[0], gameId)
-                    return@post
-                }
-                val names = containers.map { it.name?.ifEmpty { "Container ${it.id}" } ?: "Container ${it.id}" }
-                    .toTypedArray()
-                AlertDialog.Builder(activity, R.style.StoreAlertDialogDark)
-                    .setTitle("Install prerequisites into…")
-                    .setItems(names) { _, which -> promptAndInstall(activity, containers[which], gameId) }
-                    .setNegativeButton("Cancel", null)
-                    .show()
             }
         }.also { it.name = "gog-redist-picker" }.start()
     }
@@ -175,10 +154,15 @@ object GogRedistInstaller {
             toast(activity, "Prerequisites are already being installed.")
             return
         }
+        val host = activity as? Host
+        if (host == null) {
+            running.set(false)
+            return
+        }
         val app = activity.applicationContext
         debug(app, "start game=$gameId container=${container.id} deps=${info.deps} " +
             "scriptInterpreter=${info.scriptInterpreter}")
-        val window = PrereqWindow(activity)
+        val window = PrereqWindow(activity, host.prereqUi)
         Thread {
             try {
                 val left = installFromComponents(app, container, info.deps, window)
@@ -317,7 +301,7 @@ object GogRedistInstaller {
     private fun installFromComponents(app: Context, container: Container, deps: List<String>, window: PrereqWindow): List<String> {
         if (ComponentCatalog.byName.isEmpty()) runCatching { ComponentCatalog.load() }
         val installed = ComponentInstallRecords.verified(app, container)
-        val lines = ArrayList<String>()
+        val lines = ArrayList<PrereqRow>()
         val plan = LinkedHashMap<String, List<Planned>?>()
         for (depId in deps) {
             val names = StoreRedists.gog(depId)
@@ -325,11 +309,12 @@ object GogRedistInstaller {
             if (names.isEmpty() || components.any { it == null || !ComponentInstaller.isInstallable(it) }) {
                 debug(app, "dep '$depId' → ${names.ifEmpty { listOf("no component") }}: GOG's installer")
                 plan[depId] = null
-                lines += "$depId — needs GOG's installer"
+                lines += PrereqRow(depId, "needs GOG's installer", RowState.FAILED)
                 continue
             }
             plan[depId] = names.zip(components).map { (name, c) ->
-                lines += "$depId → ${DependencyDetector.labelOf(name)} — " + if (name in installed) "already installed" else "waiting"
+                lines += if (name in installed) PrereqRow("$depId → ${DependencyDetector.labelOf(name)}", "already installed", RowState.DONE)
+                    else PrereqRow("$depId → ${DependencyDetector.labelOf(name)}", "waiting", RowState.WAITING)
                 Planned(depId, name, c, lines.size - 1)
             }
         }
@@ -344,19 +329,19 @@ object GogRedistInstaller {
             for (p in items) {
                 if (p.name in installed) continue
                 val label = "$depId → ${DependencyDetector.labelOf(p.name)}"
-                if (!ok) { window.row(p.row, "$label — skipped"); continue }
-                window.row(p.row, "$label — installing")
+                if (!ok) { window.row(p.row, "skipped", RowState.WAITING); continue }
+                window.row(p.row, "installing", RowState.ACTIVE)
                 val c = p.component ?: continue
                 val error = ComponentInstaller.install(app, container, c, { f ->
-                    window.progress(done, f, "$label: ${(f * 100).toInt()} %")
+                    window.progress(done, f, null)
                 }, { stage -> window.progress(done, -1f, "$label: $stage") })
                 done++
                 if (error == null) {
                     ComponentInstallRecords.add(app, container.id, p.name)
-                    window.row(p.row, "$label — done")
+                    window.row(p.row, "done", RowState.DONE)
                 } else {
                     debug(app, "dep '$depId': ${c.name} failed ($error)")
-                    window.row(p.row, "$label — failed: $error")
+                    window.row(p.row, "failed: $error", RowState.FAILED)
                     ok = false
                 }
                 window.progress(done, 0f, "")
@@ -371,77 +356,73 @@ object GogRedistInstaller {
         return left
     }
 
-    /**
-     * The prerequisites window: one line per dep → component with its state, the current step, and
-     * an overall bar. [finished] turns Hide into Close and, when [finished]'s action is given, shows
-     * the button that runs GOG's installers. Safe to call from any thread.
-     */
-    private class PrereqWindow(private val activity: Activity) {
-        private var dialog: AlertDialog? = null
-        private var hidden = false
-        private val rows = ArrayList<TextView>()
-        private lateinit var stage: TextView
-        private lateinit var bar: ProgressBar
+    // ── Compose UI state ------------------------------------------------------------------------
+
+    /** What the prerequisites dialogs show; the host draws it with `GogPrereqDialogs`. */
+    class PrereqUi {
+        var pick by mutableStateOf<Pick?>(null)
+        var confirm by mutableStateOf<Confirm?>(null)
+        var progress by mutableStateOf<Progress?>(null)
+    }
+
+    /** Pick the container to install into. */
+    class Pick(val containers: List<Container>, val onSelected: (Container) -> Unit)
+
+    /** "Install prerequisites?" for [deps] into [containerName]. */
+    class Confirm(val deps: List<String>, val containerName: String, val onInstall: () -> Unit)
+
+    enum class RowState { WAITING, ACTIVE, DONE, FAILED }
+
+    /** One dep → component line of the progress window. */
+    data class PrereqRow(val title: String, val status: String, val state: RowState)
+
+    /** The progress window: [rows], the current step, the overall bar, and the end state. */
+    class Progress {
+        val rows = mutableStateListOf<PrereqRow>()
+        var fraction by mutableStateOf(0f)
+        var step by mutableStateOf("")
+        var percent by mutableStateOf<Int?>(null)
+        /** Set when the run is over: what to say. */
+        var finished by mutableStateOf<String?>(null)
+        /** When set, the "Use GOG's installer" button runs it. */
+        var gog by mutableStateOf<(() -> Unit)?>(null)
+        var hidden by mutableStateOf(false)
+    }
+
+    /** Feeds [ui]'s progress window from the install thread; every change is posted to the main thread. */
+    private class PrereqWindow(private val activity: Activity, private val ui: PrereqUi) {
+        private val state = Progress()
         private var total = 1
 
-        private fun ui(block: () -> Unit) = mainHandler().post {
+        private fun post(block: () -> Unit) = mainHandler().post {
             if (!activity.isFinishing && !activity.isDestroyed) block()
         }
 
-        private fun dp(v: Int) = (v * activity.resources.displayMetrics.density).toInt()
-
-        fun show(lines: List<String>, count: Int) = ui {
+        fun show(rows: List<PrereqRow>, count: Int) = post {
             total = count.coerceAtLeast(1)
-            val ctx = ContextThemeWrapper(activity, R.style.StoreAlertDialogDark)
-            val box = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(24), dp(8), dp(24), 0)
-            }
-            for (line in lines) {
-                val t = TextView(ctx).apply { text = line; setTextColor(0xFFE6E6EA.toInt()); setPadding(0, dp(4), 0, dp(4)) }
-                rows += t
-                box.addView(t)
-            }
-            bar = ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply { max = 1000 }
-            box.addView(bar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                .apply { topMargin = dp(12) })
-            stage = TextView(ctx).apply { textSize = 12f; setTextColor(0xFFB4B4BE.toInt()); setPadding(0, dp(4), 0, dp(8)) }
-            box.addView(stage)
-            dialog = AlertDialog.Builder(activity, R.style.StoreAlertDialogDark)
-                .setTitle("Installing prerequisites")
-                .setView(ScrollView(ctx).apply { addView(box) })
-                .setCancelable(false)
-                .setPositiveButton("Hide") { _, _ -> hidden = true }
-                .setNeutralButton("Use GOG's installer", null)
-                .show()
-            dialog?.getButton(AlertDialog.BUTTON_NEUTRAL)?.visibility = View.GONE
+            state.rows.addAll(rows)
+            ui.progress = state
         }
 
-        fun row(i: Int, text: String) = ui { rows.getOrNull(i)?.text = text }
-
-        /** [done] components finished, the current one at [fraction] (negative = unchanged), [text] the step. */
-        fun progress(done: Int, fraction: Float, text: String) = ui {
-            if (!::bar.isInitialized) return@ui
-            if (fraction >= 0) bar.progress = ((done + fraction.coerceIn(0f, 1f)) / total * 1000).toInt()
-            stage.text = text
+        fun row(i: Int, status: String, rowState: RowState) = post {
+            state.rows.getOrNull(i)?.let { state.rows[i] = it.copy(status = status, state = rowState) }
         }
 
-        fun finished(message: String, gog: (() -> Unit)?) = ui {
-            val d = dialog
-            if (d == null || hidden || !d.isShowing) {
-                toast(activity, message)
-                return@ui
+        /** [done] components finished, the current one at [fraction] (negative = unchanged), [step] the stage (null = unchanged). */
+        fun progress(done: Int, fraction: Float, step: String?) = post {
+            if (fraction >= 0) {
+                state.fraction = (done + fraction.coerceIn(0f, 1f)) / total
+                state.percent = (fraction.coerceIn(0f, 1f) * 100).toInt()
             }
-            if (::bar.isInitialized) bar.progress = 1000
-            stage.text = message
-            d.setTitle(if (gog == null) "Prerequisites installed" else "Prerequisites")
-            d.getButton(AlertDialog.BUTTON_POSITIVE)?.text = "Close"
-            if (gog != null) {
-                d.getButton(AlertDialog.BUTTON_NEUTRAL)?.apply {
-                    visibility = View.VISIBLE
-                    setOnClickListener { d.dismiss(); gog() }
-                }
-            }
+            if (step != null) state.step = step
+        }
+
+        fun finished(message: String, gog: (() -> Unit)?) = post {
+            state.fraction = 1f
+            state.percent = null
+            state.gog = gog
+            state.finished = message
+            if (state.hidden || ui.progress !== state) toast(activity, message)
         }
     }
 
@@ -505,7 +486,11 @@ object GogRedistInstaller {
      * themed bar instead of a system Toast (which draws as an unreadable black box on this ROM,
      * targetSDK 28). GogGameDetailActivity implements it; other callers fall back to Toast.
      */
-    interface Host { fun onRedistMessage(msg: String) }
+    interface Host {
+        fun onRedistMessage(msg: String)
+        /** The prerequisites dialogs' state, drawn by the host's Compose tree (`GogPrereqDialogs`). */
+        val prereqUi: PrereqUi
+    }
 
     private fun toast(ctx: Context, msg: String) {
         if (ctx is Host) ctx.onRedistMessage(msg)
