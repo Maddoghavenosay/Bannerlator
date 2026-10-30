@@ -1,5 +1,31 @@
 # Star-Compose — Progress Log
 
+## 2026-10-30 — 🔐 GOG login: Cloudflare "I'm human" check fails (branch `fix/gog-login-cloudflare`, CI running, NOT device-tested)
+
+> **Why.** User: "a fix for cloud human verification on bannerlator Gog login page on a new branch, cloudflare gives error when checking the I'm human box". User remembered a similar DroidDeck issue: DroidDeck PR #1500 (Diego Ramos / diegodru), device-proven on the Pocket FIT 2026-10-25 ("gog logs in now").
+>
+> **Cause (code @ main 03d9739c).** `GogLoginActivity.kt` gave the main login WebView `GALAXY_UA` = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) GOG Galaxy/2.0" while the page's scripts and client hints report an Android WebView; Cloudflare compares them. The flow also swapped UAs mid-session (Galaxy <-> fixed Chrome/127 UA for the Google/Facebook/Apple leg). Cloudflare's Turnstile mobile docs list "Consistent User Agent throughout the session" as a requirement and say a UA change mid-session makes the challenge fail.
+>
+> **Built.** `f5cb1958`: one UA for the whole flow = the WebView's own UA minus " Build/…", "; wv" and " Version/4.0" (`browserUserAgent()`; fixed Chrome UA only as fallback); main view, reload and popup all use it; no UA swaps in `route()`; in-place IdP hops still turn on third-party cookies; unused `isGogHost` removed; header comment rewritten (the old "Galaxy UA required" note dated from the 2026-06 Compose white screen). layout=client2 kept. Same approach as DroidDeck PR #1500, credited in the commit.
+>
+> **CI.** Run 41066450453 (workflow_dispatch, headSha f5cb1958 checked).
+>
+> **Device test.** Not yet. Plan: stage APK + hashes, ask before install, then GOG sign-in (email/password + the Cloudflare box; Google sign-in if possible), logcat FATAL check.
+>
+> **Resume.** Check run 41066450453 jobs → download pubg artifact → stage `/sdcard/Download/Bannerlator-gog-login-cf-f5cb1958-pubg.apk` → ask user.
+
+## 2026-10-30 — 🔀 Merged `fix/combined-gog-autoclose` to main (`03d9739c`)
+
+> **User:** "also merge the branch to main", then "we will build any new fixes on a new branch".
+>
+> Backup ref `refs/backup/20261030/main-before-combined-gog-autoclose` = 89cc9a26 (pushed). `--no-ff` merge 03d9739c (parents 89cc9a26 + a7f647f1); only conflict PROGRESS_LOG.md (both sides added entries; kept both). `git diff a7f647f1 03d9739c` = PROGRESS_LOG.md only → code tree == the installed, device-tested build. Contains fix/gog-progress-bytes (10469a7e) and fix/auto-close-relaunch (29af386a). Main push build run 41065722099. Proof: auto-close follow DEVICE-PROVEN (DOOM test B); GOG progress bar NOT device-tested yet (test C). Branches kept.
+
+## 2026-10-30 — 🎮 DOOM (2016) on a user's Galaxy Fold (SM-F976U, Adreno 840, Android 17): black screen then closes (report)
+
+> **Logs** (`/sdcard/Download/DOOM 2016.zip`): app 3.1.7 (103), container 2, Proton-11.0-11.1-arm64ec-16, Turnip Gen8 V38-patched, game at `E:\Winlator\Games\DOOM (2016)\DOOMx64vk.exe`. All 4 runs stop at the same spot: `err:module:import_dll Library mfc140u.dll (which is needed by ...CChromaEditorLibrary.dll) not found`, then `err:seh:call_seh_handlers invalid frame ...` / `Exception frame is not in stack limits` → process gone.
+>
+> **Compare (Pocket FIT, works):** GOG copy also ships CChromaEditorLibrary.dll, but container 1 has mfc140u.dll (+ vcruntime140, VC++ 2015-2022 files dated 2026-10-22); containers 2/3 lack it; no Pocket FIT DOOM log has the mfc140u line. "could not pin libvulkan_wrapper.so" (doubled path) appears on the Pocket FIT too → not the cause (separate small bug). Likely fix for the user: install "Visual C++ 2015-2022" (vcredist2022) in container 2 (container → "Browse & install components"). Not verified on the Fold.
+
 ## 2026-10-30 — 📦 Combined build (GOG progress + auto-close follow) INSTALL + v16 layers staged for testing (branch `fix/combined-gog-autoclose`, CI GREEN, installing)
 
 > **Why.** User: "save v16 to my downloads folder so we can test, download and install the new apk". Earlier "yes" to installing the combined build when not playing.
