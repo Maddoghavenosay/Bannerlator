@@ -23,6 +23,12 @@ object ComponentInstallRecords {
         prefs(context).edit().remove(key(containerId)).apply()
     }
 
+    @JvmStatic fun add(context: Context, containerId: Int, name: String) {
+        val p = prefs(context)
+        val names = p.getStringSet(key(containerId), emptySet()).orEmpty()
+        if (name !in names) p.edit().putStringSet(key(containerId), names + name).apply()
+    }
+
     @JvmStatic fun copy(context: Context, fromId: Int, toId: Int) {
         val p = prefs(context)
         val names = p.getStringSet(key(fromId), emptySet()).orEmpty()

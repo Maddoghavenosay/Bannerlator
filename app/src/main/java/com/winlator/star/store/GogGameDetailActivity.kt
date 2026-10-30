@@ -25,6 +25,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import com.winlator.star.store.compose.AddResultDialog
+import com.winlator.star.store.compose.AddShortcutResult
+import com.winlator.star.store.compose.AddToShortcutsRequest
+import com.winlator.star.store.compose.ContainerPickerDialog
+import com.winlator.star.store.compose.GogPrereqDialogs
+import com.winlator.star.store.compose.openShortcutsScreen
 import com.winlator.star.ui.screens.OutlinedAlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -81,6 +87,9 @@ class GogGameDetailActivity : ComponentActivity(), GogRedistInstaller.Host {
     /** Redist install feedback → the shared themed bar (system Toasts are an unreadable black box
      *  on this ROM). Posted on the main thread; GogRedistInstaller already calls on main. */
     override fun onRedistMessage(msg: String) { runOnUiThread { resultBarMsg = msg } }
+    override val prereqUi = GogRedistInstaller.PrereqUi()
+    private var addToShortcuts by mutableStateOf<AddToShortcutsRequest?>(null)
+    private var addResult by mutableStateOf<AddShortcutResult?>(null)
 
 
     companion object {
@@ -279,10 +288,11 @@ class GogGameDetailActivity : ComponentActivity(), GogRedistInstaller.Host {
                     onBack = { finish() },
                     onLaunch = {
                         val exe = prefs.getString("gog_exe_$gameId", null)
-                        // Add to the chosen container; the prereqs-aware path then offers to install the
-                        // game's required GOG redistributables (gap#3) into that same prefix.
-                        if (exe != null) GogLaunchHelper.addToLauncherWithPrereqs(
-                            this@GogGameDetailActivity, title, exe, imageUrl, gameId)
+                        // Add to the chosen container (Compose picker below); the add then offers to install
+                        // the game's required GOG redistributables (gap#3) into that same prefix.
+                        if (exe != null) StarLaunchBridge.loadContainers(this@GogGameDetailActivity) { containers ->
+                            addToShortcuts = AddToShortcutsRequest(title, exe, imageUrl, containers)
+                        }
                     },
                     prereqsVisible = prereqsVisible,
                     onInstallPrereqs = {
@@ -351,6 +361,38 @@ class GogGameDetailActivity : ComponentActivity(), GogRedistInstaller.Host {
                         onDismiss = { showExePicker = null },
                     )
                 }
+                addToShortcuts?.let { req ->
+                    ContainerPickerDialog(
+                        gameName = req.gameName,
+                        containers = req.containers,
+                        onDismiss = { addToShortcuts = null },
+                        onSelected = { container ->
+                            addToShortcuts = null
+                            StarLaunchBridge.writeShortcutAsync(this@GogGameDetailActivity, container, req.gameName,
+                                req.exePath, req.coverUrl) { success, message ->
+                                // With prerequisites to offer, a short note instead of the result dialog,
+                                // so the prompt does not stack on it.
+                                if (success && GogRedistInstaller.hasPrereqs(this@GogGameDetailActivity, gameId)) {
+                                    resultBarMsg = "\"${req.gameName}\" added to Shortcuts"
+                                    GogRedistInstaller.promptAndInstall(this@GogGameDetailActivity, container, gameId)
+                                } else {
+                                    addResult = AddShortcutResult(req.gameName, success, message)
+                                }
+                            }
+                        },
+                    )
+                }
+                addResult?.let { result ->
+                    AddResultDialog(
+                        result = result,
+                        onOpenShortcuts = {
+                            addResult = null
+                            openShortcutsScreen(this@GogGameDetailActivity)
+                        },
+                        onDismiss = { addResult = null },
+                    )
+                }
+                GogPrereqDialogs(prereqUi)
                 resultBarMsg?.let { UninstallResultBar(it) { resultBarMsg = null } }
             }
         }
