@@ -1,5 +1,13 @@
 # Star-Compose — Progress Log
 
+## 2026-10-30 — 🎮 DOOM (2016) GOG: starts, black screen, closes (investigation, no code change yet)
+
+> **Why.** User: "doom 2016 just starts then shut down automatically on a black screen, can you look at logs and use root to drive test launches for me until successful launch?"
+>
+> **Found (logs of the 04:40–04:42 launches).** Shortcut `DOOM (2016).desktop` (container 1, Proton 11.0-11.1-arm64ec-15, Wayland, adapter `c572b590`, `graphicsDriver=wrapper-original`, FEX PERFORMANCE_TSO). `DOOMx64.exe` starts, `qconsole.log`: "Restarting executable in to different graphics API" — `DOOMConfig.local` (dated 2026-10-03, older install) has `r_renderAPI "1"` (Vulkan) → it starts `DOOMx64vk.exe` (pid 452, BANNERIN XInput loads) and that process ends without writing its own `qconsole.log` and without any Wine error; the app then exits normally (`EXIT_SELF`, code 0). The "could not pin … libvulkan_wrapper.so" line is in DOOM Eternal's working logs too (harmless).
+>
+> **Plan.** Root-driven launches, shortcut backed up first: (1) one diagnostic launch with `WINEDEBUG=+err,+warn,+seh,+loaddll,+process` on this shortcut only; then fix by evidence.
+
 ## 2026-10-30 — 📦 Move a game to another container MERGED (main `4f44f456`, DEVICE-PROVEN)
 
 > **Xbox check (the open item).** User 2026-10-30: "xbox library loads" on the installed build `6ea422cc…` (= `93488d58` code), which carries the same NDK 26.1 Xbox backend copy (`484790e0…`) that main's builds restore from the shared cache. So main's Xbox binary is now seen working on the device (library only; no download/launch on this binary).
