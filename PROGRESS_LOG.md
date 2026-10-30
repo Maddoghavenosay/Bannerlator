@@ -1,5 +1,9 @@
 # Star-Compose — Progress Log
 
+## 2026-10-30 — 🚀 Cutting 3.1.8 stable (user: "let's just release 3.1.8")
+
+> Release commit bee2a7bc (versionCode 104 / 3.1.8, `docs/releases/3.1.8.md` in the 3.1.7 layout with the badges under the title, README version row / contents / section) + notes sizes 2670dfe4. RC CI 41138267330 green ×4; notes dry run 41138272582 green (local: "stable 3.1.8: layout OK"). Update size measured on GitHub (temp branch `tmp/size-3.1.8`, run 41139193559): 3.1.7 → 3.1.8 about 27 MB, 3.1.6 → 3.1.8 about 139 MB, full APK about 578 MB, rebuilds byte-exact. App code == main 3be00eff (device-tested 4119eb6b) + version; no separate RC device smoke test. Backup `refs/backup/20261030/main-before-3.1.8` = 361f4f28; main fast-forwards to this commit; release.yml next. Not device-tested in this release: GOG download bar, GOG sign-in check (in the notes).
+
 ## 2026-10-30 — 🔀 Merged `feat/gog-prereqs-components` to main (`3be00eff`)
 
 > **User:** "yes merge it" (after "good done" on 4119eb6b). Backup ref `refs/backup/20261030/main-before-gog-prereqs-components` = bf3f8efb (pushed). `--no-ff` merge 3be00eff (parents bf3f8efb + 4119eb6b); main had only PROGRESS_LOG commits since the base; `git diff 4119eb6b 3be00eff` = PROGRESS_LOG.md only → code == the installed, device-tested build. Not released.
