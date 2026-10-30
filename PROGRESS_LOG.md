@@ -6,7 +6,7 @@
 >
 > Five layer branches fast-forwarded to their `staging/<parent>/rpcrt4-exit-thunks` fix (backups `refs/backup/20261030/<parent>-before-rpcrt4-exit-thunks`), rebuilt green, release assembled on GitHub (temp workflows; no wcp through the device). Release: 8 wcp (DroidDeck-Proton 11.0-11.1 + GE 11.0-9 + Proton 11.0-2 arm64ec/x86_64, Proton 10.0-4 + GE 10.0-34 arm64ec), tag == proton_11.0-2 `2c0670d0`, Latest, v15-style notes + credits (Billy Laws / Jacek Caban, Valve). Mirror winlator-contents `bionic-layers-20261030-v16`; catalog 93c6d0d8 (8 rows → v16, 11.0-1 stays v15). Device-tested: DroidDeck-Proton 11.0-11.1 arm64ec (DOOM 2016 GOG); others CI only. Details: proton-wine PROGRESS_LOG on proton_11.0-2 (d8e65b0e).
 
-## 2026-10-30 — 🧰 GOG prerequisites from Win Components, no container session (branch `feat/gog-prereqs-components` 466433b6, CI running, NOT device-tested)
+## 2026-10-30 — 🧰 GOG prerequisites from Win Components, no container session (branch `feat/gog-prereqs-components` 4119eb6b, CI green, DEVICE-PROVEN, not merged)
 
 > **User:** "when a GOG game is downloaded and added to a container it asks if the user wants to install prerequisites … could they match up to the win components we offer and install those instead? to keep from having to open a container", then "yes build it on a new branch, use our components" (also for DirectX, without d3dx10).
 >
@@ -17,6 +17,13 @@
 > **CI:** run 41084596262 (headSha 466433b6 checked).
 >
 > **Test plan:** a GOG game with prerequisites (DOOM 2016: MSVC2015 + DirectX) added to a container with none of them → prompt → Install → no container session; components appear in Win Components; REDIST lines in the GOG debug log; logcat FATAL check.
+>
+> **Device tests (Pocket FIT, 2026-10-30).**
+> - 466433b6, 12:30: toast only → user tapped twice → two runs cleared each other's work folder (`.bannerlator-components`) → xact failed in both; fallback DXSETUP session blocked as a background launch; GOG:DirectX recorded without running. FAILED.
+> - 30d837ef (progress window, one run at a time, per-container lock in OfflineComponentInstaller, GOG installer only on request, deps done by components): 13:26–13:27:45 DirectX → d3dx9, d3dx11, d3dcompiler_43, xact, xact_x64, xaudio2.7 from Win Components; container 2 got Microsoft's xactengine3_7 / xaudio2_7 / x3daudio1_7 (x64 + x86), no container session, no FATAL. PASSED.
+> - 37411c83 (Compose dialogs: picker, prompt, progress) installed by the user 14:29: Compose progress window confirmed (screenshot 142955). The GOG page's Launch picker was still StarLaunchBridge's AlertDialog → 4119eb6b: Compose ContainerPickerDialog + AddResultDialog (prereq prompt after the add instead of stacking).
+> - 4119eb6b installed 15:11:01 (sha256 5d705067… == staged): user "good done"; 15:14:23 Launch → Compose picker → prompt → both deps from Win Components into container 1; no FATAL. DEVICE-PROVEN.
+> - CI: 41084596262, 41091617452, 41099709208, 41107817249 all green ×4.
 
 ## 2026-10-30 — 🔀 Merged `fix/vcredist-files` to main (`6b481273`)
 
