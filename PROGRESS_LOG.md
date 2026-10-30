@@ -1,5 +1,13 @@
 # Star-Compose — Progress Log
 
+## 2026-10-30 — 🚪 Auto-close follows a game that relaunches itself (branch `fix/auto-close-relaunch`, CI pending, NOT device-tested)
+
+> **Why.** DOOM (2016) GOG test 1 (see the DOOM entry below): the auto-close watcher ended the session because `DOOMx64.exe` hands off to `DOOMx64vk.exe` and exits. User: "do it all yes" (app fix + layer fix + v14 quick check + install the GOG progress build).
+>
+> **Built.** `XServerDisplayActivity`: the watcher keeps the Windows pid with each process name; when the watched exe is gone, `findRelaunchedGame()` picks the lowest-pid program that started after it (pid > watched pid; wineserver hands out rising ids) and is not a Wine helper (`WINE_HELPER_EXES`: explorer, services, rpcss, svchost, plugplay, winedevice, wineboot, conhost, start, cmd, tabtip, winhandler, wfm, rundll32, regsvr32, reg, msiexec, mscorsvw, taskmgr), logs `auto-close: <old> handed off to <new> (pid N), watching that`, and watches it instead. EA/SteamLite chain rule unchanged. javac: no new errors besides the missing Android `Log` class.
+>
+> **Next.** CI; device test = DOOM shortcut back to `DOOMx64.exe` (the hand-off), session must stay open (needs the layer fix for DOOM to get past its crash, or any other relaunching game).
+
 ## 2026-10-30 — 🎮 DOOM (2016) GOG: starts, black screen, closes (investigation, no code change yet)
 
 > **Why.** User: "doom 2016 just starts then shut down automatically on a black screen, can you look at logs and use root to drive test launches for me until successful launch?"
