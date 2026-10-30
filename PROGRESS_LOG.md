@@ -15,6 +15,12 @@
 > **Merge order:** asset upload → catalog merge → app merge (the app's check needs MFC in the _dll archive).
 >
 > **Device test plan:** install app build → container 2 Components shows Visual C++ not installed → install Visual C++ 2015-2022 → files + record; DOOM custom shortcut shows the Visual C++ recommendation; logcat FATAL check.
+>
+> **Device test (Pocket FIT, 10-30).** Installed 10:57 (base.apk sha256 1f531df2… == staged; no FATAL). Archive uploaded to winlator-contents `system-libraries-v1` (public download == local, sha256 d326f40a…).
+> - 11:08: container 2 Components shows vcredist2022 NOT installed; log `ComponentInstallRecords: container 2: [vcredist2022] recorded but their files are not in the prefix, dropped`; container 1 untouched. PASSED.
+> - 11:09: install of vcredist2022 (the sheet routes it to vcredist2022_dll) with the old catalog archive → "Couldn't install vcredist2022: vcredist2022_dll finished, but system32/mfc140u.dll is not in the container", no record. Check works as designed.
+> - User "yes merge it": winlator-contents main fast-forward 16b45493 → acc3fe6 (backup `refs/backup/20261030/main-before-vcredist-files`), live catalog serves the new archive.
+> - 11:13: reinstall → "Installed"; container 2 system32 26 + syswow64 25 Visual C++ DLLs, all Microsoft's, vcruntime140/mfc140u hashes == the new archive; record includes vcredist2022; no FATAL. PASSED → record check + MFC archive DEVICE-PROVEN. Recommendation scan not tested yet. App branch not merged.
 
 ## 2026-10-30 — 🧩 Visual C++ components: marked installed without the files (investigation, nothing built)
 
