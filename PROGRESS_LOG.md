@@ -22,6 +22,8 @@
 >
 > **Test B set up (08:2x):** shortcut Exec back to `DOOMx64.exe` (== original shortcut; zero-copy still off; backup `shortcut-backups/DOOM (2016).desktop.20261030-v16-testA`). Expected: DOOMx64.exe hands off to DOOMx64vk.exe; the new auto-close code must follow the relaunched exe and NOT close the game (the 3.1.7 code killed it on a black screen).
 >
+> **Test B PASSED (08:24, user-driven):** winhandler started `DOOMx64.exe` 08:24:03 → `DOOMx64vk.exe … +r_renderAPI -2` 08:24:21 (pid 8764, 1.25 GB) and DOOMx64.exe exited; the game kept running (user: "launched fine again", then paused it in the background) — the auto-close watcher followed the relaunched exe instead of killing it. Still to check: when the user quits, the app should close itself (exit-info EXIT_SELF).
+>
 > **Resume point.** Installed app `a7f647f1` (`d8e91cd7…`), container 1 on v16, DOOM 2016 shortcut Exec `DOOMx64.exe`. Nothing running in the background. If the session dies: `cc -c`, then read the DOOM (2016) wine_debug.log ("Shortcut path (resolved)") + exit-info to judge test B.
 
 ## 2026-10-30 — 🎮 DOOM Eternal (Xbox) closes after ~1 min (investigation)
