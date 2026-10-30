@@ -14,6 +14,34 @@
 >
 > **Next.** Ask before installing; device test = a GOG download (DOOM is installed now, so a different game or reinstall) — bar, GB to go, speed, time left on the game page, Download Manager and notification.
 
+## 2026-10-30 — 🚪 Auto-close follows a game that relaunches itself (branch `fix/auto-close-relaunch`, CI pending, NOT device-tested)
+
+> **Why.** DOOM (2016) GOG test 1 (see the DOOM entry below): the auto-close watcher ended the session because `DOOMx64.exe` hands off to `DOOMx64vk.exe` and exits. User: "do it all yes" (app fix + layer fix + v14 quick check + install the GOG progress build).
+>
+> **Built.** `XServerDisplayActivity`: the watcher keeps the Windows pid with each process name; when the watched exe is gone, `findRelaunchedGame()` picks the lowest-pid program that started after it (pid > watched pid; wineserver hands out rising ids) and is not a Wine helper (`WINE_HELPER_EXES`: explorer, services, rpcss, svchost, plugplay, winedevice, wineboot, conhost, start, cmd, tabtip, winhandler, wfm, rundll32, regsvr32, reg, msiexec, mscorsvw, taskmgr), logs `auto-close: <old> handed off to <new> (pid N), watching that`, and watches it instead. EA/SteamLite chain rule unchanged. javac: no new errors besides the missing Android `Log` class.
+>
+> **Next.** CI; device test = DOOM shortcut back to `DOOMx64.exe` (the hand-off), session must stay open (needs the layer fix for DOOM to get past its crash, or any other relaunching game).
+
+## 2026-10-30 — 🎮 DOOM (2016) GOG: starts, black screen, closes (investigation, no code change yet)
+
+> **Why.** User: "doom 2016 just starts then shut down automatically on a black screen, can you look at logs and use root to drive test launches for me until successful launch?"
+>
+> **Found (logs of the 04:40–04:42 launches).** Shortcut `DOOM (2016).desktop` (container 1, Proton 11.0-11.1-arm64ec-15, Wayland, adapter `c572b590`, `graphicsDriver=wrapper-original`, FEX PERFORMANCE_TSO). `DOOMx64.exe` starts, `qconsole.log`: "Restarting executable in to different graphics API" — `DOOMConfig.local` (dated 2026-10-03, older install) has `r_renderAPI "1"` (Vulkan) → it starts `DOOMx64vk.exe` (pid 452, BANNERIN XInput loads) and that process ends without writing its own `qconsole.log` and without any Wine error; the app then exits normally (`EXIT_SELF`, code 0). The "could not pin … libvulkan_wrapper.so" line is in DOOM Eternal's working logs too (harmless).
+>
+> **Plan.** Root-driven launches, shortcut backed up first (`/sdcard/Download/bannerlator/shortcut-backups/DOOM (2016).desktop.20261030-orig`, md5 `2f4f6a01…`, + DOOMConfig.cfg/.local): (1) one diagnostic launch with `WINEDEBUG=+err,+warn,+seh,+loaddll,+process` on this shortcut only; then fix by evidence.
+>
+> **Test 1 (04:46, debug).** DOOMx64.exe → `CreateProcess DOOMx64vk.exe … +r_renderAPI -2` at 04:46:20, vk exe connects over Wayland 04:46:20.27 (black screen), loads Galaxy64/steam_api64/bink2w64, no exception. At 04:46:26.155 the APP resumes all guest processes and at 04:46:27.16 sends SIGKILL/SIGTERM to every guest process incl. DOOMx64vk.exe (pid 10261) → **the session is ended by Bannerlator, not by DOOM.** Cause: auto-close-on-exit watcher (`XServerDisplayActivity.evaluateGameExitTick`, `:17767`, default ON, `autoCloseOnExit=1` in the shortcut) watches only the exact launched exe name (`doomx64.exe`); DOOM's stub exits after handing off to `DOOMx64vk.exe`, 3 ticks without it → `exit()`. Also: DOOM's `DOOMConfig.cfg/.local` (10-03, `r_renderAPI "1"` = Vulkan) come from the GOG cloud save (`BH_GOG_CLOUD autopath … DOOM/base`).
+>
+> **Test 2 (04:49).** Shortcut `Exec` → `DOOMx64vk.exe`, envVars removed: no auto-close any more (vk exe alive 120 s). DOOM itself now shows "DOOM Unhandled Exception — The engine has crashed" (`Crash.LOCALHOST.00001.html`: ExpCode 0xE06D7363 = C++ throw via kernelbase, 04:49:36); `qconsole.log` last lines: Vulkan device "Wrapper(Adreno (TM) 750)", vendor 5143, VRAM 11458MB, driver 26.99.99, VK 1.3.366, "RENDER THREAD STACK SIZE: 4194304". Second, separate problem.
+>
+> **Test 3 (04:52, +seh +vulkan).** Not Vulkan: thread 015c (GOG `Galaxy64.dll` init) → `sechost.dll` (+0x2A9A4 → +0x21648 → +0x21714 → +0x28290 → +0x2B76C) → **ACCESS_VIOLATION in Wine `rpcrt4.dll` +0x64AAC**, no handler takes it → DOOM's CrashHandler ("Storing data and writing local report", "FATAL ERROR: Filesystem call made without initialization") → C++ throw → crash dialog. Same bug as the EA app install (confirmed-issues: rpcrt4 AV writing 0x10 via sechost, both v15 layers 11.0-11.1 / 11.0-2, open). Device has only those two v15 layers. Early `RPC_S_SERVER_UNAVAILABLE` exceptions in other processes too.
+>
+> **Test 4 (04:54, +rpc +service).** The failing call is the service-manager open from `Galaxy64.dll`: svcctl over `\\.\pipe\svcctl` (services.exe, rpcss.exe, plugplay.exe, svchost.exe all running), bind OK, request sent, 24-byte reply received; the access violation happens in `ndr_client_call` UNMARSHAL of param[3] (out context handle, FC 0x30) — i.e. rpcrt4 writes the returned handle through a bad pointer. Same crash as the EA install (x64 EABackgroundService). Not graphics; the Subgroups switch (the DOOM Eternal fix, 10-21) is already `auto` on this shortcut. DOOM (2016) never ran in Bannerlator before: its 10-03 config/profile came from the GOG cloud save written by DroidDeck (0.3.2 notes: "GOG DOOM 143 fps").
+>
+> **State left.** Shortcut `Exec` = `DOOMx64vk.exe`, no envVars (original in `/sdcard/Download/bannerlator/shortcut-backups/`). Test captures `/sdcard/Download/bannerlator/doom-test/t1…t4`, crash reports in `…/doom-test/crash/`.
+>
+> **Two bugs, both need a decision.** (1) App: the auto-close watcher must follow a game that relaunches itself as another exe (DOOMx64.exe → DOOMx64vk.exe). (2) Layers (proton-wine): rpcrt4 crash on the first service-manager call from a 64-bit program on the v15 layers; suspect (unproven) the newer base's delay-loaded rpcrt4 in sechost on ARM64EC. Fix = layer rebuild; quick check = an older (v14) layer.
+
 ## 2026-10-30 — 📦 Move a game to another container MERGED (main `4f44f456`, DEVICE-PROVEN)
 
 > **Xbox check (the open item).** User 2026-10-30: "xbox library loads" on the installed build `6ea422cc…` (= `93488d58` code), which carries the same NDK 26.1 Xbox backend copy (`484790e0…`) that main's builds restore from the shared cache. So main's Xbox binary is now seen working on the device (library only; no download/launch on this binary).
