@@ -18,7 +18,11 @@
 >
 > **Next tests (user-driven):** (A) DOOM (2016) as is (Exec `DOOMx64vk.exe`, zero-copy off) on v16 → proves the layer fix without hand-swapped files; (B) Exec back to `DOOMx64.exe` → proves the auto-close relaunch follow; (C) a GOG download → byte progress, speed, time left; (D) DOOM Eternal NOTICE network trace.
 >
-> **Resume point.** Installed app `a7f647f1` (`d8e91cd7…`), container 1 on v16, DOOM 2016 shortcut == working. Nothing running in the background. If the session dies, start with `cc -c` and continue at test A.
+> **Test A PASSED (08:18–08:19, user-driven):** DOOM (2016) on the v16 layer (Exec `DOOMx64vk.exe`, zero-copy off) → campaign slot menu, 60 fps, Vulkan (screenshot 08:19:33); game log no Unhandled/access violation, no new tombstone; app exit-info EXIT_SELF status 0 at 08:19:41 — user confirmed they quit. Layer fix device-proven to the menu without hand-swapped files; gameplay still untested.
+>
+> **Test B set up (08:2x):** shortcut Exec back to `DOOMx64.exe` (== original shortcut; zero-copy still off; backup `shortcut-backups/DOOM (2016).desktop.20261030-v16-testA`). Expected: DOOMx64.exe hands off to DOOMx64vk.exe; the new auto-close code must follow the relaunched exe and NOT close the game (the 3.1.7 code killed it on a black screen).
+>
+> **Resume point.** Installed app `a7f647f1` (`d8e91cd7…`), container 1 on v16, DOOM 2016 shortcut Exec `DOOMx64.exe`. Nothing running in the background. If the session dies: `cc -c`, then read the DOOM (2016) wine_debug.log ("Shortcut path (resolved)") + exit-info to judge test B.
 
 ## 2026-10-30 — 🎮 DOOM Eternal (Xbox) closes after ~1 min (investigation)
 
