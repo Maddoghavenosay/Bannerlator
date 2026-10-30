@@ -9,6 +9,7 @@ import android.widget.Toast
 import com.winlator.star.R
 import com.winlator.star.components.Component
 import com.winlator.star.components.ComponentExecInstaller
+import com.winlator.star.components.ComponentInstallRecords
 import com.winlator.star.components.ComponentStep
 import com.winlator.star.container.Container
 import com.winlator.star.container.ContainerManager
@@ -45,7 +46,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 object GogRedistInstaller {
 
     private const val PREFS = "bh_gog_prefs"
-    private const val INSTALL_STORE = "component_installs"
 
     /** Parsed {@code gog_deps_<gameId>} record. */
     data class DepsInfo(val deps: List<String>, val scriptInterpreter: Boolean)
@@ -81,10 +81,6 @@ object GogRedistInstaller {
     @JvmStatic
     fun hasPrereqs(ctx: Context, gameId: String): Boolean =
         readGameDeps(ctx, gameId)?.deps?.isNotEmpty() == true
-
-    private fun installedMarkers(ctx: Context, containerId: Int): Set<String> =
-        ctx.getSharedPreferences(INSTALL_STORE, Context.MODE_PRIVATE)
-            .getStringSet("c$containerId", emptySet()) ?: emptySet()
 
     // ── Triggers ----------------------------------------------------------------------------------
 
@@ -171,7 +167,7 @@ object GogRedistInstaller {
                     finish(activity, "Couldn't reach GOG's redist repository — launch anyway.")
                     return@Thread
                 }
-                val installed = installedMarkers(app, container.id)
+                val installed = ComponentInstallRecords.verified(app, container)
                 val stageRoot = File(app.cacheDir, "gog_redist/$gameId").apply { mkdirs() }
 
                 // Install in the game's declared dependency order (order matters for some stacks).

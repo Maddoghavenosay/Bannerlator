@@ -166,7 +166,7 @@ object OfflineComponentInstaller {
         if (!SevenZip.isAvailable(context)) return "The bundled 7-Zip is missing"
         val prefs = context.getSharedPreferences(INSTALLS_PREFS, Context.MODE_PRIVATE)
         val key = "c${container.id}"
-        val have = prefs.getStringSet(key, emptySet()).orEmpty()
+        val have = ComponentInstallRecords.verified(context, container)
         val order = ArrayList<Component>()
         fun visit(x: Component, depth: Int) {
             if (depth > 8 || order.any { it.name == x.name }) return
