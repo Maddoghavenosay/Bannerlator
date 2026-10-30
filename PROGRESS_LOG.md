@@ -6,7 +6,11 @@
 >
 > **Found (logs of the 04:40–04:42 launches).** Shortcut `DOOM (2016).desktop` (container 1, Proton 11.0-11.1-arm64ec-15, Wayland, adapter `c572b590`, `graphicsDriver=wrapper-original`, FEX PERFORMANCE_TSO). `DOOMx64.exe` starts, `qconsole.log`: "Restarting executable in to different graphics API" — `DOOMConfig.local` (dated 2026-10-03, older install) has `r_renderAPI "1"` (Vulkan) → it starts `DOOMx64vk.exe` (pid 452, BANNERIN XInput loads) and that process ends without writing its own `qconsole.log` and without any Wine error; the app then exits normally (`EXIT_SELF`, code 0). The "could not pin … libvulkan_wrapper.so" line is in DOOM Eternal's working logs too (harmless).
 >
-> **Plan.** Root-driven launches, shortcut backed up first: (1) one diagnostic launch with `WINEDEBUG=+err,+warn,+seh,+loaddll,+process` on this shortcut only; then fix by evidence.
+> **Plan.** Root-driven launches, shortcut backed up first (`/sdcard/Download/bannerlator/shortcut-backups/DOOM (2016).desktop.20261030-orig`, md5 `2f4f6a01…`, + DOOMConfig.cfg/.local): (1) one diagnostic launch with `WINEDEBUG=+err,+warn,+seh,+loaddll,+process` on this shortcut only; then fix by evidence.
+>
+> **Test 1 (04:46, debug).** DOOMx64.exe → `CreateProcess DOOMx64vk.exe … +r_renderAPI -2` at 04:46:20, vk exe connects over Wayland 04:46:20.27 (black screen), loads Galaxy64/steam_api64/bink2w64, no exception. At 04:46:26.155 the APP resumes all guest processes and at 04:46:27.16 sends SIGKILL/SIGTERM to every guest process incl. DOOMx64vk.exe (pid 10261) → **the session is ended by Bannerlator, not by DOOM.** Cause: auto-close-on-exit watcher (`XServerDisplayActivity.evaluateGameExitTick`, `:17767`, default ON, `autoCloseOnExit=1` in the shortcut) watches only the exact launched exe name (`doomx64.exe`); DOOM's stub exits after handing off to `DOOMx64vk.exe`, 3 ticks without it → `exit()`. Also: DOOM's `DOOMConfig.cfg/.local` (10-03, `r_renderAPI "1"` = Vulkan) come from the GOG cloud save (`BH_GOG_CLOUD autopath … DOOM/base`).
+>
+> **Test 2 (next).** Shortcut `Exec` → `DOOMx64vk.exe` (no hand-off, watcher follows the real game), envVars removed.
 
 ## 2026-10-30 — 📦 Move a game to another container MERGED (main `4f44f456`, DEVICE-PROVEN)
 
