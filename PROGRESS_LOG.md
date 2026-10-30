@@ -18,6 +18,12 @@
 >
 > **State left.** Shortcut `Exec` = `DOOMx64vk.exe`, no envVars (original in `/sdcard/Download/bannerlator/shortcut-backups/`). Test captures `/sdcard/Download/bannerlator/doom-test/t1…t4`, crash reports in `…/doom-test/crash/`.
 >
+> **User 2026-10-30: "do it all yes"** (app auto-close fix, Proton fix, quick check, install the GOG progress build). GOG progress build `5d888e70…` INSTALLED 05:03:18 (hash = staged).
+>
+> **Root cause of the rpcrt4 crash (proton-wine history).** Valve's `be454c4d1d6` "HACK: Avoid delay importing rpcrt4 — Works around broken variadic exit thunks" (Billy Laws, 2025-07-15) was reverted by `8fb9c7f7154` (Jacek Caban, 2026-07-01: "We patch LLVM to produce proper exit thunks instead now", CW-Bug-Id #27308). Our layer toolchain lacks that LLVM patch → in x64 (ARM64EC) processes the delay-loaded variadic `NdrClientCall` loses its stack args: OpenSCManagerW's out-handle pointer = 0x10 (the stack-arg size) → "ACCESS_VIOLATION writing 0x10". Branches with the revert (broken): 11.0-2, 11.11.1-DroidDeck, 11.9-GE, 11.9.1-DroidDeck (v14 — so the "older Proton" quick check would crash too), 11.7.1-GE, cachyos-20261005. Never had the hack but delay-load: 10.0, 10.34-GE. OK: 11.0 (11.0-1), 11.3/11.5/11.6/11.7-GE, cachyos 0703.
+>
+> **Fix (proton-wine, staging branches, CI running):** revert the revert (P10: same Makefile change) + MARKERS rows in `build-step-arm64ec.sh`. `staging/proton_11.11.1-DroidDeck/rpcrt4-exit-thunks` 5fad1afe (run 41031357226), `…proton_11.0-2…` f862b54d (41031550634), `…proton_11.9-GE…` c87f227d (41031554278), `…proton_10.0…` 0f93a7e0 (41031558511), `…proton_10.34-GE…` 17e1d5f8 (41031561917). Quick check replaced by testing the DD 11-11.1 build directly in container 1 (swap sechost.dll + advapi32.dll in the layer and container 1 system32, backups first).
+>
 > **Two bugs, both need a decision.** (1) App: the auto-close watcher must follow a game that relaunches itself as another exe (DOOMx64.exe → DOOMx64vk.exe). (2) Layers (proton-wine): rpcrt4 crash on the first service-manager call from a 64-bit program on the v15 layers; suspect (unproven) the newer base's delay-loaded rpcrt4 in sechost on ARM64EC. Fix = layer rebuild; quick check = an older (v14) layer.
 
 ## 2026-10-30 — 📦 Move a game to another container MERGED (main `4f44f456`, DEVICE-PROVEN)
