@@ -38,6 +38,28 @@
 >
 > **User run after E3 (screenshots 06:30 gamma screen, 06:31 NOTICE "Loading…").** Log: "Logged in to PlayFab user …", `idBnetMasterIdentity::FinalizeSession: Legal documents are available to sign`, `[BethNet Flow] EnsureSignedIn() there are updated legal documents`, 10× `HTTP 400 … playfabapi.com/Client/GetPlayerCombinedInfo`, then `PumpSessionAndNetworkPackets: Not called for 33.75 seconds` (main loop blocked on the NOTICE); combase `RoGetActivationFactory Windows.Data.Json.JsonValue` / `PropertySet` semi-stub loops. 06:32:35 Android killed Bannerlator in the background (with gapps and others = memory pressure) when the user left the game. Bethesda legal-documents notice not solved yet.
 
+## 2026-10-30 — 📶 GOG downloads: progress bar from bytes + speed and time left (branch `fix/gog-progress-bytes`, CI pending, NOT device-tested)
+
+> **Why.** User: "why is my doom 2016 gog download stuck at 15 percent … it starts out stuck at 15 percent", then "yes fix the progress bar on a new branch, and why no speed/eta shows? I'd like both if possible".
+>
+> **Found (device, 04:20–04:28).** Not stuck: the Rust engine pulled DOOM (2016) (`gog base=1390579243`) at ~65 MB/s, 31 GB on disk after 7.5 min (`throughput … total=25926MB elapsed=397s`). The bar = `15 + filesDone/filesTotal*80`, fired only when a whole file finished; base installs go largest-first. GOG build 58401034488498959 = 381 files, 68.7 GiB; the first 8 files are 44 % of the bytes (2 % of the files) → screenshot 04:28 "Downloading… 16%" with ~44 % on disk. No speed/time left: GOG passed only a percentage to the registry (`StoreDownloadHooks.tick(GOG, id, pct)`), the speed string went only into the unused message.
+>
+> **Built (`78f84a55`).** Rust `store_dl/gog`: `GogEvents::on_bytes(done, total, fetched)` (default no-op), at most every 500 ms (`BytesGate`) + once after the plan; gen2 `done` = files not pending + `GogSink.chunk_bytes` (decompressed size of each verified chunk), gen1 = fetched bytes capped at pending; JNI `onBytes(JJJ)V`. Java `GogDownloadManager.ByteProgress`: pct = `15 + bytes/total*80`, never back; smoothed speed (network bytes) + time left (bytes on disk); `Callback.onBytes(done, total, speedBps, etaSeconds)`; Java fallback loops + installer download byte-based too; unused speed-window params dropped. UI: `GogDownloadTicker` (detail page + list) keeps the last bytes/speed/time left so every registry tick carries them; registry pct = share of bytes on disk (0 during setup, max 99 until done, never back) = the Download Manager card's number; label like the Xbox page: `44%  ·  37.5 GB to go  ·  65.3 MB/s  ·  ~9 min left`. `docs/RUST_GOG_PARITY.md` §6 updated.
+>
+> **Checked locally.** `cargo test --lib store_dl::gog`: 22 passed (new: chunk bytes counted per verified chunk, not for a failed one; gate lets one event per interval). javac syntax pass on `GogDownloadManager.java` (only missing-Android-class errors). Kotlin not compiled locally (CI).
+>
+> **CI.** Run 41028284572 (dispatch, headSha `b26e3e0b`, label gog-progress-b26e3e0): pubg/standard/ludashi/antutu success. **Staged** `/sdcard/Download/Bannerlator-gog-progress-b26e3e0b.apk` sha256 `5d888e70…c5ee6d` (host = device); dex has `GogDownloadTicker`, `libblsteam.so` has `onBytes`. Not installed (ask first).
+>
+> **Next.** Ask before installing; device test = a GOG download (DOOM is installed now, so a different game or reinstall) — bar, GB to go, speed, time left on the game page, Download Manager and notification.
+
+## 2026-10-30 — 🚪 Auto-close follows a game that relaunches itself (branch `fix/auto-close-relaunch`, CI pending, NOT device-tested)
+
+> **Why.** DOOM (2016) GOG test 1 (see the DOOM entry below): the auto-close watcher ended the session because `DOOMx64.exe` hands off to `DOOMx64vk.exe` and exits. User: "do it all yes" (app fix + layer fix + v14 quick check + install the GOG progress build).
+>
+> **Built.** `XServerDisplayActivity`: the watcher keeps the Windows pid with each process name; when the watched exe is gone, `findRelaunchedGame()` picks the lowest-pid program that started after it (pid > watched pid; wineserver hands out rising ids) and is not a Wine helper (`WINE_HELPER_EXES`: explorer, services, rpcss, svchost, plugplay, winedevice, wineboot, conhost, start, cmd, tabtip, winhandler, wfm, rundll32, regsvr32, reg, msiexec, mscorsvw, taskmgr), logs `auto-close: <old> handed off to <new> (pid N), watching that`, and watches it instead. EA/SteamLite chain rule unchanged. javac: no new errors besides the missing Android `Log` class.
+>
+> **Next.** CI; device test = DOOM shortcut back to `DOOMx64.exe` (the hand-off), session must stay open (needs the layer fix for DOOM to get past its crash, or any other relaunching game).
+
 ## 2026-10-30 — 🎮 DOOM (2016) GOG: starts, black screen, closes (investigation, no code change yet)
 
 > **Why.** User: "doom 2016 just starts then shut down automatically on a black screen, can you look at logs and use root to drive test launches for me until successful launch?"
