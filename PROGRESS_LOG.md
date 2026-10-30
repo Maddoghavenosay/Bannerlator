@@ -1,5 +1,21 @@
 # Star-Compose — Progress Log
 
+## 2026-10-30 — 🧩 Visual C++ components: marked installed without the files (investigation, nothing built)
+
+> **Why.** User: "how do we fix the vcredist or redistributables to include those files correctly" (after the Fold DOOM 2016 mfc140u report).
+>
+> **Found (Pocket FIT + code @ main edcb77ae).**
+> - `ComponentExecInstaller.kt` records a component as installed when its installer session ends; it never checks the result (comment lines 34-35: "session ended == installer done; there is no exit code"; record at :212-218).
+> - Container 2 (Proton-11.0-2-arm64ec-15): vcredist2022 recorded, but no `ProgramData\Package Cache`, no VC Runtimes registry keys, Wine builtin msvcp140/vcruntime140, no mfc140u → installer never finished. Same container, 10-23 23:15: EA MSI failed 0x8007065b from the v15 rpcrt4 crash in the service path (confirmed-issues). VC_redist also goes through Windows Installer → most likely the same v15 bug (fixed in v16 layers). Not yet proven by a rerun.
+> - Container 1 got the full set (x64 + x86 incl. MFC, 14.44.35211) on 10-22 07:44, most likely via the Xbox VC14 auto-install (324b332b) → catalog vcredist2022, whose VC_redist.x64.exe is really 14.44.35211.0 (label says 14.42.34430 = stale).
+> - Catalog: `vcredist2022_arm64` = registry keys only (by design); `vcredist2022_dll` (installer-free) has no mfc140*/mfcm140* files.
+>
+> **Proposed (user to pick, each on a new branch):** app verifies installer components after the session (VC++: mfc140u present + vcruntime140 not Wine builtin) and re-checks old records; catalog adds MFC DLLs to vcredist2022_dll + fixes the label; recommendations scan DLLs beside the exe; release v16 layers. Test first: container 2 → v16 layer → Reinstall Visual C++ (needs a container session, ask first).
+
+## 2026-10-30 — 🔀 Merged `fix/gog-login-cloudflare` to main (`edcb77ae`)
+
+> **User:** "merge gog login fix". Backup ref `refs/backup/20261030/main-before-gog-login-cloudflare` = 70f56e65 (pushed). `--no-ff` merge edcb77ae (parents 70f56e65 + f5cb1958); no conflicts; `git diff f5cb1958 edcb77ae` = PROGRESS_LOG.md only → code == CI-built branch (run 41066450453 green ×4). First push got GitHub "Internal Server Error" (main unchanged), retry OK. Proof: CI-green, NOT device-tested (APK still staged `/sdcard/Download/Bannerlator-gog-login-cf-f5cb1958-pubg.apk`, sha256 9cd6cd16…).
+
 ## 2026-10-30 — 🔐 GOG login: Cloudflare "I'm human" check fails (branch `fix/gog-login-cloudflare`, CI running, NOT device-tested)
 
 > **Why.** User: "a fix for cloud human verification on bannerlator Gog login page on a new branch, cloudflare gives error when checking the I'm human box". User remembered a similar DroidDeck issue: DroidDeck PR #1500 (Diego Ramos / diegodru), device-proven on the Pocket FIT 2026-10-25 ("gog logs in now").
