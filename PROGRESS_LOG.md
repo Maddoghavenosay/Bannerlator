@@ -24,6 +24,12 @@
 >
 > **Fix (proton-wine, staging branches, CI running):** revert the revert (P10: same Makefile change) + MARKERS rows in `build-step-arm64ec.sh`. `staging/proton_11.11.1-DroidDeck/rpcrt4-exit-thunks` 5fad1afe (run 41031357226), `…proton_11.0-2…` f862b54d (41031550634), `…proton_11.9-GE…` c87f227d (41031554278), `…proton_10.0…` 0f93a7e0 (41031558511), `…proton_10.34-GE…` 17e1d5f8 (41031561917). Quick check replaced by testing the DD 11-11.1 build directly in container 1 (swap sechost.dll + advapi32.dll in the layer and container 1 system32, backups first).
 >
+> **Layer builds (09:3x UTC).** DD 11-11.1 run 41031357226 ✅ (aarch64 log: `ok sechost imports rpcrt4 directly`, `ok advapi32 imports rpcrt4 directly`); 11.0-2 41031550634 ✅, 10.0-4 41031558511 ✅, GE 10-34 41031561917 ✅, GE 11-9 41031554278 running. New DD `sechost.dll` (md5 `3ac98047…`): imports kernelbase, **rpcrt4**, ucrtbase…, delay-imports none (old `887fec81…`: delay rpcrt4); `advapi32.dll` (`76064e63…`): rpcrt4 imported, delay = cryptsp/user32/userenv (old `37702dda…`).
+>
+> **Swapped on the device 05:38 (device clock), no session running:** both DLLs into `contents/Proton/11.0-11.1-arm64ec-15/lib/wine/aarch64-windows/` and container 1 `system32/` (cp in place: owner u0_a193, label kept; md5 = new). Originals: `/sdcard/Download/bannerlator/doom-test/dll-backup/{layer,container1}/`. DOOM test waits for the user's Xbox DOOM Eternal download (`xbox_games/9P74BRFBXXC6`, ~67 MB/s, 67.9 GB at 05:39) — a session exit ends the app process and would kill it.
+>
+> **App test build.** Auto-close branch CI 41030838366 ✅×4. Combined build for the device = `fix/combined-gog-autoclose` a7f647f1 (fix/gog-progress-bytes + merge fix/auto-close-relaunch; only the log conflicted), CI 41035141019 running. Install only with the user's yes, after the Xbox download.
+>
 > **Two bugs, both need a decision.** (1) App: the auto-close watcher must follow a game that relaunches itself as another exe (DOOMx64.exe → DOOMx64vk.exe). (2) Layers (proton-wine): rpcrt4 crash on the first service-manager call from a 64-bit program on the v15 layers; suspect (unproven) the newer base's delay-loaded rpcrt4 in sechost on ARM64EC. Fix = layer rebuild; quick check = an older (v14) layer.
 
 ## 2026-10-30 — 📦 Move a game to another container MERGED (main `4f44f456`, DEVICE-PROVEN)
